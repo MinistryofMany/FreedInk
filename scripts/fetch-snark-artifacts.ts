@@ -132,6 +132,19 @@ async function main() {
 		return;
 	}
 
+	// Skip the rewrite when nothing actually changed, so `npm run build`
+	// (which runs this as prebuild) doesn't dirty the tree just to bump
+	// `fetchedAt`. Both sides come from the same record shape, so a JSON
+	// comparison is a reliable deep-equal here.
+	const unchanged =
+		prior !== null &&
+		prior.cdnBase === CDN_BASE &&
+		JSON.stringify(prior.artifacts) === JSON.stringify(next.artifacts);
+	if (unchanged) {
+		console.log(`lock file unchanged — leaving ${LOCK_FILE} as-is`);
+		return;
+	}
+
 	await writeFile(LOCK_FILE, JSON.stringify(next, null, 2) + '\n');
 	const totalBytes = DEPTHS.reduce((acc, d) => {
 		const r = next.artifacts[String(d)];
