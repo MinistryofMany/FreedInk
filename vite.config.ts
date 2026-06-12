@@ -1,22 +1,27 @@
+/// <reference types="vitest/config" />
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig({
-	plugins: [
-		sveltekit(),
-		nodePolyfills({
-			include: ['path', 'stream', 'util'],
-			exclude: ['http'],
-			globals: {
-				Buffer: true,
-				global: true,
-				process: true
-			},
-			overrides: {
-				fs: 'memfs'
-			},
-			protocolImports: true
-		})
-	]
+	plugins: [sveltekit()],
+	ssr: {
+		// Semaphore packages load WASM at runtime — let the SSR pipeline import
+		// them through Node's resolver instead of trying to bundle them.
+		external: [
+			'@semaphore-protocol/core',
+			'@semaphore-protocol/group',
+			'@semaphore-protocol/proof',
+			'nodemailer'
+		]
+	},
+	build: {
+		rollupOptions: {
+			external: ['nodemailer']
+		}
+	},
+	optimizeDeps: {
+		exclude: ['@semaphore-protocol/proof']
+	}
+	// Test config lives in vitest.workspace.ts — each project there supplies
+	// its own include/environment/setup files.
 });

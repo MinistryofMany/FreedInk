@@ -1,26 +1,86 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { _ } from '$lib/i18n';
 	import type { PageData } from './$types';
 
-	export let data: PageData & { Blogs: any[] };
+	export let data: PageData;
+
+	// Accumulated list across "Load more" navigations within the same SPA
+	// session. Reset when the URL cursor goes back to null (e.g. user clicked
+	// the logo to land on /).
+	let acc: typeof data.Blogs = data.Blogs;
+	let nextCursor: string | null = data.nextCursor;
+	let lastSeenCursor: string | null = null;
+	let loading = false;
+
+	// React to load data changes (forward "Load more" navigation appends;
+	// fresh visits reset). We dedupe on the cursor that *produced* the page
+	// — if cursor is null, this is page 1, replace acc.
+	$: {
+		const currentCursor = $page.url.searchParams.get('cursor');
+		if (currentCursor === null) {
+			acc = data.Blogs;
+			lastSeenCursor = null;
+		} else if (currentCursor !== lastSeenCursor) {
+			// Append and dedupe by id in case of concurrent inserts.
+			const seen = new Set(acc.map((b) => b.id));
+			acc = [...acc, ...data.Blogs.filter((b) => !seen.has(b.id))];
+			lastSeenCursor = currentCursor;
+		}
+		nextCursor = data.nextCursor;
+	}
+
+	async function loadMore() {
+		if (!nextCursor || loading) return;
+		loading = true;
+		try {
+			await goto(`/?cursor=${encodeURIComponent(nextCursor)}`, {
+				noScroll: true,
+				keepFocus: true,
+				replaceState: false
+			});
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
+<svelte:head>
+	<title>{$_('home.page_title')}</title>
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="FreedInk" />
+	<meta property="og:description" content={$_('home.og_description')} />
+	<meta name="twitter:card" content="summary" />
+</svelte:head>
+
 <div class="jumbotron">
-	<h2>Welcome to Freed Ink</h2>
-	<p>
-		This is a blogging platform that is a bit different than others. We aim to construct blogs
-		shaped around like minds who want to speak more freely, but with some weight behind it.
-	</p>
-	<a href="/signup" class="btn btn-primary">Free Your Ink</a>
+	<h2>{$_('home.welcome_heading')}</h2>
+	<p>{$_('home.subhead')}</p>
+	<a href="/signup" class="btn btn-primary">{$_('home.cta')}</a>
 </div>
 <div class="featured">
-	<h2>Featured Blogs</h2>
+	<h2>{$_('home.featured_blogs')}</h2>
 	<ul>
-		{#each data.Blogs as Blog}
+		{#each acc as Blog (Blog.id)}
 			<li>
 				<h2><a href={`/b/${Blog.slug}`}>{Blog.title}</a></h2>
 			</li>
 		{/each}
 	</ul>
+	{#if nextCursor}
+		<form
+			method="get"
+			action="/"
+			on:submit|preventDefault={loadMore}
+			class="load-more"
+		>
+			<input type="hidden" name="cursor" value={nextCursor} />
+			<button type="submit" disabled={loading}>
+				{loading ? $_('comments.loading') : $_('actions.load_more')}
+			</button>
+		</form>
+	{/if}
 </div>
 
 <style>
@@ -68,5 +128,9 @@
 	ul {
 		list-style-type: none;
 		padding: 0;
+	}
+	.load-more {
+		margin-top: 1rem;
+		text-align: center;
 	}
 </style>

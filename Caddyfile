@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Production Caddyfile for freed.ink
+#
+# DNS expectation:
+#   freed.ink    A    <public IPv4 of the docker host>
+#   freed.ink    AAAA <public IPv6 of the docker host>  (optional but encouraged)
+#
+# The Caddy container exposes 80/443 on the host (see docker-compose.yml).
+# Caddy obtains certificates from Let's Encrypt automatically. ACME HTTP-01
+# challenge requires port 80 to be reachable from the public Internet.
+#
+# Override via env at deploy time:
+#   PUBLIC_HOST   — site address (default: freed.ink)
+#   ACME_EMAIL    — contact email for cert issuance / renewal notices
+#
+# Local development:
+#   Leave PUBLIC_HOST unset (or set it to freed.ink.localhost) and Caddy will
+#   serve a locally-trusted certificate via its internal CA. Visit
+#   https://freed.ink.localhost/ and accept the self-signed root the first
+#   time. Tip: `caddy trust` installs that root into your system store so
+#   browsers stop complaining.
+# ─────────────────────────────────────────────────────────────────────────────
+
+{$PUBLIC_HOST:freed.ink.localhost} {
+	# TLS via Let's Encrypt in prod; Caddy's local CA for *.localhost.
+	tls {$ACME_EMAIL:admin@freed.ink}
+
+	encode zstd gzip
+
+	# Reject oversize request bodies before they reach the app. 5 MiB is plenty
+	# for posts/comments; uploads (if added later) should hit a separate route
+	# with a different limit.
+	request_body {
+		max_size 5MB
+	}
+
+	# Security headers. CSP intentionally omitted — owned by Wave 2B which
+	# needs to coordinate nonces / hashes with the SvelteKit render pipeline.
+	header {
+		# Two years, includeSubDomains, preload-list eligible.
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		# Drop the default "Server: Caddy" advert.
+		-Server
+	}
+
+	reverse_proxy app:3000
+}

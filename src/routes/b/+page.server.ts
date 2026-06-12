@@ -1,9 +1,13 @@
-import { getAllBlogs } from '$lib/db/blogs';
+import type { PageServerLoad } from './$types';
+import { listBlogsPage } from '$lib/db/blogs';
+import { parseLimit } from '$lib/pagination';
 
-type HomePage = {
-	Blogs: unknown[];
-};
-
-export const load: () => Promise<HomePage> = async () => {
-	return await getAllBlogs();
+export const load: PageServerLoad = async ({ url }) => {
+	const cursor = url.searchParams.get('cursor');
+	const limit = parseLimit(url.searchParams.get('limit'));
+	const page = await listBlogsPage({ cursor, limit });
+	return {
+		Blogs: page.items,
+		nextCursor: page.nextCursor
+	};
 };

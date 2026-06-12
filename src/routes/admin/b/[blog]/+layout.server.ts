@@ -1,38 +1,28 @@
 import { error, redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import type { LayoutServerLoad } from './$types';
 import { getBlogBySlug } from '$lib/db/blogs';
-import { getUserByAddress } from '$lib/db/users';
-import { isAuthor, isOwner, isReviewer } from '$lib/db/roles';
+import { db, schema } from '$lib/db/client';
+import { and, eq, isNull } from 'drizzle-orm';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
-	console.log(params);
-	if (!locals.siwe) {
-		console.error('SIWE data not found in locals:', locals);
-		throw redirect(303, '/'); // Redirect to login if not authenticated
-	}
+export const load: LayoutServerLoad = async ({ locals, params }) => {
+	if (!locals.user) throw redirect(303, '/signup');
+	const blog = await getBlogBySlug(params.blog);
+	if (!blog) throw error(404, 'blog not found');
 
-	const address = locals.siwe.address;
-	const user = await getUserByAddress(address);
-	const blog_slug = params.blog;
-	const blog = await getBlogBySlug(blog_slug);
-	const blog_title = blog.title;
-	const owner = await isOwner(blog.id, address);
-	const reviewer = await isReviewer(blog.id, address);
-	const author = await isAuthor(blog.id, address);
-	console.log('owner', owner);
-	console.log('reviewer', reviewer);
-	console.log('author', author);
-	if (!owner && !reviewer && !author) {
-		console.error(
-			'admin/b/blog/layout: User does not have any administrative access to',
-			blog_title
+	const memberships = await db
+		.select({ role: schema.blogMembers.role })
+		.from(schema.blogMembers)
+		.where(
+			and(
+				eq(schema.blogMembers.blogId, blog.id),
+				eq(schema.blogMembers.userId, locals.user.id),
+				isNull(schema.blogMembers.removedAt)
+			)
 		);
-		throw redirect(303, '/admin'); // Redirect to login if not authenticated
-	}
-	const data = {
-		address,
-		user
-	};
+	if (memberships.length === 0) throw redirect(303, '/admin');
 
-	return data;
+	return {
+		blog: { id: blog.id, slug: blog.slug, title: blog.title, description: blog.description },
+		roles: memberships.map((m) => m.role)
+	};
 };

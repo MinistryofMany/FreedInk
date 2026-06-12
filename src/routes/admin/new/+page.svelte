@@ -1,39 +1,46 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { _ } from '$lib/i18n';
 
-	const createBlog = async (event) => {
-		event.preventDefault();
-		const title = event.target.title.value;
-		const description = event.target.description.value;
-		const res = await fetch('/api/blog/create', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ title, description })
-		});
-		const status = (await res.status) === 200 ? 'success' : 'failure';
+	let title = '';
+	let description = '';
+	let busy = false;
+	let error = '';
 
-		if (status === 'success') {
+	async function createBlog() {
+		busy = true;
+		error = '';
+		try {
+			const res = await fetch('/api/blog/create', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ title, description })
+			});
+			if (!res.ok) {
+				error = await res.text();
+				return;
+			}
 			const json = await res.json();
-			const slug = json.slug;
-			console.log(json);
-			event.target.reset();
-			goto(`/admin/b/${slug}/manage`);
+			goto(`/admin/b/${json.slug}/manage`);
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			busy = false;
 		}
-	};
+	}
 </script>
 
-<h3>Create a Blog</h3>
+<h3>{$_('admin.create_blog_heading')}</h3>
 
-<form on:submit={createBlog}>
-	<label for="title">Title</label>
-	<input type="text" id="title" name="title" required />
+<form on:submit|preventDefault={createBlog}>
+	<label for="title">{$_('admin.title_label')}</label>
+	<input type="text" id="title" name="title" bind:value={title} required />
 
-	<label for="description">Description</label>
-	<textarea id="description" name="description" required rows="5"></textarea>
+	<label for="description">{$_('admin.description_label')}</label>
+	<textarea id="description" name="description" bind:value={description} required rows="5"></textarea>
 
-	<button type="submit">Create</button>
+	{#if error}<p style="color: var(--color-red)">{error}</p>{/if}
+	<button type="submit" disabled={busy}>{busy ? $_('admin.creating') : $_('admin.create_button')}</button>
 </form>
 
 <style>

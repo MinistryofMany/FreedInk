@@ -1,12 +1,12 @@
-// See https://kit.svelte.dev/docs/types#app
-// for information about these interfaces
+import type { User } from '$lib/db/schema';
+
 declare global {
 	namespace App {
-		// interface Error {}
-		// interface Locals {}
-		// interface PageData {}
-		// interface PageState {}
-		// interface Platform {}
+		interface Locals {
+			user: User | null;
+			requestId: string;
+			locale: string;
+		}
 	}
 }
 

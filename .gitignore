@@ -19,3 +19,26 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Tests
+test-results/
+playwright-report/
+.playwright/
+coverage/
+
+# Snark artifacts (fetched via `npm run snark:fetch`, ~65 MiB for depths 1-16).
+# Tracked indirectly via snark-artifacts.lock.json so CI / Docker builds know
+# exactly which versions to download.
+static/snark-artifacts/
+
+# User-uploaded media (filesystem-backed; not source-controlled).
+static/uploads/
+
+# Runtime state owned by the app (e.g. suspensions.json, vapid.json for Web
+# Push keys). Not source-controlled.
+data/
+data/vapid.json
+
+# DB dumps and per-env test secrets (added during Tessera OIDC integration)
+backups/
+.env.test

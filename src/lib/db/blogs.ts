@@ -1,156 +1,125 @@
-import { supabase } from '$lib/supabaseClient';
+import { db, schema } from './client';
+import type { Blog, MemberRole } from './schema';
+import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
-import { getUserByAddress } from './users';
+import { refreshSnapshot } from './snapshots';
+import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 
-export async function getAllBlogs() {
-	console.debug('getAllBlogs');
-	const { data } = await supabase.from('Blogs').select();
-	return {
-		Blogs: data ?? []
-	};
+export async function listBlogs() {
+	return db
+		.select()
+		.from(schema.blogs)
+		.where(isNull(schema.blogs.archivedAt))
+		.orderBy(desc(schema.blogs.createdAt));
+}
+
+type BlogCursor = { key: string; id: string };
+
+/**
+ * Cursor-paginated blog list (newest first). Keyset on (createdAt, id) so
+ * concurrent inserts can't cause skips/duplicates between pages.
+ */
+export async function listBlogsPage(opts: {
+	cursor?: string | null;
+	limit?: number;
+} = {}): Promise<Page<Blog>> {
+	const limit = Math.max(1, Math.min(opts.limit ?? 20, 100));
+	const cursor = decodeCursor<BlogCursor>(opts.cursor);
+
+	const where = cursor
+		? and(
+				isNull(schema.blogs.archivedAt),
+				or(
+					lt(schema.blogs.createdAt, new Date(cursor.key)),
+					and(
+						eq(schema.blogs.createdAt, new Date(cursor.key)),
+						lt(schema.blogs.id, cursor.id)
+					)
+				)
+			)
+		: isNull(schema.blogs.archivedAt);
+
+	const rows = await db
+		.select()
+		.from(schema.blogs)
+		.where(where)
+		.orderBy(desc(schema.blogs.createdAt), desc(schema.blogs.id))
+		.limit(limit + 1);
+
+	const hasMore = rows.length > limit;
+	const items = hasMore ? rows.slice(0, limit) : rows;
+	const last = items[items.length - 1];
+	const nextCursor =
+		hasMore && last
+			? encodeCursor({ key: last.createdAt.toISOString(), id: last.id } satisfies BlogCursor)
+			: null;
+	return { items, nextCursor };
 }
 
 export async function getBlogBySlug(slug: string) {
-	console.debug('getBlogBySlug', slug);
-	const { data: blogData, error: blogError } = await supabase
-		.from('Blogs')
-		.select()
-		.eq('slug', slug)
-		.single();
-	if (blogError) {
-		console.error('Error fetching blog:', blogError);
-		return null;
-	}
-	return blogData;
+	const rows = await db.select().from(schema.blogs).where(eq(schema.blogs.slug, slug)).limit(1);
+	return rows[0] ?? null;
 }
 
-export async function getOwnedBlogsByAddress(address: string) {
-	console.debug('getOwnedBlogsByAddress', address);
-	const userData = await getUserByAddress(address);
-	const userId = userData.id;
-
-	const { data: blogs, error: blogError } = await supabase
-		.from('BlogOwners')
-		.select('blog_id, Blogs (title, slug)')
-		.eq('owner_id', userId);
-
-	if (blogError) {
-		console.error('Error fetching owned blogs:', blogError);
-		return [];
-	}
-	return blogs.map((blog) => blog.Blogs);
+export async function getBlogById(id: string) {
+	const rows = await db.select().from(schema.blogs).where(eq(schema.blogs.id, id)).limit(1);
+	return rows[0] ?? null;
 }
 
-export async function getAuthoredBlogsByAddress(address: string) {
-	console.debug('getAuthoredBlogsByAddress', address);
-	const userData = await getUserByAddress(address);
-	const userId = userData.id;
-
-	const { data: blogs, error: blogError } = await supabase
-		.from('BlogAuthors')
-		.select('blog_id, Blogs (title, slug)')
-		.eq('author_id', userId);
-
-	if (blogError) {
-		console.error('Error fetching owned blogs:', blogError);
-		return [];
-	}
-	return blogs.map((blog) => blog.Blogs);
+async function blogsForUserWithRole(userId: string, roles: MemberRole[]) {
+	const rows = await db
+		.select({ blog: schema.blogs, role: schema.blogMembers.role })
+		.from(schema.blogMembers)
+		.innerJoin(schema.blogs, eq(schema.blogs.id, schema.blogMembers.blogId))
+		.where(
+			and(
+				eq(schema.blogMembers.userId, userId),
+				isNull(schema.blogMembers.removedAt),
+				isNull(schema.blogs.archivedAt)
+			)
+		)
+		.orderBy(desc(schema.blogs.createdAt));
+	return rows.filter((r) => roles.includes(r.role)).map((r) => r.blog);
 }
 
-export async function getReviewedBlogsByAddress(address: string) {
-	console.debug('getReviewedBlogsByAddress', address);
-	const userData = await getUserByAddress(address);
-	const userId = userData.id;
+export const getOwnedBlogs = (uid: string) => blogsForUserWithRole(uid, ['owner']);
+export const getEditedBlogs = (uid: string) => blogsForUserWithRole(uid, ['owner', 'editor']);
+export const getReviewedBlogs = (uid: string) =>
+	blogsForUserWithRole(uid, ['owner', 'editor', 'reviewer']);
+export const getAuthoredBlogs = (uid: string) =>
+	blogsForUserWithRole(uid, ['owner', 'editor', 'author']);
 
-	const { data: blogs, error: blogError } = await supabase
-		.from('BlogReviewers')
-		.select('blog_id, Blogs (title, slug)')
-		.eq('reviewer_id', userId);
-
-	if (blogError) {
-		console.error('Error fetching owned blogs:', blogError);
-		return [];
-	}
-	return blogs.map((blog) => blog.Blogs);
-}
-
-export async function createBlog(address: string, title: string, description: string) {
-	console.debug('createBlog', address, title);
-	const userData = await getUserByAddress(address);
-	const userId = userData.id;
+export async function createBlog(
+	userId: string,
+	title: string,
+	description: string | null
+): Promise<{ id: string; slug: string }> {
 	const slug = sluggify(title);
-
-	const { data: blogData, error: blogError } = await supabase
-		.from('Blogs')
-		.insert([{ title, description, slug }])
-		.select('id')
-		.single();
-
-	if (blogError) {
-		console.error('Error creating blog:', blogError);
-		return { success: false, message: 'Error creating blog.' };
-	}
-
-	const blogId = blogData.id;
-
-	const { error: ownerError } = await supabase
-		.from('BlogOwners')
-		.insert([{ blog_id: blogId, owner_id: userId }]);
-
-	if (ownerError) {
-		console.error('Error setting blog owner:', ownerError);
-		return { success: false, message: 'Error setting blog owner.' };
-	}
-
-	return { success: true, message: 'Blog created and owner set successfully.', slug };
+	const inserted = await db
+		.insert(schema.blogs)
+		.values({ title, description, slug })
+		.returning({ id: schema.blogs.id });
+	const blog = inserted[0];
+	await db.insert(schema.blogMembers).values({
+		blogId: blog.id,
+		userId,
+		role: 'owner',
+		addedBy: userId
+	});
+	await refreshSnapshot(blog.id);
+	return { id: blog.id, slug };
 }
 
-export async function getAuthorIDCs(blog_id: string) {
-	try {
-		// Fetch owners
-		const { data: owners, error: ownersError } = await supabase
-			.from('BlogOwners')
-			.select('owner_id')
-			.eq('blog_id', blog_id);
+export async function archiveBlog(blogId: string): Promise<void> {
+	await db
+		.update(schema.blogs)
+		.set({ archivedAt: new Date() })
+		.where(eq(schema.blogs.id, blogId));
+}
 
-		if (ownersError) throw new Error(`Error fetching owners: ${ownersError.message}`);
-
-		// Fetch authors
-		const { data: authors, error: authorsError } = await supabase
-			.from('BlogAuthors')
-			.select('author_id')
-			.eq('blog_id', blog_id);
-
-		if (authorsError) throw new Error(`Error fetching authors: ${authorsError.message}`);
-
-		// Fetch reviewers
-		const { data: reviewers, error: reviewersError } = await supabase
-			.from('BlogReviewers')
-			.select('reviewer_id')
-			.eq('blog_id', blog_id);
-
-		if (reviewersError) throw new Error(`Error fetching reviewers: ${reviewersError.message}`);
-
-		// Combine all the user IDs
-		const userIds = [
-			...owners.map((owner) => owner.owner_id),
-			...authors.map((author) => author.author_id),
-			...reviewers.map((reviewer) => reviewer.reviewer_id)
-		];
-
-		// Fetch the users based on the combined IDs
-		const { data: users, error: usersError } = await supabase
-			.from('Users')
-			.select('idc, created_at')
-			.in('id', userIds)
-			.order('created_at', { ascending: true });
-
-		if (usersError) throw new Error(`Error fetching users: ${usersError.message}`);
-
-		return users.map((user) => user.idc);
-	} catch (error) {
-		console.error('Error fetching IDCs:', error);
-		return null;
-	}
+export async function unarchiveBlog(blogId: string): Promise<void> {
+	await db
+		.update(schema.blogs)
+		.set({ archivedAt: null })
+		.where(eq(schema.blogs.id, blogId));
 }

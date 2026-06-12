@@ -1,15 +1,87 @@
-import { getBlogBySlug } from '$lib/db/blogs';
-import { createBlogPost } from '$lib/db/posts';
 import type { RequestHandler } from './$types';
+import { error, json } from '@sveltejs/kit';
+import { z } from 'zod';
+import { getBlogBySlug } from '$lib/db/blogs';
+import { createPost } from '$lib/db/posts';
+import { requireRole, ROLES_WRITING } from '$lib/server/auth';
+import { verifyMembership } from '$lib/server/semaphore';
+import { enforce, RULES } from '$lib/server/rate-limit';
+import { audit } from '$lib/server/audit';
+import { notifyReviewersOfNewSubmission } from '$lib/server/notifications';
+import { isValidLanguageCode, normalizeLanguageCode } from '$lib/languages';
 
-export const POST: RequestHandler = async ({ request }) => {
-	const { blog_slug, title, content, proof } = await request.json();
+const ProofSchema = z.object({
+	merkleTreeDepth: z.number().int().positive(),
+	merkleTreeRoot: z.string(),
+	nullifier: z.string(),
+	message: z.string(),
+	scope: z.string(),
+	points: z.array(z.string())
+});
+
+const Body = z.object({
+	blog_slug: z.string().min(1),
+	title: z.string().min(1).max(300),
+	content: z.string().min(1).max(200_000),
+	proof: ProofSchema,
+	submit_for_review: z.boolean().default(true),
+	// Optional. Server normalizes to a known code, falls back to the blog's
+	// defaultLanguage if missing.
+	language: z
+		.string()
+		.refine((s) => isValidLanguageCode(s), 'unsupported language code')
+		.optional()
+});
+
+export const POST: RequestHandler = async (event) => {
+	await enforce(RULES.postCreate, event, { keyBy: 'user' });
+	const { request, locals } = event;
+	if (!locals.user) throw error(401, 'sign in required');
+	const parsed = Body.safeParse(await request.json());
+	if (!parsed.success) throw error(422, parsed.error.message);
+	const { blog_slug, title, content, proof, submit_for_review, language } = parsed.data;
+
 	const blog = await getBlogBySlug(blog_slug);
-	const result = await createBlogPost(blog.id, title, content, proof);
+	if (!blog) throw error(404, 'blog not found');
+	await requireRole(blog.id, locals.user.id, ROLES_WRITING);
 
-	if (!result) {
-		return new Response(JSON.stringify({ message: 'Failed to create post.' }), { status: 422 });
+	const expectedScope = `post:${blog.id}`;
+	const expectedMessage = `${title}\n\n${content}`;
+	const { snapshot, nullifier } = await verifyMembership({
+		blogId: blog.id,
+		proof,
+		expectedScope,
+		expectedMessage
+	});
+
+	const status = submit_for_review ? 'under_review' : 'draft';
+	let result;
+	try {
+		result = await createPost({
+			blogId: blog.id,
+			title,
+			content,
+			proof,
+			snapshotRoot: snapshot.root,
+			nullifier,
+			status,
+			language: language ? normalizeLanguageCode(language) : undefined
+		});
+	} catch (err) {
+		const e = err as { code?: string };
+		if (e.code === '23505') throw error(409, 'duplicate submission (nullifier reuse)');
+		throw err;
 	}
-
-	return new Response(JSON.stringify(result), { status: 200 });
+	if (submit_for_review) {
+		await audit(event, {
+			event: 'post.submitted',
+			actorUserId: locals.user.id,
+			subjectBlogId: blog.id,
+			metadata: { post_id: result.post.id, version_id: result.version.id, title }
+		});
+		// Fire-and-forget: email reviewers. Failure must never block the
+		// submit response, so we void the promise and swallow inside.
+		void notifyReviewersOfNewSubmission(blog.id, result.version.id);
+	}
+	return json({ ok: true, post_id: result.post.id, version_id: result.version.id });
 };

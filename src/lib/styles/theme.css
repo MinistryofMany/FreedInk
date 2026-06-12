@@ -1,0 +1,267 @@
+/*
+  Author: Cipher
+  Created: 2026-05-18
+  Purpose: Global design tokens — color palette (light/dark), typography scale,
+           focus ring, and a small set of cross-cutting a11y utilities. Imported
+           once from src/routes/+layout.svelte so it lands on every page.
+*/
+
+:root {
+	/* Fonts */
+	--heading-font: 'Source Code Pro', sans-serif;
+	--text-font: 'Lato', sans-serif;
+
+	/*
+	  Typography scale. clamp(min, ideal, max) lets the body type breathe with
+	  viewport width while never going below the readable floor or past the
+	  reasonable ceiling on giant monitors.
+	*/
+	--text-xs: clamp(0.72rem, 0.68rem + 0.15vw, 0.8rem);
+	--text-sm: clamp(0.82rem, 0.78rem + 0.2vw, 0.9rem);
+	--text-base: clamp(0.95rem, 0.9rem + 0.25vw, 1.05rem);
+	--text-lg: clamp(1.1rem, 1.02rem + 0.4vw, 1.25rem);
+	--text-xl: clamp(1.3rem, 1.18rem + 0.6vw, 1.5rem);
+	--text-2xl: clamp(1.6rem, 1.4rem + 1vw, 2rem);
+	--text-3xl: clamp(2rem, 1.7rem + 1.6vw, 2.75rem);
+
+	/* Touch target floor (WCAG 2.5.5 AAA recommends 44x44) */
+	--touch-target: 44px;
+
+	/* Focus ring — single source of truth */
+	--focus-ring-color: hsl(45, 95%, 50%);
+	--focus-ring-width: 3px;
+	--focus-ring-offset: 2px;
+
+	/* Light palette (default) — kept compatible with the historical token names. */
+	--color-green: hsl(172, 60%, 25%);
+	--color-green-light: hsl(172, 42%, 50%);
+	--color-green-lightest: hsl(172, 40%, 75%);
+	--color-green-white: hsl(172, 60%, 95%);
+	--color-green-dark: hsl(172, 84%, 15%);
+	--color-red: hsl(354, 60%, 37%);
+	--color-red-dark: hsl(354, 80%, 23%);
+	--color-blue: hsl(215, 60%, 30%);
+	--color-blue-light: hsl(215, 40%, 50%);
+	--color-blue-lightest: hsl(215, 40%, 70%);
+	--color-blue-dark: hsl(215, 70%, 20%);
+	--color-purple: hsl(270, 60%, 30%);
+	--color-purple-light: hsl(270, 40%, 50%);
+	--color-purple-lightest: hsl(270, 40%, 75%);
+	--color-purple-dark: hsl(270, 70%, 20%);
+
+	--text-color-green-darkest: #000a03;
+
+	/* Surface + content tokens added in this wave. */
+	--color-bg: var(--color-green-white);
+	--color-surface: #ffffff;
+	--color-surface-alt: hsl(172, 40%, 92%);
+	--color-text: var(--text-color-green-darkest);
+	--color-text-muted: hsl(172, 25%, 28%);
+	--color-border: hsl(172, 25%, 78%);
+	--color-link: var(--color-green-dark);
+	--color-link-hover: var(--color-green);
+	--nav-bg: var(--color-green-dark);
+	--nav-fg: var(--color-green-lightest);
+	--shadow-elev-1: 0 1px 2px hsla(172, 60%, 10%, 0.08), 0 2px 6px hsla(172, 60%, 10%, 0.06);
+	--shadow-elev-2: 0 4px 12px hsla(172, 60%, 10%, 0.18);
+}
+
+/* Dark palette — applied when the OS prefers dark AND the user has not opted
+   into a manual theme. The data-theme attribute on <html> wins over the media
+   query (see the html[data-theme="..."] selectors below).
+   Tokens are tuned for reading: high text contrast on a low-saturation slate,
+   muted links so long body copy stays comfortable. */
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-green: hsl(172, 35%, 55%);
+		--color-green-light: hsl(172, 30%, 45%);
+		--color-green-lightest: hsl(172, 25%, 32%);
+		--color-green-white: hsl(180, 8%, 11%);
+		--color-green-dark: hsl(172, 30%, 70%);
+		--color-red: hsl(354, 50%, 60%);
+		--color-red-dark: hsl(354, 60%, 45%);
+		--color-blue: hsl(215, 45%, 65%);
+		--color-blue-light: hsl(215, 35%, 55%);
+		--color-blue-lightest: hsl(215, 25%, 40%);
+		--color-blue-dark: hsl(215, 40%, 75%);
+		--color-purple: hsl(270, 35%, 65%);
+		--color-purple-light: hsl(270, 30%, 55%);
+		--color-purple-lightest: hsl(270, 25%, 40%);
+		--color-purple-dark: hsl(270, 40%, 78%);
+
+		--text-color-green-darkest: hsl(172, 15%, 92%);
+
+		--color-bg: hsl(180, 8%, 11%);
+		--color-surface: hsl(180, 7%, 15%);
+		--color-surface-alt: hsl(180, 6%, 18%);
+		--color-text: hsl(172, 15%, 92%);
+		--color-text-muted: hsl(172, 12%, 70%);
+		--color-border: hsl(180, 6%, 28%);
+		--color-link: hsl(172, 45%, 75%);
+		--color-link-hover: hsl(172, 60%, 85%);
+		--nav-bg: hsl(180, 10%, 7%);
+		--nav-fg: hsl(172, 25%, 85%);
+		--shadow-elev-1: 0 1px 2px hsla(0, 0%, 0%, 0.5), 0 2px 6px hsla(0, 0%, 0%, 0.4);
+		--shadow-elev-2: 0 4px 12px hsla(0, 0%, 0%, 0.6);
+	}
+}
+
+/* Manual override — data-theme="light" on <html> forces the light palette
+   even if the OS prefers dark. */
+html[data-theme='light'] {
+	--color-green: hsl(172, 60%, 25%);
+	--color-green-light: hsl(172, 42%, 50%);
+	--color-green-lightest: hsl(172, 40%, 75%);
+	--color-green-white: hsl(172, 60%, 95%);
+	--color-green-dark: hsl(172, 84%, 15%);
+	--color-red: hsl(354, 60%, 37%);
+	--color-red-dark: hsl(354, 80%, 23%);
+	--color-blue: hsl(215, 60%, 30%);
+	--color-blue-light: hsl(215, 40%, 50%);
+	--color-blue-lightest: hsl(215, 40%, 70%);
+	--color-blue-dark: hsl(215, 70%, 20%);
+	--color-purple: hsl(270, 60%, 30%);
+	--color-purple-light: hsl(270, 40%, 50%);
+	--color-purple-lightest: hsl(270, 40%, 75%);
+	--color-purple-dark: hsl(270, 70%, 20%);
+
+	--text-color-green-darkest: #000a03;
+
+	--color-bg: hsl(172, 60%, 95%);
+	--color-surface: #ffffff;
+	--color-surface-alt: hsl(172, 40%, 92%);
+	--color-text: #000a03;
+	--color-text-muted: hsl(172, 25%, 28%);
+	--color-border: hsl(172, 25%, 78%);
+	--color-link: hsl(172, 84%, 15%);
+	--color-link-hover: hsl(172, 60%, 25%);
+	--nav-bg: hsl(172, 84%, 15%);
+	--nav-fg: hsl(172, 40%, 75%);
+	--shadow-elev-1: 0 1px 2px hsla(172, 60%, 10%, 0.08), 0 2px 6px hsla(172, 60%, 10%, 0.06);
+	--shadow-elev-2: 0 4px 12px hsla(172, 60%, 10%, 0.18);
+}
+
+/* Manual override — data-theme="dark" on <html> forces the dark palette
+   even if the OS prefers light. Mirrors the prefers-color-scheme block. */
+html[data-theme='dark'] {
+	--color-green: hsl(172, 35%, 55%);
+	--color-green-light: hsl(172, 30%, 45%);
+	--color-green-lightest: hsl(172, 25%, 32%);
+	--color-green-white: hsl(180, 8%, 11%);
+	--color-green-dark: hsl(172, 30%, 70%);
+	--color-red: hsl(354, 50%, 60%);
+	--color-red-dark: hsl(354, 60%, 45%);
+	--color-blue: hsl(215, 45%, 65%);
+	--color-blue-light: hsl(215, 35%, 55%);
+	--color-blue-lightest: hsl(215, 25%, 40%);
+	--color-blue-dark: hsl(215, 40%, 75%);
+	--color-purple: hsl(270, 35%, 65%);
+	--color-purple-light: hsl(270, 30%, 55%);
+	--color-purple-lightest: hsl(270, 25%, 40%);
+	--color-purple-dark: hsl(270, 40%, 78%);
+
+	--text-color-green-darkest: hsl(172, 15%, 92%);
+
+	--color-bg: hsl(180, 8%, 11%);
+	--color-surface: hsl(180, 7%, 15%);
+	--color-surface-alt: hsl(180, 6%, 18%);
+	--color-text: hsl(172, 15%, 92%);
+	--color-text-muted: hsl(172, 12%, 70%);
+	--color-border: hsl(180, 6%, 28%);
+	--color-link: hsl(172, 45%, 75%);
+	--color-link-hover: hsl(172, 60%, 85%);
+	--nav-bg: hsl(180, 10%, 7%);
+	--nav-fg: hsl(172, 25%, 85%);
+	--shadow-elev-1: 0 1px 2px hsla(0, 0%, 0%, 0.5), 0 2px 6px hsla(0, 0%, 0%, 0.4);
+	--shadow-elev-2: 0 4px 12px hsla(0, 0%, 0%, 0.6);
+}
+
+html,
+body {
+	background-color: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--text-font);
+	font-size: var(--text-base);
+	line-height: 1.55;
+	margin: 0;
+	padding: 0;
+	-webkit-text-size-adjust: 100%;
+}
+
+/* Skip-to-content link — visually hidden until focused, then jumps to a
+   prominent fixed pill in the top-left. Anchors to #main-content rendered by
+   the root layout. */
+.skip-link {
+	position: fixed;
+	top: 0;
+	left: 0;
+	background: var(--color-green-dark);
+	color: var(--color-green-white);
+	padding: 0.75rem 1rem;
+	border-radius: 0 0 0.4rem 0;
+	transform: translateY(-110%);
+	transition: transform 120ms ease-out;
+	z-index: 1000;
+	font-weight: 600;
+	text-decoration: none !important;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+	transform: translateY(0);
+	outline: var(--focus-ring-width) solid var(--focus-ring-color);
+	outline-offset: 0;
+}
+
+/* Global focus ring — visible on every focusable element. Uses outline so it
+   doesn't shift layout, and a high-contrast color that reads on every surface
+   in either palette. */
+:focus-visible {
+	outline: var(--focus-ring-width) solid var(--focus-ring-color);
+	outline-offset: var(--focus-ring-offset);
+	border-radius: 2px;
+}
+
+/* Visually hidden helper — used for screen-reader-only labels. */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Tap targets — when shown on touch / narrow viewports, interactive elements
+   should hit the 44px floor. We apply this globally and let larger components
+   keep their natural padding. */
+button,
+.btn,
+input[type='button'],
+input[type='submit'],
+select,
+[role='button'] {
+	min-height: var(--touch-target);
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='url'],
+input[type='number'],
+input:not([type]),
+textarea {
+	min-height: var(--touch-target);
+	padding: 0.5rem 0.6rem;
+	font-size: var(--text-base);
+	background: var(--color-surface);
+	color: var(--color-text);
+	border: 1px solid var(--color-border);
+	border-radius: 0.3rem;
+}
+textarea {
+	min-height: calc(var(--touch-target) * 2);
+}

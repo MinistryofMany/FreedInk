@@ -1,149 +1,88 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { BrowserProvider } from 'ethers';
-	import { SiweMessage } from 'siwe';
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { tick } from 'svelte'; // To ensure DOM updates
-	import { Identity } from '@semaphore-protocol/core';
 
-	export let address;
+	export let address: string | null = null;
+	let busy = false;
+	let error = '';
 
-	let isConnected = false;
-	let isAuthenticated = false;
-	let connectWalletBtn;
-	let siweBtn;
-
-	if (browser) {
-		async function connectWalletSigner() {
-			if (typeof window.ethereum !== 'undefined') {
-				const provider = new BrowserProvider(window.ethereum);
-				await provider.send('eth_requestAccounts', []);
-				const signer = provider.getSigner();
-				return signer;
-			} else {
-				alert('MetaMask is not installed!');
-				return null;
+	async function signInWithEthereum() {
+		if (!browser) return;
+		busy = true;
+		error = '';
+		try {
+			const { BrowserProvider } = await import('ethers');
+			const { SiweMessage } = await import('siwe');
+			if (!(window as any).ethereum) {
+				error = 'No injected wallet detected (MetaMask, Rabby, etc.).';
+				return;
 			}
-		}
+			const provider = new BrowserProvider((window as any).ethereum);
+			await provider.send('eth_requestAccounts', []);
+			const signer = await provider.getSigner();
+			const addr = await signer.getAddress();
+			const network = await provider.getNetwork();
 
-		async function signMessage() {
-			const signer = await connectWalletSigner();
-			if (signer) {
-				const message = `Generate your EdDSA Key Pair at ${window.location.origin}`;
-				const signature = await signer.signMessage(message);
-				const newSemaphoreIdentity = new Identity(signature);
-				localStorage.setItem('semaphoreIdentity', newSemaphoreIdentity.privateKey.toString());
-				console.log('Semaphore Identity Generated', newSemaphoreIdentity);
-				return newSemaphoreIdentity;
-			}
-		}
-		onMount(async () => {
-			function checkAuthentication() {
-				isAuthenticated = address ? true : false;
-			}
-
-			const provider = new BrowserProvider(window.ethereum);
-
-			const accounts = await provider.listAccounts();
-			if (accounts.length > 0) {
-				isConnected = true;
-				checkAuthentication();
-			}
-
-			// Attach event listeners after the DOM is updated
-			await tick();
-			if (connectWalletBtn) {
-				connectWalletBtn.onclick = connectWallet;
-			}
-			if (siweBtn) {
-				siweBtn.onclick = signInWithEthereum;
-			}
-		});
-
-		async function createSiweMessage(address: string, statement: string) {
-			const res = await fetch('/api/nonce', {
-				credentials: 'include'
-			});
+			const nonce = await (await fetch('/api/nonce', { credentials: 'include' })).text();
 			const message = new SiweMessage({
-				scheme: 'https',
+				scheme: document.location.protocol.replace(':', ''),
 				domain: document.location.host,
-				address,
-				statement,
+				address: addr,
+				statement: 'Sign into Freed.Ink with Ethereum.',
 				uri: document.location.origin,
 				version: '1',
-				chainId: (await provider.getNetwork().then(({ chainId }) => chainId)) as number,
-				nonce: await res.text()
-			});
-			return message.prepareMessage();
-		}
-
-		const provider = new BrowserProvider(window.ethereum);
-
-		function connectWallet() {
-			provider.send('eth_requestAccounts', []).catch(() => console.log('user rejected request'));
-		}
-
-		async function signInWithEthereum() {
-			const signer = await provider.getSigner();
-
-			const message = await createSiweMessage(
-				await signer.getAddress(),
-				'Sign into Freed Ink with Ethereum.'
-			);
+				chainId: Number(network.chainId),
+				nonce
+			}).prepareMessage();
 			const signature = await signer.signMessage(message);
-
 			const res = await fetch('/api/verify', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
+				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ message, signature }),
 				credentials: 'include'
 			});
-			res.json().then((data) => {
-				if (data.new_user) {
-					goto('/signup/profile');
-				} else {
-					window.location.href = '/admin';
-				}
-			});
+			if (!res.ok) {
+				error = await res.text();
+				return;
+			}
+			const json = await res.json();
+			goto(json.needs_identity ? '/signup/identity' : '/admin');
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			busy = false;
 		}
 	}
 
 	async function signOut() {
-		const response = await fetch('/api/signout', { method: 'POST' });
-		if (response.ok) {
-			window.location.reload();
-			goto('/');
-		} else {
-			console.error('Failed to sign out');
+		const res = await fetch('/api/signout', { method: 'POST' });
+		if (res.ok) {
+			window.location.href = '/';
 		}
 	}
 </script>
 
 <div id="siwe_state">
-	{#if !isConnected}
-		<button bind:this={connectWalletBtn}>Connect</button>
-	{/if}
-	{#if isAuthenticated}
+	{#if address}
 		<div title={address} class="address">{address}</div>
-		<button on:click={signOut}>Sign Out</button>
+		<button on:click={signOut}>Sign out</button>
 	{:else}
-		<button bind:this={siweBtn}>Sign-in</button>
+		<button on:click={signInWithEthereum} disabled={busy}>
+			{busy ? 'Signing…' : 'Sign-in with Ethereum'}
+		</button>
+	{/if}
+	{#if error}
+		<span style="color: var(--color-red)">{error}</span>
 	{/if}
 </div>
 
 <style>
 	#siwe_state {
 		display: flex;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
 		gap: 1rem;
+		align-items: center;
 	}
-
-	#siwe_state .address {
+	.address {
 		max-width: 12ch;
 		text-overflow: ellipsis;
 		white-space: nowrap;

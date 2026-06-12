@@ -1,272 +1,491 @@
-import { supabase } from '$lib/supabaseClient';
-import { getAuthorIDCs, getBlogBySlug } from './blogs';
-import { getBlogAuthors, getBlogOwners } from './roles';
-import { getUserByAddress } from './users';
-import { getBlogReviewers } from '$lib/db/roles';
+import { db, schema } from './client';
+import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
-import { verifyProof, type SemaphoreProof } from '@semaphore-protocol/proof';
-import { Group } from '@semaphore-protocol/group';
+import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 
-/**
- * Fetch all posts for a specific blog based on the blog's slug.
- * @param blog_slug The slug of the blog.
- * @returns Blog details and an array of blog posts.
- */
-export async function getBlogPosts(blog_slug: string) {
-	console.debug('getBlogPosts', blog_slug);
-	try {
-		// Retrieve the blog's ID and details using the slug
-		const blogData = await getBlogBySlug(blog_slug);
+type DateIdCursor = { key: string; id: string };
 
-		if (!blogData) {
-			console.error(`Blog with slug ${blog_slug} not found.`);
-			return null;
-		}
-		console.log('getting all authors');
-		const authors = await getBlogAuthors(blogData.id);
-		const reviewers = await getBlogReviewers(blogData.id, '', true);
-		const owners = await getBlogOwners(blogData.id, '', true);
-		const all_authors = [
-			...(authors?.authors ?? []).map((author) => author.username),
-			...(reviewers?.reviewers ?? []).map((reviewer) => reviewer.username),
-			...(owners?.owners ?? []).map((owner) => owner.username)
-		].sort();
-		console.log(authors, reviewers, owners, all_authors);
-
-		// Fetch blog posts for the specified blog ID
-		const { data: postsData, error: postsError } = await supabase
-			.from('BlogPosts')
-			.select(
-				`
-				id,
-				created_at,
-				blog_id,
-				status,
-				current_version,
-				BlogPostVersions:BlogPosts_current_version_fkey (
-					title,
-					content,
-					slug
-				)
-			`
-			)
-			.eq('blog_id', blogData.id)
-			.order('created_at', { ascending: true });
-
-		if (postsError) throw postsError;
-
-		// Flatten the posts to simplify data structure
-		const flattenedPosts = postsData.map((post) => ({
-			title: post.BlogPostVersions?.title,
-			content: post.BlogPostVersions?.content,
-			slug: post.BlogPostVersions?.slug,
-			status: post.status
-		}));
-
-		return {
-			Blog: {
-				title: blogData.title,
-				slug: blog_slug,
-				description: blogData.description,
-				authors: all_authors
-			},
-			Posts: flattenedPosts ?? []
-		};
-	} catch (error) {
-		console.error('Error fetching blog posts:', error);
-		return null;
-	}
+function clampLimit(n: number | undefined, dflt = 20, max = 100): number {
+	const v = n ?? dflt;
+	if (!Number.isFinite(v) || !Number.isInteger(v) || v < 1) return dflt;
+	return Math.min(v, max);
 }
 
-/**
- * Fetch a single blog post by the blog's slug and the post's slug.
- * @param blog_slug The slug of the blog.
- * @param post_slug The slug of the blog post.
- * @returns Blog details and the specific blog post.
- */
-export async function getBlogPost(blog_slug: string, post_slug: string) {
-	try {
-		// Retrieve the blog's ID and title using the blog slug
-		const { data: blogData, error: blogError } = await supabase
-			.from('Blogs')
-			.select('id, title')
-			.eq('slug', blog_slug)
-			.single();
-
-		if (blogError) throw blogError;
-		if (!blogData) {
-			console.error(`Blog with slug ${blog_slug} not found.`);
-			return null;
-		}
-		// Retrieve the post details using the blog and post slugs
-		const { data: postData, error: postError } = await supabase
-			.from('BlogPosts')
-			.select(
-				`
-				id,
-				created_at,
-				blog_id,
-				status,
-				BlogPostVersions:BlogPosts_current_version_fkey (
-					title,
-					content,
-					slug
-				)
-			`
-			)
-			.eq('blog_id', blogData.id)
-			.eq('BlogPostVersions.slug', post_slug)
-			.single();
-
-		if (postError) throw postError;
-
-		// Flatten the post data
-		const post = {
-			id: postData.id,
-			created_at: postData.created_at,
-			blog_id: postData.blog_id,
-			status: postData.status,
-			title: postData.BlogPostVersions?.title,
-			content: postData.BlogPostVersions?.content,
-			slug: postData.BlogPostVersions?.slug
-		};
-
-		// Return the blog and post details
-		return {
-			Blog: { title: blogData.title, slug: blog_slug },
-			Post: post
-		};
-	} catch (error) {
-		console.error('Error fetching blog post:', error);
-		return null;
-	}
-}
-
-export async function getUnderReviewPostsByReviewer(address: string) {
-	try {
-		const userData = await getUserByAddress(address);
-
-		const reviewerId = userData.id;
-
-		// Step 2: Fetch the blog IDs where the user is a reviewer
-		const { data: blogReviewerData, error: blogReviewerError } = await supabase
-			.from('BlogReviewers')
-			.select('blog_id')
-			.eq('reviewer_id', reviewerId);
-
-		if (blogReviewerError || !blogReviewerData.length) {
-			throw new Error(`No blogs found where the address ${address} is a reviewer.`);
-		}
-
-		const blogIds = blogReviewerData.map((entry) => entry.blog_id);
-
-		// Step 3: Fetch all blog posts that are in 'under_review' status and belong to the blogs where the user is a reviewer
-		const { data: postsData, error: postsError } = await supabase
-			.from('BlogPosts')
-			.select(
-				`
-                id,
-                created_at,
-                blog_id,
-                status,
-                BlogPostVersions!inner (
-                    id,
-                    title,
-                    content,
-                    version,
-                    slug,
-                    status
-                )
-            `
-			)
-			.in('blog_id', blogIds)
-			.eq('status', 'under_review') // BlogPost must be under review
-			.eq('BlogPostVersions.status', 'under_review') // Fetch the BlogPostVersion that is under review
-			.order('created_at', { ascending: true });
-
-		if (postsError) {
-			throw new Error(`Error fetching under-review blog posts: ${postsError.message}`);
-		}
-
-		// Step 4: Flatten the data for ease of use in the frontend
-		const flattenedPosts = postsData.map((post) => ({
-			id: post.id,
-			created_at: post.created_at,
-			blog_id: post.blog_id,
-			status: post.status,
+export async function listPublishedPosts(blogId: string) {
+	const rows = await db
+		.select({
+			id: schema.blogPosts.id,
+			status: schema.blogPosts.status,
+			createdAt: schema.blogPosts.createdAt,
 			version: {
-				id: post.BlogPostVersions.id,
-				title: post.BlogPostVersions.title,
-				content: post.BlogPostVersions.content,
-				slug: post.BlogPostVersions.slug,
-				status: post.BlogPostVersions.status
+				title: schema.blogPostVersions.title,
+				content: schema.blogPostVersions.content,
+				slug: schema.blogPostVersions.slug,
+				publishedAt: schema.blogPostVersions.publishedAt
 			}
-		}));
-
-		return flattenedPosts;
-	} catch (error) {
-		console.error('Error fetching under-review posts by reviewer:', error);
-		return null;
-	}
+		})
+		.from(schema.blogPosts)
+		.innerJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(
+			and(
+				eq(schema.blogPosts.blogId, blogId),
+				eq(schema.blogPosts.status, 'published'),
+				isNull(schema.blogPostVersions.deletedAt)
+			)
+		)
+		.orderBy(desc(schema.blogPostVersions.publishedAt));
+	return rows;
 }
 
-export async function createBlogPost(
-	blog_id: string,
-	title: string,
-	content: string,
-	proof: object = {}
-) {
-	const slug = sluggify(title);
-	const verified = await verifyProof(proof as SemaphoreProof);
-	console.warn('verified', verified);
-	const { data: postData, error: postError } = await supabase
-		.from('BlogPosts')
-		.insert([
-			{
-				blog_id: blog_id,
-				status: 'under_review'
+export async function listAllPosts(blogId: string) {
+	const rows = await db
+		.select({
+			id: schema.blogPosts.id,
+			status: schema.blogPosts.status,
+			createdAt: schema.blogPosts.createdAt,
+			currentVersionId: schema.blogPosts.currentVersionId,
+			version: {
+				id: schema.blogPostVersions.id,
+				title: schema.blogPostVersions.title,
+				content: schema.blogPostVersions.content,
+				slug: schema.blogPostVersions.slug,
+				status: schema.blogPostVersions.status
 			}
-		])
-		.select();
+		})
+		.from(schema.blogPosts)
+		.leftJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(eq(schema.blogPosts.blogId, blogId))
+		.orderBy(desc(schema.blogPosts.createdAt));
+	return rows;
+}
 
-	if (postError) {
-		console.error('Error creating blog post:', postError);
-		return null;
-	}
-	console.debug('Create post but havent created post version yet');
+export async function getPostBySlug(blogId: string, postSlug: string) {
+	const rows = await db
+		.select({
+			post: schema.blogPosts,
+			version: schema.blogPostVersions
+		})
+		.from(schema.blogPosts)
+		.innerJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(
+			and(
+				eq(schema.blogPosts.blogId, blogId),
+				eq(schema.blogPostVersions.slug, postSlug),
+				isNull(schema.blogPostVersions.deletedAt)
+			)
+		)
+		.limit(1);
+	return rows[0] ?? null;
+}
 
-	const post_id = postData[0].id;
+export async function getPostsUnderReview(blogIds: string[]) {
+	if (blogIds.length === 0) return [];
+	return db
+		.select({
+			id: schema.blogPosts.id,
+			blogId: schema.blogPosts.blogId,
+			createdAt: schema.blogPosts.createdAt,
+			version: {
+				id: schema.blogPostVersions.id,
+				title: schema.blogPostVersions.title,
+				content: schema.blogPostVersions.content,
+				slug: schema.blogPostVersions.slug,
+				snapshotRoot: schema.blogPostVersions.snapshotRoot,
+				submittedAt: schema.blogPostVersions.submittedAt
+			}
+		})
+		.from(schema.blogPosts)
+		.innerJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(
+			and(
+				inArray(schema.blogPosts.blogId, blogIds),
+				eq(schema.blogPosts.status, 'under_review')
+			)
+		)
+		.orderBy(desc(schema.blogPosts.createdAt));
+}
 
-	const { data: versionData, error: versionError } = await supabase
-		.from('BlogPostVersions')
-		.insert([
-			{
-				post_id: post_id,
-				title: title,
-				content: content,
+// ─────────────────────────── paginated variants ───────────────────────────
+//
+// Cursor-paginated listings sit *next to* the unbounded variants — the older
+// callers still work, new public-facing routes use these. Each one keysets on
+// (sort_key, id) so concurrent writes between page fetches don't cause skips
+// or duplicates. The id is a UUID, so the composite is total-order.
+
+/** Published posts of one blog, newest published first. */
+export async function listPublishedPostsPage(
+	blogId: string,
+	opts: { cursor?: string | null; limit?: number } = {}
+): Promise<
+	Page<{
+		id: string;
+		status: 'draft' | 'under_review' | 'published' | 'rejected';
+		createdAt: Date;
+		version: {
+			title: string;
+			content: string;
+			slug: string;
+			publishedAt: Date | null;
+		};
+	}>
+> {
+	const limit = clampLimit(opts.limit);
+	const cursor = decodeCursor<DateIdCursor>(opts.cursor);
+
+	const base = and(
+		eq(schema.blogPosts.blogId, blogId),
+		eq(schema.blogPosts.status, 'published'),
+		isNull(schema.blogPostVersions.deletedAt)
+	);
+	// Keyset on (publishedAt, blogPosts.id). publishedAt is required for
+	// published posts but typed as nullable; we coalesce in the comparator.
+	const where = cursor
+		? and(
+				base,
+				or(
+					lt(schema.blogPostVersions.publishedAt, new Date(cursor.key)),
+					and(
+						eq(schema.blogPostVersions.publishedAt, new Date(cursor.key)),
+						lt(schema.blogPosts.id, cursor.id)
+					)
+				)
+			)
+		: base;
+
+	const rows = await db
+		.select({
+			id: schema.blogPosts.id,
+			status: schema.blogPosts.status,
+			createdAt: schema.blogPosts.createdAt,
+			version: {
+				title: schema.blogPostVersions.title,
+				content: schema.blogPostVersions.content,
+				slug: schema.blogPostVersions.slug,
+				publishedAt: schema.blogPostVersions.publishedAt
+			}
+		})
+		.from(schema.blogPosts)
+		.innerJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(where)
+		.orderBy(desc(schema.blogPostVersions.publishedAt), desc(schema.blogPosts.id))
+		.limit(limit + 1);
+
+	const hasMore = rows.length > limit;
+	const items = hasMore ? rows.slice(0, limit) : rows;
+	const last = items[items.length - 1];
+	const nextCursor =
+		hasMore && last && last.version.publishedAt
+			? encodeCursor({
+					key: last.version.publishedAt.toISOString(),
+					id: last.id
+				} satisfies DateIdCursor)
+			: null;
+	return { items, nextCursor };
+}
+
+/** All posts of one blog, newest first (admin view). */
+export async function listAllPostsPage(
+	blogId: string,
+	opts: { cursor?: string | null; limit?: number } = {}
+): Promise<
+	Page<{
+		id: string;
+		status: 'draft' | 'under_review' | 'published' | 'rejected';
+		createdAt: Date;
+		currentVersionId: string | null;
+		version: {
+			id: string;
+			title: string;
+			content: string;
+			slug: string;
+			status: 'draft' | 'under_review' | 'published' | 'rejected';
+		} | null;
+	}>
+> {
+	const limit = clampLimit(opts.limit);
+	const cursor = decodeCursor<DateIdCursor>(opts.cursor);
+
+	const base = eq(schema.blogPosts.blogId, blogId);
+	const where = cursor
+		? and(
+				base,
+				or(
+					lt(schema.blogPosts.createdAt, new Date(cursor.key)),
+					and(
+						eq(schema.blogPosts.createdAt, new Date(cursor.key)),
+						lt(schema.blogPosts.id, cursor.id)
+					)
+				)
+			)
+		: base;
+
+	const rows = await db
+		.select({
+			id: schema.blogPosts.id,
+			status: schema.blogPosts.status,
+			createdAt: schema.blogPosts.createdAt,
+			currentVersionId: schema.blogPosts.currentVersionId,
+			version: {
+				id: schema.blogPostVersions.id,
+				title: schema.blogPostVersions.title,
+				content: schema.blogPostVersions.content,
+				slug: schema.blogPostVersions.slug,
+				status: schema.blogPostVersions.status
+			}
+		})
+		.from(schema.blogPosts)
+		.leftJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(where)
+		.orderBy(desc(schema.blogPosts.createdAt), desc(schema.blogPosts.id))
+		.limit(limit + 1);
+
+	const hasMore = rows.length > limit;
+	const items = hasMore ? rows.slice(0, limit) : rows;
+	const last = items[items.length - 1];
+	const nextCursor =
+		hasMore && last
+			? encodeCursor({
+					key: last.createdAt.toISOString(),
+					id: last.id
+				} satisfies DateIdCursor)
+			: null;
+	return { items, nextCursor };
+}
+
+/** Posts under review across one or more blogs, newest first. */
+export async function getPostsUnderReviewPage(
+	blogIds: string[],
+	opts: { cursor?: string | null; limit?: number } = {}
+): Promise<
+	Page<{
+		id: string;
+		blogId: string;
+		createdAt: Date;
+		version: {
+			id: string;
+			title: string;
+			content: string;
+			slug: string;
+			snapshotRoot: string | null;
+			submittedAt: Date | null;
+		};
+	}>
+> {
+	if (blogIds.length === 0) return { items: [], nextCursor: null };
+	const limit = clampLimit(opts.limit);
+	const cursor = decodeCursor<DateIdCursor>(opts.cursor);
+
+	const base = and(
+		inArray(schema.blogPosts.blogId, blogIds),
+		eq(schema.blogPosts.status, 'under_review')
+	);
+	const where = cursor
+		? and(
+				base,
+				or(
+					lt(schema.blogPosts.createdAt, new Date(cursor.key)),
+					and(
+						eq(schema.blogPosts.createdAt, new Date(cursor.key)),
+						lt(schema.blogPosts.id, cursor.id)
+					)
+				)
+			)
+		: base;
+
+	const rows = await db
+		.select({
+			id: schema.blogPosts.id,
+			blogId: schema.blogPosts.blogId,
+			createdAt: schema.blogPosts.createdAt,
+			version: {
+				id: schema.blogPostVersions.id,
+				title: schema.blogPostVersions.title,
+				content: schema.blogPostVersions.content,
+				slug: schema.blogPostVersions.slug,
+				snapshotRoot: schema.blogPostVersions.snapshotRoot,
+				submittedAt: schema.blogPostVersions.submittedAt
+			}
+		})
+		.from(schema.blogPosts)
+		.innerJoin(
+			schema.blogPostVersions,
+			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
+		)
+		.where(where)
+		.orderBy(desc(schema.blogPosts.createdAt), desc(schema.blogPosts.id))
+		.limit(limit + 1);
+
+	const hasMore = rows.length > limit;
+	const items = hasMore ? rows.slice(0, limit) : rows;
+	const last = items[items.length - 1];
+	const nextCursor =
+		hasMore && last
+			? encodeCursor({
+					key: last.createdAt.toISOString(),
+					id: last.id
+				} satisfies DateIdCursor)
+			: null;
+	return { items, nextCursor };
+}
+
+/** Comments on one post version, newest first. */
+export async function listCommentsPage(
+	postVersionId: string,
+	opts: { cursor?: string | null; limit?: number } = {}
+): Promise<
+	Page<{
+		id: string;
+		body: string;
+		createdAt: Date;
+	}>
+> {
+	const limit = clampLimit(opts.limit);
+	const cursor = decodeCursor<DateIdCursor>(opts.cursor);
+
+	// Match the existing inline query: hide soft-deleted comments.
+	const base = and(
+		eq(schema.postComments.postVersionId, postVersionId),
+		isNull(schema.postComments.deletedAt)
+	);
+	const where = cursor
+		? and(
+				base,
+				or(
+					lt(schema.postComments.createdAt, new Date(cursor.key)),
+					and(
+						eq(schema.postComments.createdAt, new Date(cursor.key)),
+						lt(schema.postComments.id, cursor.id)
+					)
+				)
+			)
+		: base;
+
+	const rows = await db
+		.select({
+			id: schema.postComments.id,
+			body: schema.postComments.body,
+			createdAt: schema.postComments.createdAt
+		})
+		.from(schema.postComments)
+		.where(where)
+		.orderBy(desc(schema.postComments.createdAt), desc(schema.postComments.id))
+		.limit(limit + 1);
+
+	const hasMore = rows.length > limit;
+	const items = hasMore ? rows.slice(0, limit) : rows;
+	const last = items[items.length - 1];
+	const nextCursor =
+		hasMore && last
+			? encodeCursor({
+					key: last.createdAt.toISOString(),
+					id: last.id
+				} satisfies DateIdCursor)
+			: null;
+	return { items, nextCursor };
+}
+
+export type CreatePostInput = {
+	blogId: string;
+	title: string;
+	content: string;
+	proof: unknown;
+	snapshotRoot: string;
+	nullifier: string;
+	status: 'draft' | 'under_review';
+	// Optional. Falls back to the blog's defaultLanguage if unset.
+	language?: string;
+};
+
+export async function createPost(input: CreatePostInput) {
+	const slug = sluggify(input.title);
+	return db.transaction(async (tx) => {
+		// Resolve effective language inside the transaction so we always pick
+		// up the blog's current default if the author didn't override.
+		let language = input.language;
+		if (!language) {
+			const [b] = await tx
+				.select({ defaultLanguage: schema.blogs.defaultLanguage })
+				.from(schema.blogs)
+				.where(eq(schema.blogs.id, input.blogId))
+				.limit(1);
+			language = b?.defaultLanguage ?? 'en';
+		}
+
+		const [post] = await tx
+			.insert(schema.blogPosts)
+			.values({ blogId: input.blogId, status: input.status })
+			.returning();
+		const [version] = await tx
+			.insert(schema.blogPostVersions)
+			.values({
+				postId: post.id,
 				version: 1,
-				slug: slug,
-				proof: proof,
-				status: 'under_review'
-			}
-		])
-		.select();
+				title: input.title,
+				content: input.content,
+				slug,
+				language,
+				proof: input.proof as object,
+				snapshotRoot: input.snapshotRoot,
+				nullifier: input.nullifier,
+				status: input.status,
+				submittedAt: input.status === 'under_review' ? new Date() : null
+			})
+			.returning();
+		await tx
+			.update(schema.blogPosts)
+			.set({ currentVersionId: version.id })
+			.where(eq(schema.blogPosts.id, post.id));
+		return { post, version };
+	});
+}
 
-	if (versionError) {
-		console.error('Error creating blog post version:', versionError);
-		return null;
-	}
+export async function submitForReview(postVersionId: string): Promise<void> {
+	await db.transaction(async (tx) => {
+		const [version] = await tx
+			.update(schema.blogPostVersions)
+			.set({ status: 'under_review', submittedAt: new Date() })
+			.where(eq(schema.blogPostVersions.id, postVersionId))
+			.returning();
+		if (version) {
+			await tx
+				.update(schema.blogPosts)
+				.set({ status: 'under_review' })
+				.where(eq(schema.blogPosts.id, version.postId));
+		}
+	});
+}
 
-	const { error: postUpdateError } = await supabase
-		.from('BlogPosts')
-		.update({ current_version: versionData[0].id })
-		.eq('id', post_id)
-		.select();
-
-	if (postUpdateError) {
-		console.error('Error updating blog post:', postUpdateError);
-		return null;
-	}
-
-	return { post: postData[0], version: versionData[0] };
+export async function setPostStatus(
+	postId: string,
+	versionId: string,
+	status: 'published' | 'rejected'
+): Promise<void> {
+	await db.transaction(async (tx) => {
+		await tx
+			.update(schema.blogPostVersions)
+			.set({
+				status,
+				publishedAt: status === 'published' ? new Date() : null
+			})
+			.where(eq(schema.blogPostVersions.id, versionId));
+		await tx.update(schema.blogPosts).set({ status }).where(eq(schema.blogPosts.id, postId));
+	});
 }

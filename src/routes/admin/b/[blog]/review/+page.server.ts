@@ -1,44 +1,30 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import {
-	getBlogAuthors,
-	getBlogOwners,
-	getBlogReviewers,
-	isOwner,
-	isReviewer
-} from '$lib/db/roles';
 import { getBlogBySlug } from '$lib/db/blogs';
+import { hasRole, ROLES_REVIEWING } from '$lib/server/auth';
+import { getPostsUnderReviewPage } from '$lib/db/posts';
+import { getReviewSummary } from '$lib/server/tally';
+import { parseLimit } from '$lib/pagination';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
-	if (!locals.siwe) {
-		console.error('SIWE data not found in locals:', locals);
-		throw redirect(303, '/'); // Redirect to login if not authenticated
-	}
+export const load: PageServerLoad = async ({ locals, params, url }) => {
+	if (!locals.user) throw redirect(303, '/signup');
+	const blog = await getBlogBySlug(params.blog);
+	if (!blog) throw error(404, 'blog not found');
+	if (!(await hasRole(blog.id, locals.user.id, ROLES_REVIEWING)))
+		throw redirect(303, '/admin');
 
-	const address = locals.siwe.address;
-	const blog_slug = params.blog;
-	const blog = await getBlogBySlug(blog_slug);
-	const blog_title = blog.title;
-	const blog_id = blog.id;
-
-	const owner = await isOwner(blog.id, address);
-	const reviewer = await isReviewer(blog.id, address);
-	if (!owner || !reviewer) {
-		console.error('User does not have any administrative access to', blog_title);
-		throw redirect(303, '/admin'); // Redirect to login if not authenticated
-	}
-	const authors = await getBlogAuthors(blog_id);
-	const owners = await getBlogOwners(blog_id, address);
-	const reviewers = await getBlogReviewers(blog_id, address);
-
-	const data = {
-		address,
-		blog_title,
-		blog_id,
-		owners: owners.owners,
-		authors: authors.authors,
-		reviewers: reviewers.reviewers
+	const cursor = url.searchParams.get('cursor');
+	const limit = parseLimit(url.searchParams.get('limit'));
+	const page = await getPostsUnderReviewPage([blog.id], { cursor, limit });
+	const enriched = await Promise.all(
+		page.items.map(async (p) => ({
+			...p,
+			tally: await getReviewSummary(p.version.id)
+		}))
+	);
+	return {
+		blog: { id: blog.id, slug: blog.slug, title: blog.title },
+		posts: enriched,
+		nextCursor: page.nextCursor
 	};
-
-	return data;
 };
