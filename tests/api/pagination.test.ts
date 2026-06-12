@@ -36,26 +36,6 @@ async function fetchPage(path: string, extraParams: Record<string, string> = {},
 	return res.text();
 }
 
-async function walk(
-	path: string,
-	extraParams: Record<string, string>,
-	cursorName = 'cursor'
-): Promise<string[]> {
-	const cursors: string[] = [];
-	let cursor: string | undefined = undefined;
-	let safety = 0;
-	for (;;) {
-		const html = await fetchPage(path, extraParams, cursor);
-		const next = extractCursor(html, cursorName);
-		cursors.push(cursor ?? '');
-		if (!next) break;
-		cursor = next;
-		safety++;
-		if (safety > 30) throw new Error('pagination did not terminate');
-	}
-	return cursors;
-}
-
 describe('GET /b?limit=5 cursor chain', () => {
 	it('paginates blogs with a follow-able cursor', async () => {
 		// Seed 12 blogs. Direct DB insert avoids snapshot/identity work and

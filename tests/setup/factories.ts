@@ -1,5 +1,6 @@
 // Test factories: tiny helpers to build a graph of users/identities/blogs/
 // members and produce real Semaphore proofs against the current snapshot.
+import { existsSync } from 'node:fs';
 import { db, schema } from '$lib/db/client';
 import { and, eq } from 'drizzle-orm';
 import { Identity } from '@semaphore-protocol/identity';
@@ -91,14 +92,7 @@ function nodeArtifactsForDepth(depth: number): { wasm: string; zkey: string } | 
 	const dir = `${process.cwd()}/static/snark-artifacts/semaphore/${depth}`;
 	const wasm = `${dir}/semaphore-${depth}.wasm`;
 	const zkey = `${dir}/semaphore-${depth}.zkey`;
-	try {
-		// Avoid an extra import: synchronous existsSync via Node's fs.
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const { existsSync } = require('node:fs');
-		return existsSync(wasm) && existsSync(zkey) ? { wasm, zkey } : undefined;
-	} catch {
-		return undefined;
-	}
+	return existsSync(wasm) && existsSync(zkey) ? { wasm, zkey } : undefined;
 }
 
 // Build a proof against the *current* snapshot for `blogId`. Mirrors the

@@ -3,7 +3,7 @@
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
 import { db, schema } from '$lib/db/client';
-import { and, eq, isNull, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { getBlogBySlug } from '$lib/db/blogs';
 import { buildRss, rssExcerpt, type RssItem } from '$lib/server/rss';

@@ -14,7 +14,6 @@ import {
 } from '$lib/db/users';
 
 const ADDR = '0x' + '11'.repeat(20);
-const ADDR2 = '0x' + '22'.repeat(20);
 
 describe('users.createUserWithWallet', () => {
 	it('creates a user and links the wallet address (normalized to lowercase)', async () => {

@@ -21,7 +21,6 @@ if (publicEnv.PUBLIC_SENTRY_DSN) {
 			});
 		})
 		.catch((err) => {
-			// eslint-disable-next-line no-console
 			console.warn('failed to load sentry browser SDK', err);
 		});
 }
@@ -38,7 +37,7 @@ export const handleError: HandleClientError = async ({ error, event }) => {
 			// swallow — never throw from handleError
 		}
 	}
-	// eslint-disable-next-line no-console
+
 	console.error('client error', error);
 	return { message: 'Something went wrong.' };
 };

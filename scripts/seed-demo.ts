@@ -85,12 +85,6 @@ await sql`INSERT INTO blog_members (blog_id, user_id, role, added_by)
 await sql`INSERT INTO blog_members (blog_id, user_id, role, added_by)
   VALUES (${blogId}, ${carol.id}, 'reviewer', ${alice.id})`;
 
-// Build snapshot identities sorted by user_creation_date.
-const allUsers = [alice, bob, carol];
-const sortedIdcs = allUsers
-	.slice()
-	.sort((a, b) => a.id.localeCompare(b.id)) // since they're all created right now, tiebreak by id
-	.map((u) => u.identity.commitment.toString());
 // Get actual creation order from DB so the ordering matches what the app would compute.
 const orderedUsers = await sql<{ user_id: string; created_at: Date; idc: string }[]>`
   SELECT u.id AS user_id, u.created_at, ui.idc

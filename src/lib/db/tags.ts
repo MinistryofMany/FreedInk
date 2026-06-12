@@ -1,5 +1,5 @@
 import { db, schema } from './client';
-import { and, eq, inArray, sql, ilike, desc, lt, or } from 'drizzle-orm';
+import { and, eq, sql, ilike, desc, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 

@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	// Type-only import: erased at compile time, so it does not undo the lazy
+	// dynamic import('ethers') below.
+	import type { Eip1193Provider } from 'ethers';
 
 	export let address: string | null = null;
 	let busy = false;
@@ -13,11 +16,12 @@
 		try {
 			const { BrowserProvider } = await import('ethers');
 			const { SiweMessage } = await import('siwe');
-			if (!(window as any).ethereum) {
+			const { ethereum } = window as Window & { ethereum?: Eip1193Provider };
+			if (!ethereum) {
 				error = 'No injected wallet detected (MetaMask, Rabby, etc.).';
 				return;
 			}
-			const provider = new BrowserProvider((window as any).ethereum);
+			const provider = new BrowserProvider(ethereum);
 			await provider.send('eth_requestAccounts', []);
 			const signer = await provider.getSigner();
 			const addr = await signer.getAddress();

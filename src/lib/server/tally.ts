@@ -1,5 +1,5 @@
 import { db, schema } from '$lib/db/client';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { setPostStatus } from '$lib/db/posts';
 
 // Decide whether a post version has crossed approve/reject thresholds. The

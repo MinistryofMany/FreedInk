@@ -14,4 +14,7 @@
 	<meta property="og:type" content="article" />
 </svelte:head>
 
+<!-- data.html is our own legal markdown rendered server-side by renderMarkdown
+     (marked + DOMPurify allowlist sanitize, src/lib/server/markdown.ts). -->
+<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 {@html data.html}

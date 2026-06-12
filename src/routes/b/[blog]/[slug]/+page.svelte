@@ -221,6 +221,10 @@
 			{data.Post.language.toUpperCase()}
 		</span>
 	</p>
+	<!-- bodyHtml is rendered server-side by renderMarkdown (marked + DOMPurify
+	     allowlist sanitize, src/lib/server/markdown.ts), so the static-analysis
+	     XSS warning does not apply here. -->
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	<div class="content">{@html data.Post.bodyHtml}</div>
 	<p class="report-row">
 		<button

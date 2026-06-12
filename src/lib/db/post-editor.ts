@@ -13,7 +13,7 @@
 // land, the second just wins the current pointer. That's acceptable: history
 // is preserved.
 import { db, schema } from './client';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { hasRole, ROLES_WRITING } from '$lib/server/auth';
 import { error } from '@sveltejs/kit';

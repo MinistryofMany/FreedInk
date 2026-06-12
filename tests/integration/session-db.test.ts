@@ -7,7 +7,7 @@ import {
 	reapExpiredSessions
 } from '$lib/server/session';
 import { db, schema } from '$lib/db/client';
-import { eq, lt } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { makeUser } from '../setup/factories';
 
 describe('session DB roundtrip', () => {

@@ -1,5 +1,5 @@
 import { db, schema } from './client';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { User } from './schema';
 
 export async function getUserById(id: string): Promise<User | null> {

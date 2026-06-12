@@ -4,7 +4,7 @@
 // object via Web `FormData` + `File`. Node 20+ has both built-in, so no
 // FormData polyfill is needed.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { api, asUser, BASE_URL } from './helpers';
+import { asUser, BASE_URL } from './helpers';
 import { makeUser } from '../setup/factories';
 import { db, schema } from '$lib/db/client';
 import { sql } from 'drizzle-orm';

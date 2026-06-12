@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll, goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { StatusLevel } from '$lib/db/status';
 	export let data: PageData;

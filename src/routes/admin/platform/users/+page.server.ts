@@ -7,7 +7,7 @@
 import type { Actions, PageServerLoad } from './$types';
 import { fail } from '@sveltejs/kit';
 import { db, schema } from '$lib/db/client';
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { revokeAllSessions } from '$lib/server/session';
 import { audit } from '$lib/server/audit';
 

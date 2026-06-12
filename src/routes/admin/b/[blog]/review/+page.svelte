@@ -69,13 +69,6 @@
 		}
 	}
 
-	async function getIdentity() {
-		const cached = getCachedIdentity();
-		if (cached) return cached;
-		needsPassword = true;
-		throw new Error('password required');
-	}
-
 	async function unlock() {
 		const res = await fetch('/api/identity');
 		const json = await res.json();

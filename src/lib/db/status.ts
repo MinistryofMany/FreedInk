@@ -12,7 +12,7 @@
 //
 // No HTTP / auth concerns here — the API endpoints layer those on top.
 import { db, schema } from './client';
-import { and, desc, eq, gte, lt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ne, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 
 export type StatusLevel = (typeof schema.statusLevel.enumValues)[number];

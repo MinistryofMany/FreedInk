@@ -6,13 +6,6 @@ import { attachVirtualAuthenticator, detachVirtualAuthenticator } from './_utils
 
 const STRONG_PASSWORD = 'aVeryStrongPassword12345';
 
-function slugify(s: string): string {
-	return s
-		.toLowerCase()
-		.replace(/ /g, '-')
-		.replace(/[^a-z0-9-_]/g, '');
-}
-
 test('signup → identity → blog → manage', async ({ page }) => {
 	test.setTimeout(120_000);
 	const { session, authenticatorId } = await attachVirtualAuthenticator(page);

@@ -212,7 +212,7 @@
 			// load (network or syntax error). Show the user a usable message
 			// instead of failing silently.
 			uploadError = `editor failed to initialise: ${(err as Error).message}`;
-			// eslint-disable-next-line no-console
+
 			console.error('[MarkdownEditor] init failed', err);
 		});
 	});

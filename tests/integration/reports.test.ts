@@ -9,7 +9,6 @@ import {
 	targetExists
 } from '$lib/db/reports';
 import { db, schema } from '$lib/db/client';
-import { eq } from 'drizzle-orm';
 import { createUserWithEmail } from '$lib/db/users';
 import { makeUser, makeBlogWith } from '../setup/factories';
 import { createPost, setPostStatus } from '$lib/db/posts';
