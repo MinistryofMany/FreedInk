@@ -20,14 +20,17 @@ const config = {
 		// to compile its WASM modules in the browser.
 		// connect-src includes snark-artifacts.pse.dev as the CDN fallback for
 		// proving artifacts we vendor at /snark-artifacts/.
+		// style-src/font-src allow Google Fonts: app.html loads Lato and
+		// Source Code Pro from fonts.googleapis.com (stylesheet) and
+		// fonts.gstatic.com (font files).
 		csp: {
 			mode: 'hash',
 			directives: {
 				'default-src': ['self'],
 				'script-src': ['self', 'wasm-unsafe-eval'],
-				'style-src': ['self', 'unsafe-inline'],
+				'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
 				'img-src': ['self', 'data:', 'blob:'],
-				'font-src': ['self', 'data:'],
+				'font-src': ['self', 'data:', 'https://fonts.gstatic.com'],
 				'connect-src': ['self', 'https://snark-artifacts.pse.dev'],
 				'frame-ancestors': ['none'],
 				'base-uri': ['self'],
