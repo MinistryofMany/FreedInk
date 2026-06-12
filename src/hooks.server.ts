@@ -121,6 +121,17 @@ const mainHandle: Handle = async ({ event, resolve }) => {
 	response.headers.set('Permissions-Policy', PERMISSIONS_POLICY);
 	response.headers.set('X-Request-Id', requestId);
 
+	// Dynamic HTML must revalidate. SvelteKit stamps a body-hash ETag on
+	// rendered pages but no Cache-Control, so a header-only change (e.g. the
+	// CSP) can be served stale from a 304 against an unchanged body. Force
+	// revalidation, and keep authed HTML out of shared caches. Static and
+	// immutable assets keep their own caching (their Cache-Control is already
+	// set, so we don't override it).
+	const contentType = response.headers.get('content-type') ?? '';
+	if (contentType.startsWith('text/html') && !response.headers.has('cache-control')) {
+		response.headers.set('Cache-Control', 'private, no-cache');
+	}
+
 	// One structured log line per request. Keep at info; status >=500 gets
 	// bumped to error so it shows up under default filter.
 	const durationMs = Math.round(performance.now() - started);
