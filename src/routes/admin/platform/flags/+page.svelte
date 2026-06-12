@@ -13,9 +13,10 @@
 	<p><a href="/admin/platform">&larr; Overview</a></p>
 	<h2>Feature flags</h2>
 	<p class="note">
-		Toggle enable/disable and the rollout percentage per flag. Per-user overrides
-		below win over the global flag and rollout decision. Every change is recorded
-		in the audit log as <code>feature_flag.changed</code>.
+		Toggle enable/disable and the rollout percentage per flag. Per-user overrides below win over the
+		global flag and rollout decision. Every change is recorded in the audit log as <code
+			>feature_flag.changed</code
+		>.
 	</p>
 </header>
 
@@ -118,13 +119,7 @@
 		</label>
 		<label>
 			User (username or uuid)
-			<input
-				type="text"
-				name="user_query"
-				required
-				list="recent-users"
-				placeholder="search…"
-			/>
+			<input type="text" name="user_query" required list="recent-users" placeholder="search…" />
 			<datalist id="recent-users">
 				{#each recentUsers as u (u.id)}
 					<option value={u.username}>{u.username}</option>

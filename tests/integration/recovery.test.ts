@@ -4,17 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema } from '$lib/db/client';
 import { and, eq, isNull } from 'drizzle-orm';
-import {
-	startRecovery,
-	lookupRecovery,
-	consumeRecovery
-} from '$lib/server/recovery';
-import {
-	createSession,
-	revokeAllSessions,
-	loadSessionUser,
-	packCookie
-} from '$lib/server/session';
+import { startRecovery, lookupRecovery, consumeRecovery } from '$lib/server/recovery';
+import { createSession, revokeAllSessions, loadSessionUser, packCookie } from '$lib/server/session';
 import { startRegistration } from '$lib/server/webauthn';
 import { makeUser } from '../setup/factories';
 import { markEmailVerified } from '$lib/db/users';
@@ -24,10 +15,7 @@ async function activeRecoveries(userId: string) {
 		.select()
 		.from(schema.accountRecoveries)
 		.where(
-			and(
-				eq(schema.accountRecoveries.userId, userId),
-				isNull(schema.accountRecoveries.consumedAt)
-			)
+			and(eq(schema.accountRecoveries.userId, userId), isNull(schema.accountRecoveries.consumedAt))
 		);
 }
 

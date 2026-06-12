@@ -25,11 +25,7 @@ function isInt(n: unknown): n is number {
 }
 
 export async function updateBlogSettings(blogId: string, patch: UpdateBlogSettingsPatch) {
-	const before = await db
-		.select()
-		.from(schema.blogs)
-		.where(eq(schema.blogs.id, blogId))
-		.limit(1);
+	const before = await db.select().from(schema.blogs).where(eq(schema.blogs.id, blogId)).limit(1);
 	if (before.length === 0) throw error(404, 'blog not found');
 	const current = before[0];
 

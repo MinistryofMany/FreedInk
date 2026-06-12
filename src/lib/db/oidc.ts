@@ -2,10 +2,7 @@ import { db, schema } from './client';
 import { and, eq } from 'drizzle-orm';
 import type { User } from './schema';
 
-export async function getUserByOidcIdentity(
-	issuer: string,
-	subject: string
-): Promise<User | null> {
+export async function getUserByOidcIdentity(issuer: string, subject: string): Promise<User | null> {
 	const rows = await db
 		.select({ user: schema.users })
 		.from(schema.oidcIdentities)

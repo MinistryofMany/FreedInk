@@ -45,10 +45,7 @@ const database = (parsed.pathname || '/').slice(1) || 'postgres';
 const outDir = resolve(process.env.BACKUP_DIR ?? './backups');
 await mkdir(outDir, { recursive: true });
 
-const ts = new Date()
-	.toISOString()
-	.replace(/[-:]/g, '')
-	.replace(/\..+$/, 'Z');
+const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, 'Z');
 const outFile = resolve(outDir, `freedink-${ts}.dump`);
 // pg_dump --file writes directly to outFile; on failure we may end up with a
 // truncated artefact. Write to a .partial first and rename on success so
@@ -76,10 +73,14 @@ const args = [
 	'--format=custom',
 	'--no-owner',
 	'--no-acl',
-	'--host', host,
-	'--port', port,
-	'--username', user,
-	'--file', partialFile,
+	'--host',
+	host,
+	'--port',
+	port,
+	'--username',
+	user,
+	'--file',
+	partialFile,
 	database
 ];
 

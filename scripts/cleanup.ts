@@ -66,59 +66,77 @@ export async function runCleanupOnce(sql: Sql): Promise<CleanupStats> {
 	};
 
 	// sessions: expired (`expires_at < now()`).
-	stats.sessions = (await sql`
+	stats.sessions = (
+		await sql`
 		DELETE FROM sessions WHERE expires_at < now()
-	`).count;
+	`
+	).count;
 
 	// siwe_nonces: either expired or already consumed.
-	stats.siwe_nonces = (await sql`
+	stats.siwe_nonces = (
+		await sql`
 		DELETE FROM siwe_nonces
 		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`).count;
+	`
+	).count;
 
 	// webauthn_challenges: only have expires_at; reap when past.
-	stats.webauthn_challenges = (await sql`
+	stats.webauthn_challenges = (
+		await sql`
 		DELETE FROM webauthn_challenges WHERE expires_at < now()
-	`).count;
+	`
+	).count;
 
 	// email_verifications: expired or consumed.
-	stats.email_verifications = (await sql`
+	stats.email_verifications = (
+		await sql`
 		DELETE FROM email_verifications
 		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`).count;
+	`
+	).count;
 
 	// post_submission_nonces: one-shot — expired or already consumed.
-	stats.post_submission_nonces = (await sql`
+	stats.post_submission_nonces = (
+		await sql`
 		DELETE FROM post_submission_nonces
 		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`).count;
+	`
+	).count;
 
 	// account_recoveries: expired or consumed.
-	stats.account_recoveries = (await sql`
+	stats.account_recoveries = (
+		await sql`
 		DELETE FROM account_recoveries
 		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`).count;
+	`
+	).count;
 
 	// rate_limits: past the window expiry.
-	stats.rate_limits = (await sql`
+	stats.rate_limits = (
+		await sql`
 		DELETE FROM rate_limits WHERE expires_at < now()
-	`).count;
+	`
+	).count;
 
 	// blog_invitations: revoked OR past expires_at (and not yet accepted —
 	// keep accepted ones for audit trail since they reference a real account).
-	stats.blog_invitations = (await sql`
+	stats.blog_invitations = (
+		await sql`
 		DELETE FROM blog_invitations
 		WHERE accepted_at IS NULL
 		  AND (revoked_at IS NOT NULL OR expires_at < now())
-	`).count;
+	`
+	).count;
 
 	// status_checks: bounded by the retention horizon. Pure time-based reap
 	// (no expires_at column) so the public /status page's 90-day uptime grid
 	// always has something to draw from without unbounded growth.
-	stats.status_checks = (await sql`
+	stats.status_checks = (
+		await sql`
 		DELETE FROM status_checks
 		WHERE checked_at < now() - (${STATUS_CHECKS_RETENTION_DAYS}::int * interval '1 day')
-	`).count;
+	`
+	).count;
 
 	return stats;
 }

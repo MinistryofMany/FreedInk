@@ -31,12 +31,14 @@ async function installIdentity(userId: string, identity: Identity) {
 	});
 }
 
-export async function makeUser(opts: {
-	email?: string;
-	username?: string;
-	seed?: string;
-	wallet?: string;
-} = {}): Promise<TestUser> {
+export async function makeUser(
+	opts: {
+		email?: string;
+		username?: string;
+		seed?: string;
+		wallet?: string;
+	} = {}
+): Promise<TestUser> {
 	const username = opts.username ?? `u${Math.random().toString(36).slice(2, 8)}`;
 	const email = opts.email ?? `${username}@x.com`;
 	const user = opts.wallet
@@ -47,10 +49,7 @@ export async function makeUser(opts: {
 	return { id: user.id, username, identity };
 }
 
-export async function rotateUserIdentity(
-	userId: string,
-	seed: string
-): Promise<Identity> {
+export async function rotateUserIdentity(userId: string, seed: string): Promise<Identity> {
 	const identity = new Identity(seed);
 	await db.transaction(async (tx) => {
 		await tx

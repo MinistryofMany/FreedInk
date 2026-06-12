@@ -55,9 +55,7 @@ describe('renderPrometheus: basic gauge', () => {
 	});
 
 	it('emits zero samples cleanly (just HELP+TYPE)', () => {
-		const out = renderPrometheus([
-			{ name: 'm', help: 'h', type: 'counter', samples: [] }
-		]);
+		const out = renderPrometheus([{ name: 'm', help: 'h', type: 'counter', samples: [] }]);
 		expect(out).toBe('# HELP m h\n# TYPE m counter\n');
 	});
 });

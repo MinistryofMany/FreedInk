@@ -2,11 +2,7 @@ import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { db, schema } from '$lib/db/client';
 import { and, eq, desc } from 'drizzle-orm';
-import {
-	SESSION_COOKIE_NAME,
-	currentSessionId,
-	destroySessionById
-} from '$lib/server/session';
+import { SESSION_COOKIE_NAME, currentSessionId, destroySessionById } from '$lib/server/session';
 import { audit } from '$lib/server/audit';
 
 export const GET: RequestHandler = async ({ locals, cookies }) => {

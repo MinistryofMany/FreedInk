@@ -93,9 +93,7 @@ export async function listReports(
 		? ((await itemsQ.where(whereClause)) as ReportListItem[])
 		: ((await itemsQ) as ReportListItem[]);
 
-	const countQ = db
-		.select({ n: sql<number>`count(*)::int` })
-		.from(schema.abuseReports);
+	const countQ = db.select({ n: sql<number>`count(*)::int` }).from(schema.abuseReports);
 	const countRows = whereClause ? await countQ.where(whereClause) : await countQ;
 
 	return { items, total: countRows[0]?.n ?? 0 };
@@ -134,10 +132,7 @@ export async function setReportStatus(opts: {
 // reported actually exists. The target_type column is a closed enum so we
 // switch on it; FK enforcement isn't possible at the schema level (the
 // column points to multiple tables) so we do it in code.
-export async function targetExists(
-	targetType: ReportTarget,
-	targetId: string
-): Promise<boolean> {
+export async function targetExists(targetType: ReportTarget, targetId: string): Promise<boolean> {
 	switch (targetType) {
 		case 'post': {
 			const rows = await db
@@ -176,10 +171,7 @@ export async function targetExists(
 
 // Build the admin-side link for navigating to the target. We don't link
 // users (no public user page exists yet) — operator just sees the UUID.
-export function targetLinkFor(
-	targetType: ReportTarget,
-	targetId: string
-): string | null {
+export function targetLinkFor(targetType: ReportTarget, targetId: string): string | null {
 	switch (targetType) {
 		case 'post':
 			return `/admin/platform/reports?focus=${targetType}:${targetId}`;

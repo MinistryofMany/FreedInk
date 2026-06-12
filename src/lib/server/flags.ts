@@ -102,10 +102,7 @@ async function loadFlag(key: string): Promise<FlagRow | null> {
 	return row;
 }
 
-async function loadOverride(
-	flagKey: string,
-	userId: string
-): Promise<OverrideRow | null> {
+async function loadOverride(flagKey: string, userId: string): Promise<OverrideRow | null> {
 	const cacheKey = `${flagKey}:${userId}`;
 	const cached = overrideCache.get(cacheKey);
 	const t = nowMs();
@@ -161,21 +158,13 @@ export async function listOverridesForFlag(flagKey: string): Promise<OverrideRow
 // a uint32 and modulo 100. Modulo bias on a 32-bit range vs. 100 is
 // negligible (<< 1 / 2^25), so the distribution is effectively uniform.
 export function rolloutBucket(discriminator: string, key: string): number {
-	const h = createHash('sha256')
-		.update(discriminator)
-		.update('|')
-		.update(key)
-		.digest();
+	const h = createHash('sha256').update(discriminator).update('|').update(key).digest();
 	const n = h.readUInt32BE(0);
 	return n % 100;
 }
 
 // Apply the rollout-percentage decision. 0 => never, 100 => always.
-function isInRollout(
-	discriminator: string,
-	key: string,
-	rolloutPercentage: number
-): boolean {
+function isInRollout(discriminator: string, key: string, rolloutPercentage: number): boolean {
 	if (rolloutPercentage <= 0) return false;
 	if (rolloutPercentage >= 100) return true;
 	return rolloutBucket(discriminator, key) < rolloutPercentage;
@@ -328,10 +317,7 @@ export async function setOverride(
 		.insert(schema.featureFlagOverrides)
 		.values({ flagKey, userId, enabled })
 		.onConflictDoUpdate({
-			target: [
-				schema.featureFlagOverrides.flagKey,
-				schema.featureFlagOverrides.userId
-			],
+			target: [schema.featureFlagOverrides.flagKey, schema.featureFlagOverrides.userId],
 			set: { enabled }
 		})
 		.returning()) as OverrideRow[];
@@ -371,10 +357,7 @@ export async function removeOverride(
 	return deleted.length > 0;
 }
 
-export async function deleteFlag(
-	key: string,
-	actorUserId: string | null
-): Promise<boolean> {
+export async function deleteFlag(key: string, actorUserId: string | null): Promise<boolean> {
 	const deleted = await db
 		.delete(schema.featureFlags)
 		.where(eq(schema.featureFlags.key, key))

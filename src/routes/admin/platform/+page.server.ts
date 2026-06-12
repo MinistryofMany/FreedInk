@@ -73,9 +73,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			createdAt: schema.auditLog.createdAt
 		})
 		.from(schema.auditLog)
-		.where(
-			validFilter ? sql`${schema.auditLog.event} = ${validFilter}::audit_event` : sql`true`
-		)
+		.where(validFilter ? sql`${schema.auditLog.event} = ${validFilter}::audit_event` : sql`true`)
 		.orderBy(desc(schema.auditLog.createdAt))
 		.limit(AUDIT_LIMIT);
 

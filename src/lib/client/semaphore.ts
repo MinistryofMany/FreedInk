@@ -40,9 +40,7 @@ const DEFAULT_PREWARM_DEPTHS = [1, 4];
 // pay for the wasm+zkey download. Uses `cache: 'force-cache'` + `priority: low`
 // so the prefetch is happy to wait behind real network traffic; if local
 // artifacts are missing for a depth we silently skip (CDN will serve later).
-export async function prewarmArtifacts(
-	depths: number[] = DEFAULT_PREWARM_DEPTHS
-): Promise<void> {
+export async function prewarmArtifacts(depths: number[] = DEFAULT_PREWARM_DEPTHS): Promise<void> {
 	if (typeof window === 'undefined' || typeof fetch !== 'function') return;
 	const init: RequestInit & { priority?: 'low' | 'high' | 'auto' } = {
 		cache: 'force-cache',

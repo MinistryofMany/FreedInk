@@ -96,7 +96,9 @@ describe('GET /metrics (with METRICS_BEARER set)', () => {
 				// not ready yet
 			}
 			if (child.exitCode !== null) {
-				throw new Error(`bearer server exited early (${child.exitCode}): ${stderr.join('').slice(-1000)}`);
+				throw new Error(
+					`bearer server exited early (${child.exitCode}): ${stderr.join('').slice(-1000)}`
+				);
 			}
 			await wait(200);
 		}

@@ -14,9 +14,7 @@ let child: ChildProcess | null = null;
 export async function startServer(): Promise<string> {
 	if (child) return BASE_URL;
 	if (!existsSync('build/index.js')) {
-		throw new Error(
-			"build/index.js not found — run 'npm run build' before running API tests"
-		);
+		throw new Error("build/index.js not found — run 'npm run build' before running API tests");
 	}
 	child = spawn('node', ['build'], {
 		stdio: ['ignore', 'pipe', 'pipe'],
@@ -48,9 +46,7 @@ export async function startServer(): Promise<string> {
 			// not ready yet
 		}
 		if (child.exitCode !== null) {
-			throw new Error(
-				`server exited early (${child.exitCode}):\n${stderr.join('').slice(-2000)}`
-			);
+			throw new Error(`server exited early (${child.exitCode}):\n${stderr.join('').slice(-2000)}`);
 		}
 		await wait(200);
 	}

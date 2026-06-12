@@ -211,7 +211,9 @@ describe('runCleanupOnce', () => {
 		const stats = await runCleanupOnce(sql);
 		expect(stats.status_checks).toBe(1);
 
-		const remaining = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM status_checks`;
+		const remaining = await sql<
+			{ count: number }[]
+		>`SELECT count(*)::int AS count FROM status_checks`;
 		expect(remaining[0]?.count).toBe(2);
 	});
 });

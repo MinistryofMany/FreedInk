@@ -2,12 +2,7 @@ import type { RequestHandler } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import { db, schema } from '$lib/db/client';
 import { enforce, RULES } from '$lib/server/rate-limit';
-import {
-	oidcConfig,
-	generatePkce,
-	randomUrlToken,
-	buildAuthorizationUrl
-} from '$lib/server/oidc';
+import { oidcConfig, generatePkce, randomUrlToken, buildAuthorizationUrl } from '$lib/server/oidc';
 
 // Begin "Sign in with Tessera". Generates PKCE + state + nonce, persists the
 // pending authorization, and redirects the browser to Tessera's consent

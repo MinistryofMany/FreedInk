@@ -168,9 +168,7 @@ describe('status incidents: list helpers', () => {
 		expect(resolvedList.map((i) => i.id)).toContain(willResolve.id);
 
 		const opAll = await listIncidentsForOperator('all');
-		expect(opAll.map((i) => i.id)).toEqual(
-			expect.arrayContaining([active.id, willResolve.id])
-		);
+		expect(opAll.map((i) => i.id)).toEqual(expect.arrayContaining([active.id, willResolve.id]));
 		const opActive = await listIncidentsForOperator('active');
 		expect(opActive.map((i) => i.id)).toContain(active.id);
 		expect(opActive.map((i) => i.id)).not.toContain(willResolve.id);

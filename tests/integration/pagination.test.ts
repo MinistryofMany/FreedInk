@@ -149,16 +149,11 @@ describe('listBlogsPage', () => {
 		for (const r of inserted) seededIds.push(r.id);
 
 		// Sanity: confirm 35 rows landed.
-		const countRow = await db
-			.select({ c: sql<number>`count(*)::int` })
-			.from(schema.blogs);
+		const countRow = await db.select({ c: sql<number>`count(*)::int` }).from(schema.blogs);
 		expect(countRow[0].c).toBe(35);
 
 		const limit = 10;
-		const all = await walkAll(
-			(cursor) => listBlogsPage({ cursor, limit }),
-			limit
-		);
+		const all = await walkAll((cursor) => listBlogsPage({ cursor, limit }), limit);
 		expect(all.length).toBe(35);
 		const idSet = new Set(all.map((b) => b.id));
 		expect(idSet.size).toBe(35);
@@ -206,10 +201,7 @@ describe('listPublishedPostsPage', () => {
 			seeded.push(postId);
 		}
 		const limit = 7;
-		const all = await walkAll(
-			(cursor) => listPublishedPostsPage(blogId, { cursor, limit }),
-			limit
-		);
+		const all = await walkAll((cursor) => listPublishedPostsPage(blogId, { cursor, limit }), limit);
 		expect(all.length).toBe(25);
 		const idSet = new Set(all.map((p) => p.id));
 		expect(idSet.size).toBe(25);
@@ -247,10 +239,7 @@ describe('listAllPostsPage', () => {
 			});
 			ids.push(postId);
 		}
-		const all = await walkAll(
-			(cursor) => listAllPostsPage(blogId, { cursor, limit: 4 }),
-			4
-		);
+		const all = await walkAll((cursor) => listAllPostsPage(blogId, { cursor, limit: 4 }), 4);
 		expect(all.length).toBe(15);
 		expect(new Set(all.map((p) => p.id))).toEqual(new Set(ids));
 	});
@@ -300,10 +289,7 @@ describe('listCommentsPage', () => {
 			// comment rates never produce dupes at this granularity.
 			await new Promise((r) => setTimeout(r, 2));
 		}
-		const all = await walkAll(
-			(cursor) => listCommentsPage(versionId, { cursor, limit: 5 }),
-			5
-		);
+		const all = await walkAll((cursor) => listCommentsPage(versionId, { cursor, limit: 5 }), 5);
 		expect(all.length).toBe(18);
 		expect(new Set(all.map((c) => c.id))).toEqual(new Set(seeded));
 	});
@@ -319,10 +305,7 @@ describe('listCommentsPage', () => {
 		for (let i = 0; i < 5; i++) {
 			await seedComment(versionId, `c ${i}`, i % 2 === 0 ? new Date() : null);
 		}
-		const all = await walkAll(
-			(cursor) => listCommentsPage(versionId, { cursor, limit: 5 }),
-			5
-		);
+		const all = await walkAll((cursor) => listCommentsPage(versionId, { cursor, limit: 5 }), 5);
 		expect(all.length).toBe(2);
 	});
 });
@@ -358,10 +341,7 @@ describe('searchPublishedPostsPage', () => {
 				content: 'whatever'
 			});
 		}
-		const all = await walkAll(
-			(cursor) => searchPublishedPostsPage({ cursor, limit: 2 }),
-			2
-		);
+		const all = await walkAll((cursor) => searchPublishedPostsPage({ cursor, limit: 2 }), 2);
 		expect(all.length).toBe(6);
 	});
 });

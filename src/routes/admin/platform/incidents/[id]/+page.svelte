@@ -5,12 +5,7 @@
 	export let data: PageData;
 	$: ({ incident, updates } = data);
 
-	const STATUSES: IncidentStatus[] = [
-		'investigating',
-		'identified',
-		'monitoring',
-		'resolved'
-	];
+	const STATUSES: IncidentStatus[] = ['investigating', 'identified', 'monitoring', 'resolved'];
 
 	let updateStatus: IncidentStatus = 'investigating';
 	let updateBody = '';

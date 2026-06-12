@@ -169,8 +169,8 @@
 		<article>
 			<h4>{p.version.title}</h4>
 			<p class="meta">
-				Submitted {new Date(p.version.submittedAt ?? p.createdAt).toLocaleString()} ·
-				approves {p.tally.approves} · rejects {p.tally.rejects}
+				Submitted {new Date(p.version.submittedAt ?? p.createdAt).toLocaleString()} · approves {p
+					.tally.approves} · rejects {p.tally.rejects}
 			</p>
 			<pre>{p.version.content}</pre>
 			<label>
@@ -181,16 +181,13 @@
 				<fieldset class="reasons">
 					<legend>Why are you rejecting this post?</legend>
 					<p class="reason-hint">
-						Pick everything that applies. Reasons are aggregated and shown to the author —
-						no individual reviewer is named.
+						Pick everything that applies. Reasons are aggregated and shown to the author — no
+						individual reviewer is named.
 					</p>
 					<div class="reason-grid">
 						{#each REJECTION_REASONS as r}
 							<label class="reason-row">
-								<input
-									type="checkbox"
-									bind:checked={reasonsByPost[p.version.id][r.key]}
-								/>
+								<input type="checkbox" bind:checked={reasonsByPost[p.version.id][r.key]} />
 								<span class="reason-label">{r.label}</span>
 								<span class="reason-desc">{r.description}</span>
 							</label>
@@ -201,11 +198,7 @@
 			<div class="actions">
 				<button on:click={() => vote(p.version.id, 'approve')} disabled={busy}>Approve</button>
 				{#if rejectOpenByPost[p.version.id]}
-					<button
-						class="reject"
-						on:click={() => vote(p.version.id, 'reject')}
-						disabled={busy}
-					>
+					<button class="reject" on:click={() => vote(p.version.id, 'reject')} disabled={busy}>
 						Confirm reject
 					</button>
 					<button type="button" class="ghost" on:click={() => toggleReject(p.version.id)}>

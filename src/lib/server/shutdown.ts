@@ -86,7 +86,9 @@ export const withShutdownTracking: Handle = async ({ event, resolve }) => {
  * Wait for in-flight requests to drain, capped at `graceMs`. Resolves either
  * when the counter hits zero or the deadline elapses.
  */
-export async function drainInFlight(graceMs: number): Promise<{ drained: boolean; remaining: number }> {
+export async function drainInFlight(
+	graceMs: number
+): Promise<{ drained: boolean; remaining: number }> {
 	if (inFlight === 0) return { drained: true, remaining: 0 };
 
 	if (!shutdownComplete.promise) {
@@ -100,7 +102,10 @@ export async function drainInFlight(graceMs: number): Promise<{ drained: boolean
 		timer = setTimeout(() => r('timeout'), graceMs);
 	});
 
-	const winner = await Promise.race([shutdownComplete.promise.then(() => 'drained' as const), timeout]);
+	const winner = await Promise.race([
+		shutdownComplete.promise.then(() => 'drained' as const),
+		timeout
+	]);
 	if (timer) clearTimeout(timer);
 	return { drained: winner === 'drained', remaining: inFlight };
 }
@@ -122,7 +127,12 @@ export async function performShutdown(opts: {
 	const log = opts.log ?? defaultLog;
 	const exit = opts.exit ?? ((code: number) => process.exit(code));
 
-	log({ event: 'shutdown.begin', signal: opts.signal, in_flight: inFlight, grace_ms: opts.graceMs });
+	log({
+		event: 'shutdown.begin',
+		signal: opts.signal,
+		in_flight: inFlight,
+		grace_ms: opts.graceMs
+	});
 
 	const drainResult = await drainInFlight(opts.graceMs);
 	log({
@@ -163,7 +173,9 @@ function defaultLog(line: Record<string, unknown>) {
 
 let installed = false;
 
-export function installSignalHandlers(opts: { graceMs?: number; log?: (l: Record<string, unknown>) => void } = {}): void {
+export function installSignalHandlers(
+	opts: { graceMs?: number; log?: (l: Record<string, unknown>) => void } = {}
+): void {
 	if (installed) return;
 	installed = true;
 
@@ -187,7 +199,9 @@ if (!isTest && !isBrowser) {
 	queueMicrotask(() => {
 		void (async () => {
 			try {
-				const mod = (await import('$lib/db/client')) as { closePool?: (o?: { timeoutSeconds?: number }) => Promise<void> };
+				const mod = (await import('$lib/db/client')) as {
+					closePool?: (o?: { timeoutSeconds?: number }) => Promise<void>;
+				};
 				if (typeof mod.closePool === 'function') {
 					registerPoolCloser(() => mod.closePool!({ timeoutSeconds: 5 }));
 				}

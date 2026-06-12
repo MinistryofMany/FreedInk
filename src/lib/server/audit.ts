@@ -15,10 +15,7 @@ export type AuditInput = {
 	metadata?: Record<string, unknown>;
 };
 
-export async function audit(
-	event_: RequestEvent | null,
-	input: AuditInput
-): Promise<void> {
+export async function audit(event_: RequestEvent | null, input: AuditInput): Promise<void> {
 	try {
 		await db.insert(schema.auditLog).values({
 			event: input.event,

@@ -112,11 +112,7 @@ describe('audit log: blog.archived / unarchived', () => {
 		const owner = await makeUser({ username: 'audit-arch' });
 		const blog = await makeBlogWith({ owner });
 		const { cookie } = await asUser(owner);
-		const r1 = await postJSON(
-			'/api/blog/archive',
-			{ blog_id: blog.id, archive: true },
-			{ cookie }
-		);
+		const r1 = await postJSON('/api/blog/archive', { blog_id: blog.id, archive: true }, { cookie });
 		expect(r1.status).toBe(200);
 		const e1 = await lastEvent({ actor: owner.id, subjectBlog: blog.id });
 		expect(e1?.event).toBe('blog.archived');
@@ -132,92 +128,88 @@ describe('audit log: blog.archived / unarchived', () => {
 });
 
 describe('audit log: post.submitted, review.cast, post.published', () => {
-	it(
-		'emits post.submitted on submission and post.published on threshold flip',
-		async () => {
-			// Re-use seeds the blog-flow test verified work (their commitments
-			// happen to lex-sort in the same order as user-creation-date, which
-			// is the implicit assumption baked into buildTestProof). Picking
-			// arbitrary new seeds risks a mismatch between the snapshot's leaf
-			// order and the proof's leaf order — different Merkle roots, which
-			// the server rejects as "unknown snapshot".
-			const owner = await makeUser({ username: 'audit-po', seed: 'owner-seed' });
-			const rev1 = await makeUser({ username: 'audit-r1', seed: 'rev1-seed' });
-			const rev2 = await makeUser({ username: 'audit-r2', seed: 'rev2-seed' });
-			const blog = await makeBlogWith({
-				owner,
-				members: [
-					{ user: rev1, role: 'reviewer' },
-					{ user: rev2, role: 'reviewer' }
-				]
-			});
-			const ownerSess = await asUser(owner);
+	it('emits post.submitted on submission and post.published on threshold flip', async () => {
+		// Re-use seeds the blog-flow test verified work (their commitments
+		// happen to lex-sort in the same order as user-creation-date, which
+		// is the implicit assumption baked into buildTestProof). Picking
+		// arbitrary new seeds risks a mismatch between the snapshot's leaf
+		// order and the proof's leaf order — different Merkle roots, which
+		// the server rejects as "unknown snapshot".
+		const owner = await makeUser({ username: 'audit-po', seed: 'owner-seed' });
+		const rev1 = await makeUser({ username: 'audit-r1', seed: 'rev1-seed' });
+		const rev2 = await makeUser({ username: 'audit-r2', seed: 'rev2-seed' });
+		const blog = await makeBlogWith({
+			owner,
+			members: [
+				{ user: rev1, role: 'reviewer' },
+				{ user: rev2, role: 'reviewer' }
+			]
+		});
+		const ownerSess = await asUser(owner);
 
-			// Submit a post for review with a real Semaphore proof.
-			const proof = await buildTestProof({
-				blogId: blog.id,
-				identity: owner.identity,
-				scope: `post:${blog.id}`,
-				message: 'Audit Post\n\nbody'
-			});
-			const submit = await postJSON(
-				'/api/blog/post',
-				{
-					blog_slug: blog.slug,
-					title: 'Audit Post',
-					content: 'body',
-					proof,
-					submit_for_review: true
-				},
-				{ cookie: ownerSess.cookie }
-			);
-			if (submit.status !== 200) {
-				const body = await submit.text();
-				throw new Error(`submit failed ${submit.status}: ${body}`);
-			}
-			const { version_id } = await submit.json();
+		// Submit a post for review with a real Semaphore proof.
+		const proof = await buildTestProof({
+			blogId: blog.id,
+			identity: owner.identity,
+			scope: `post:${blog.id}`,
+			message: 'Audit Post\n\nbody'
+		});
+		const submit = await postJSON(
+			'/api/blog/post',
+			{
+				blog_slug: blog.slug,
+				title: 'Audit Post',
+				content: 'body',
+				proof,
+				submit_for_review: true
+			},
+			{ cookie: ownerSess.cookie }
+		);
+		if (submit.status !== 200) {
+			const body = await submit.text();
+			throw new Error(`submit failed ${submit.status}: ${body}`);
+		}
+		const { version_id } = await submit.json();
 
-			const events = await eventsFor(owner.id);
-			expect(events).toContain('post.submitted');
+		const events = await eventsFor(owner.id);
+		expect(events).toContain('post.submitted');
 
-			// rev1 votes approve.
-			const rev1Sess = await asUser(rev1);
-			const p1 = await buildTestProof({
-				blogId: blog.id,
-				identity: rev1.identity,
-				scope: `review:${version_id}`,
-				message: 'approve'
-			});
-			const v1 = await postJSON(
-				'/api/post/review',
-				{ post_version_id: version_id, vote: 'approve', proof: p1 },
-				{ cookie: rev1Sess.cookie }
-			);
-			expect(v1.status).toBe(200);
-			const ev1 = await eventsFor(rev1.id);
-			expect(ev1).toContain('review.cast');
-			expect(ev1).not.toContain('post.published');
+		// rev1 votes approve.
+		const rev1Sess = await asUser(rev1);
+		const p1 = await buildTestProof({
+			blogId: blog.id,
+			identity: rev1.identity,
+			scope: `review:${version_id}`,
+			message: 'approve'
+		});
+		const v1 = await postJSON(
+			'/api/post/review',
+			{ post_version_id: version_id, vote: 'approve', proof: p1 },
+			{ cookie: rev1Sess.cookie }
+		);
+		expect(v1.status).toBe(200);
+		const ev1 = await eventsFor(rev1.id);
+		expect(ev1).toContain('review.cast');
+		expect(ev1).not.toContain('post.published');
 
-			// rev2 votes approve → flip to published.
-			const rev2Sess = await asUser(rev2);
-			const p2 = await buildTestProof({
-				blogId: blog.id,
-				identity: rev2.identity,
-				scope: `review:${version_id}`,
-				message: 'approve'
-			});
-			const v2 = await postJSON(
-				'/api/post/review',
-				{ post_version_id: version_id, vote: 'approve', proof: p2 },
-				{ cookie: rev2Sess.cookie }
-			);
-			expect(v2.status).toBe(200);
-			const ev2 = await eventsFor(rev2.id);
-			expect(ev2).toContain('review.cast');
-			expect(ev2).toContain('post.published');
-		},
-		120_000
-	);
+		// rev2 votes approve → flip to published.
+		const rev2Sess = await asUser(rev2);
+		const p2 = await buildTestProof({
+			blogId: blog.id,
+			identity: rev2.identity,
+			scope: `review:${version_id}`,
+			message: 'approve'
+		});
+		const v2 = await postJSON(
+			'/api/post/review',
+			{ post_version_id: version_id, vote: 'approve', proof: p2 },
+			{ cookie: rev2Sess.cookie }
+		);
+		expect(v2.status).toBe(200);
+		const ev2 = await eventsFor(rev2.id);
+		expect(ev2).toContain('review.cast');
+		expect(ev2).toContain('post.published');
+	}, 120_000);
 });
 
 describe('audit log: comment.posted', () => {
@@ -284,10 +276,7 @@ describe('audit log: identity.created', () => {
 		// user-with-wallet (no identity) and POST through the endpoint.
 		const wallet = '0x' + 'a'.repeat(40);
 		// Create a user with a wallet but no identity row.
-		const [u] = await db
-			.insert(schema.users)
-			.values({ username: 'audit-id-user' })
-			.returning();
+		const [u] = await db.insert(schema.users).values({ username: 'audit-id-user' }).returning();
 		await db.insert(schema.walletAddresses).values({ userId: u.id, address: wallet });
 
 		const { createSession, packCookie } = await import('$lib/server/session');

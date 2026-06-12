@@ -29,10 +29,7 @@ export const GET: RequestHandler = async (event) => {
 			.update(schema.emailVerifications)
 			.set({ consumedAt: new Date() })
 			.where(eq(schema.emailVerifications.token, token));
-		await tx
-			.update(schema.users)
-			.set({ email: row.email })
-			.where(eq(schema.users.id, row.userId));
+		await tx.update(schema.users).set({ email: row.email }).where(eq(schema.users.id, row.userId));
 	});
 	await markEmailVerified(row.userId);
 

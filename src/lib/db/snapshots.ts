@@ -94,10 +94,7 @@ export async function refreshSnapshot(blogId: string): Promise<{
 		.select({ root: schema.blogMemberSnapshots.root })
 		.from(schema.blogMemberSnapshots)
 		.where(
-			and(
-				eq(schema.blogMemberSnapshots.blogId, blogId),
-				eq(schema.blogMemberSnapshots.root, root)
-			)
+			and(eq(schema.blogMemberSnapshots.blogId, blogId), eq(schema.blogMemberSnapshots.root, root))
 		)
 		.limit(1);
 

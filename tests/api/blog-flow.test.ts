@@ -113,11 +113,14 @@ describe('blog/members', () => {
 		const owner = await makeUser({ username: 'owner' });
 		const blog = await makeBlogWith({ owner });
 		const { cookie } = await asUser(owner);
-		const res = await fetch(`http://${'127.0.0.1'}:${process.env.TEST_SERVER_PORT ?? 5174}/api/blog/members`, {
-			method: 'DELETE',
-			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ blog_id: blog.id, target_user_id: owner.id })
-		});
+		const res = await fetch(
+			`http://${'127.0.0.1'}:${process.env.TEST_SERVER_PORT ?? 5174}/api/blog/members`,
+			{
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json', cookie },
+				body: JSON.stringify({ blog_id: blog.id, target_user_id: owner.id })
+			}
+		);
 		expect(res.status).toBe(409);
 	});
 });
@@ -341,13 +344,15 @@ describe('post-tags + archive', () => {
 		]);
 
 		// Archive blog
-		const arch = await postJSON('/api/blog/archive', { blog_id: blog.id, archive: true }, { cookie });
+		const arch = await postJSON(
+			'/api/blog/archive',
+			{ blog_id: blog.id, archive: true },
+			{ cookie }
+		);
 		expect(arch.status).toBe(200);
 
 		// Listing /b should no longer show it
-		const listing = await fetch(
-			`http://127.0.0.1:${process.env.TEST_SERVER_PORT ?? 5174}/b`
-		);
+		const listing = await fetch(`http://127.0.0.1:${process.env.TEST_SERVER_PORT ?? 5174}/b`);
 		const html = await listing.text();
 		expect(html).not.toContain(blog.slug);
 	}, 60_000);

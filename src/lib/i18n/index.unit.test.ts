@@ -45,9 +45,7 @@ describe('message lookup', () => {
 
 	it('interpolates ICU-style {placeholder} values', () => {
 		const t = get(_);
-		expect(t('post.published_at', { values: { date: '2026-05-18' } })).toBe(
-			'Published 2026-05-18'
-		);
+		expect(t('post.published_at', { values: { date: '2026-05-18' } })).toBe('Published 2026-05-18');
 		expect(t('post.status', { values: { status: 'draft' } })).toBe('Status: draft');
 		expect(t('admin.welcome', { values: { name: 'Tyler' } })).toBe('Welcome Tyler');
 	});

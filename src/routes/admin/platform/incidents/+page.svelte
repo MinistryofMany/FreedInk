@@ -56,11 +56,7 @@
 </header>
 
 {#if showDeclare}
-	<form
-		class="declare"
-		on:submit|preventDefault={declare}
-		aria-label="Declare a new incident"
-	>
+	<form class="declare" on:submit|preventDefault={declare} aria-label="Declare a new incident">
 		<label>
 			Title
 			<input type="text" bind:value={title} required maxlength="200" />

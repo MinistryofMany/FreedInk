@@ -3,12 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
-import {
-	createSession,
-	revokeAllSessions,
-	loadSessionUser,
-	packCookie
-} from '$lib/server/session';
+import { createSession, revokeAllSessions, loadSessionUser, packCookie } from '$lib/server/session';
 import { makeUser } from '../setup/factories';
 
 describe('revokeAllSessions', () => {

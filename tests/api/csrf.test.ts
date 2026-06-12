@@ -13,11 +13,7 @@ import { api, BASE_URL } from './helpers';
 
 const EVIL_ORIGIN = 'https://evil.example.com';
 
-async function jsonPost(
-	path: string,
-	body: unknown,
-	origin?: string
-): Promise<Response> {
+async function jsonPost(path: string, body: unknown, origin?: string): Promise<Response> {
 	const headers: Record<string, string> = { 'content-type': 'application/json' };
 	if (origin) headers.origin = origin;
 	return api(path, { method: 'POST', headers, body: JSON.stringify(body) });

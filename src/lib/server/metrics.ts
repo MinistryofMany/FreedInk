@@ -114,9 +114,7 @@ export async function countPublishedPostVersions(): Promise<number> {
 }
 
 export async function countCommentsTotal(): Promise<number> {
-	const [row] = await db
-		.select({ n: sql<number>`count(*)::int` })
-		.from(schema.postComments);
+	const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.postComments);
 	return row?.n ?? 0;
 }
 

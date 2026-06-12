@@ -93,26 +93,12 @@
 		<div class="threshold">
 			<label>
 				Numerator
-				<input
-					type="number"
-					min="1"
-					max="100"
-					step="1"
-					bind:value={approvalNumerator}
-					required
-				/>
+				<input type="number" min="1" max="100" step="1" bind:value={approvalNumerator} required />
 			</label>
 			<span class="slash">/</span>
 			<label>
 				Denominator
-				<input
-					type="number"
-					min="1"
-					max="100"
-					step="1"
-					bind:value={approvalDenominator}
-					required
-				/>
+				<input type="number" min="1" max="100" step="1" bind:value={approvalDenominator} required />
 			</label>
 		</div>
 		<p class="preview" class:invalid={!validThreshold}>{previewText}</p>

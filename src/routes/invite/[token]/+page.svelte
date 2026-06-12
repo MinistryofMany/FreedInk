@@ -29,8 +29,8 @@
 	{#if !data.invitation}
 		<h2>Invitation unavailable</h2>
 		<p>
-			This invitation link is invalid, expired, or has already been used. Ask the person who
-			invited you to send a new one.
+			This invitation link is invalid, expired, or has already been used. Ask the person who invited
+			you to send a new one.
 		</p>
 		<p><a href="/">Back to home</a></p>
 	{:else}

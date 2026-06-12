@@ -32,7 +32,8 @@ function installGlobals() {
 		get: () => permission,
 		configurable: true
 	});
-	NotificationStub.requestPermission = requestPermissionMock as unknown as typeof Notification.requestPermission;
+	NotificationStub.requestPermission =
+		requestPermissionMock as unknown as typeof Notification.requestPermission;
 	(globalThis as unknown as { Notification: unknown }).Notification = NotificationStub;
 	(window as unknown as { Notification: unknown }).Notification = NotificationStub;
 
@@ -148,9 +149,7 @@ describe('client push helper', () => {
 		// practice but we standardised on ArrayBuffer to satisfy the DOM types.
 		expect(subscribeArg.applicationServerKey).toBeInstanceOf(ArrayBuffer);
 
-		const subscribeCall = fetchMock.mock.calls.find(
-			(c) => c[0] === '/api/push/subscribe'
-		);
+		const subscribeCall = fetchMock.mock.calls.find((c) => c[0] === '/api/push/subscribe');
 		expect(subscribeCall).toBeDefined();
 		const body = JSON.parse(subscribeCall![1].body);
 		expect(body.endpoint).toBe('https://fcm.example/abc');
@@ -190,9 +189,7 @@ describe('client push helper', () => {
 		getRegistrationMock.mockResolvedValueOnce(fakeReg);
 		getSubscriptionMock.mockResolvedValueOnce(fakeSub);
 
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ ok: true }), { status: 200 })
-		);
+		fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
 		const { unsubscribe } = await import('./push');
 		await unsubscribe();

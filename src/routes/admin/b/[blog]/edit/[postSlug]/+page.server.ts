@@ -23,7 +23,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const feedback = await getReviewFeedback(row.version.id);
 
 	return {
-		blog: { id: blog.id, slug: blog.slug, title: blog.title, defaultLanguage: blog.defaultLanguage },
+		blog: {
+			id: blog.id,
+			slug: blog.slug,
+			title: blog.title,
+			defaultLanguage: blog.defaultLanguage
+		},
 		post: {
 			id: row.post.id,
 			status: row.post.status,

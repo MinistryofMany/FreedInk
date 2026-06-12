@@ -121,10 +121,7 @@ export async function notifyReviewersOfNewSubmission(
 					buildKey(NOTIFY_REVIEW_RULE.bucket, `${r.id}:${blogId}`)
 				);
 				if (!decision.allowed) {
-					log.info(
-						{ user: r.id, blog: blogId },
-						'review notify throttled'
-					);
+					log.info({ user: r.id, blog: blogId }, 'review notify throttled');
 					return;
 				}
 				await sendMail({ to: r.email, subject, text: body });
@@ -172,10 +169,7 @@ export async function notifyMembersOfNewPublishedPost(
 					buildKey(NOTIFY_PUBLISH_RULE.bucket, `${r.id}:${blogId}`)
 				);
 				if (!decision.allowed) {
-					log.info(
-						{ user: r.id, blog: blogId },
-						'publish notify throttled'
-					);
+					log.info({ user: r.id, blog: blogId }, 'publish notify throttled');
 					return;
 				}
 				await sendMail({ to: r.email, subject, text: body });
@@ -270,7 +264,9 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
 			)
 			.catch(async (err: unknown) => {
 				const status =
-					err instanceof WebPushError ? err.statusCode : (err as { statusCode?: number })?.statusCode;
+					err instanceof WebPushError
+						? err.statusCode
+						: (err as { statusCode?: number })?.statusCode;
 				if (status === 410 || status === 404) {
 					// Gone / unknown — the push service has dropped the subscription.
 					try {
@@ -298,10 +294,7 @@ async function memberIdsWithPush(blogId: string): Promise<string[]> {
 	return userIdsWithPushForRoles(blogId, ANY_ACTIVE);
 }
 
-async function userIdsWithPushForRoles(
-	blogId: string,
-	roles: MemberRole[]
-): Promise<string[]> {
+async function userIdsWithPushForRoles(blogId: string, roles: MemberRole[]): Promise<string[]> {
 	const rows = await db
 		.select({ userId: schema.blogMembers.userId })
 		.from(schema.blogMembers)

@@ -18,9 +18,7 @@
 	let inviteBusy = false;
 	let inviteMsg = '';
 
-	$: pendingInvitations = invitations.filter(
-		(i) => i.acceptedAt === null && i.revokedAt === null
-	);
+	$: pendingInvitations = invitations.filter((i) => i.acceptedAt === null && i.revokedAt === null);
 	$: recentDecisions = invitations
 		.filter((i) => i.acceptedAt !== null || i.revokedAt !== null)
 		.slice(0, 10);
@@ -29,17 +27,29 @@
 		const res = await fetch(`/api/blog/invite?blog_id=${blog.id}`);
 		if (res.ok) {
 			const json = await res.json();
-			invitations = json.invitations.map((i: { expires_at: string; created_at: string; accepted_at: string | null; revoked_at: string | null; id: string; email: string; role: Role; accepted_by_username: string | null; invited_by_username: string }) => ({
-				id: i.id,
-				email: i.email,
-				role: i.role,
-				expiresAt: i.expires_at,
-				createdAt: i.created_at,
-				acceptedAt: i.accepted_at,
-				revokedAt: i.revoked_at,
-				acceptedByUsername: i.accepted_by_username,
-				invitedByUsername: i.invited_by_username
-			}));
+			invitations = json.invitations.map(
+				(i: {
+					expires_at: string;
+					created_at: string;
+					accepted_at: string | null;
+					revoked_at: string | null;
+					id: string;
+					email: string;
+					role: Role;
+					accepted_by_username: string | null;
+					invited_by_username: string;
+				}) => ({
+					id: i.id,
+					email: i.email,
+					role: i.role,
+					expiresAt: i.expires_at,
+					createdAt: i.created_at,
+					acceptedAt: i.accepted_at,
+					revokedAt: i.revoked_at,
+					acceptedByUsername: i.accepted_by_username,
+					invitedByUsername: i.invited_by_username
+				})
+			);
 		}
 	}
 

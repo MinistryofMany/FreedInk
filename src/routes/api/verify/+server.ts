@@ -71,8 +71,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 	}
 
-	const needsProfile =
-		!user.username || user.username.startsWith('0x') || user.username.length < 3;
+	const needsProfile = !user.username || user.username.startsWith('0x') || user.username.length < 3;
 	const needsIdentity = await hasNoActiveIdentity(user.id);
 
 	const sessionId = await createSession(user.id, {
@@ -107,10 +106,7 @@ async function hasNoActiveIdentity(userId: string): Promise<boolean> {
 		.select({ id: schema.userIdentities.id })
 		.from(schema.userIdentities)
 		.where(
-			and(
-				eq(schema.userIdentities.userId, userId),
-				eq(schema.userIdentities.status, 'active')
-			)
+			and(eq(schema.userIdentities.userId, userId), eq(schema.userIdentities.status, 'active'))
 		)
 		.limit(1);
 	return rows.length === 0;

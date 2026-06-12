@@ -187,7 +187,12 @@
 		>
 			<span aria-hidden="true">
 				<svg viewBox="0 0 24 24" width="24" height="24" focusable="false">
-					<path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+					<path
+						d="M3 6h18M3 12h18M3 18h18"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+					/>
 				</svg>
 			</span>
 		</button>
@@ -217,7 +222,12 @@
 >
 	<div class="drawer-header">
 		<span class="drawer-title">{$_('nav.menu')}</span>
-		<button type="button" class="drawer-close" aria-label={$_('a11y.close_menu')} on:click={closeDrawer}>
+		<button
+			type="button"
+			class="drawer-close"
+			aria-label={$_('a11y.close_menu')}
+			on:click={closeDrawer}
+		>
 			<span aria-hidden="true">&times;</span>
 		</button>
 	</div>

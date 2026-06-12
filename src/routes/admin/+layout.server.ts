@@ -1,11 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import {
-	getOwnedBlogs,
-	getEditedBlogs,
-	getReviewedBlogs,
-	getAuthoredBlogs
-} from '$lib/db/blogs';
+import { getOwnedBlogs, getEditedBlogs, getReviewedBlogs, getAuthoredBlogs } from '$lib/db/blogs';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/signup');

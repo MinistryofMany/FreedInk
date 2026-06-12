@@ -172,11 +172,7 @@ export const actions: Actions = {
 		});
 		if (!parsed.success) return fail(422, { error: parsed.error.message });
 
-		await removeOverride(
-			parsed.data.flag_key,
-			parsed.data.user_id,
-			event.locals.user?.id ?? null
-		);
+		await removeOverride(parsed.data.flag_key, parsed.data.user_id, event.locals.user?.id ?? null);
 		return { ok: true };
 	}
 };

@@ -134,8 +134,8 @@
 				data.feedback.rejects ===
 			1
 				? ''
-				: 's'} ({data.feedback.approves} approve · {data.feedback.rejects} reject). Individual
-			reviewers are not named — the cryptography prevents linking votes to identities.
+				: 's'} ({data.feedback.approves} approve · {data.feedback.rejects} reject). Individual reviewers
+			are not named — the cryptography prevents linking votes to identities.
 		</p>
 		{#if data.feedback.reasonCounts.length > 0}
 			<ul class="reason-list">
@@ -150,9 +150,7 @@
 				<ul class="comment-list">
 					{#each data.feedback.comments as c}
 						<li>
-							<span class="comment-vote" class:approve={c.vote === 'approve'}
-								>{c.vote}</span
-							>
+							<span class="comment-vote" class:approve={c.vote === 'approve'}>{c.vote}</span>
 							<span class="comment-body">{c.comment}</span>
 						</li>
 					{/each}

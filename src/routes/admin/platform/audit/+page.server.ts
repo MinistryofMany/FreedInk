@@ -12,9 +12,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const page = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
 	const offset = (page - 1) * PAGE_SIZE;
 
-	const [count] = await db
-		.select({ n: sql<number>`count(*)::int` })
-		.from(schema.auditLog);
+	const [count] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.auditLog);
 	const totalPages = Math.max(1, Math.ceil((count?.n ?? 0) / PAGE_SIZE));
 
 	const rows = await db

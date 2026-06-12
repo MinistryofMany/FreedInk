@@ -70,8 +70,7 @@ export const DELETE: RequestHandler = async (event) => {
 	if (!parsed.success) throw error(422, parsed.error.message);
 
 	await requireRole(parsed.data.blog_id, locals.user.id, ROLES_MANAGING);
-	if (parsed.data.target_user_id === locals.user.id)
-		throw error(409, "you can't remove yourself");
+	if (parsed.data.target_user_id === locals.user.id) throw error(409, "you can't remove yourself");
 	const existing = await getActiveMember(parsed.data.blog_id, parsed.data.target_user_id);
 	await removeMember(parsed.data.blog_id, parsed.data.target_user_id);
 	if (existing) {

@@ -19,10 +19,7 @@ describe('auth gates: unauthenticated requests are rejected', () => {
 			'/api/blog/members',
 			{ blog_id: '00000000-0000-0000-0000-000000000000', target: { username: 'x' }, role: 'author' }
 		],
-		[
-			'/api/blog/archive',
-			{ blog_id: '00000000-0000-0000-0000-000000000000', archive: true }
-		],
+		['/api/blog/archive', { blog_id: '00000000-0000-0000-0000-000000000000', archive: true }],
 		[
 			'/api/post/review',
 			{
@@ -39,14 +36,8 @@ describe('auth gates: unauthenticated requests are rejected', () => {
 				proof: stubProof
 			}
 		],
-		[
-			'/api/post/submit',
-			{ post_version_id: '00000000-0000-0000-0000-000000000000' }
-		],
-		[
-			'/api/post/tags',
-			{ post_id: '00000000-0000-0000-0000-000000000000', tags: ['x'] }
-		],
+		['/api/post/submit', { post_version_id: '00000000-0000-0000-0000-000000000000' }],
+		['/api/post/tags', { post_id: '00000000-0000-0000-0000-000000000000', tags: ['x'] }],
 		['/api/user', { username: 'newname' }],
 		['/api/identity', { idc: '1' }],
 		['/api/identity/rotate', { idc: '1' }]

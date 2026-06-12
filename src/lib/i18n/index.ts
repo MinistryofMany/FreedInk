@@ -41,7 +41,7 @@ addMessages('en', en);
 init({
 	fallbackLocale: DEFAULT_LOCALE,
 	initialLocale: browser
-		? pickSupported(getLocaleFromNavigator()) ?? DEFAULT_LOCALE
+		? (pickSupported(getLocaleFromNavigator()) ?? DEFAULT_LOCALE)
 		: DEFAULT_LOCALE
 });
 

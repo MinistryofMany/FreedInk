@@ -32,7 +32,11 @@ function assertBrowser() {
 	if (!browser) throw new Error('vault is browser-only');
 }
 
-async function deriveKey(password: string, salt: Uint8Array, params: KdfParams): Promise<CryptoKey> {
+async function deriveKey(
+	password: string,
+	salt: Uint8Array,
+	params: KdfParams
+): Promise<CryptoKey> {
 	const baseKey = await crypto.subtle.importKey(
 		'raw',
 		new TextEncoder().encode(password) as BufferSource,
@@ -41,7 +45,12 @@ async function deriveKey(password: string, salt: Uint8Array, params: KdfParams):
 		['deriveKey']
 	);
 	return crypto.subtle.deriveKey(
-		{ name: 'PBKDF2', salt: salt as BufferSource, iterations: params.iterations, hash: params.hash },
+		{
+			name: 'PBKDF2',
+			salt: salt as BufferSource,
+			iterations: params.iterations,
+			hash: params.hash
+		},
 		baseKey,
 		{ name: 'AES-GCM', length: 256 },
 		false,
@@ -119,7 +128,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 	return btoa(s);
 }
 
-export async function encryptIdentity(identity: Identity, password: string): Promise<IdentityRecord> {
+export async function encryptIdentity(
+	identity: Identity,
+	password: string
+): Promise<IdentityRecord> {
 	assertBrowser();
 	const salt = rand(16);
 	const nonce = rand(12);

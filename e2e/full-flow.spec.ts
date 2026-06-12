@@ -156,7 +156,10 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 		// ceil(2/3 * 1) = 1, so a single approve auto-publishes.
 		await page.goto(`/admin/b/${blogSlug}/review`);
 		await expect(page.getByRole('heading', { name: postTitle })).toBeVisible();
-		await page.getByRole('button', { name: /^approve$/i }).first().click();
+		await page
+			.getByRole('button', { name: /^approve$/i })
+			.first()
+			.click();
 
 		// After the proof + API round-trip the post leaves the under_review
 		// queue (status flips to published).

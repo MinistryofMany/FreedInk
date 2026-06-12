@@ -44,15 +44,15 @@ The voting threshold (default `2/3`) is computed against the **eligible count fr
 
 ## Scripts
 
-| script | what it does |
-|---|---|
-| `npm run dev` | Vite dev server |
-| `npm run build` | Production build (adapter-node) |
-| `npm run db:generate` | Generate a migration from `src/lib/db/schema.ts` |
-| `npm run db:migrate` | Apply pending migrations |
-| `npm run db:push` | Push schema without generating migrations (dev only) |
-| `npm run db:studio` | Drizzle Studio (DB browser) |
-| `npm test` | Vitest run |
+| script                | what it does                                         |
+| --------------------- | ---------------------------------------------------- |
+| `npm run dev`         | Vite dev server                                      |
+| `npm run build`       | Production build (adapter-node)                      |
+| `npm run db:generate` | Generate a migration from `src/lib/db/schema.ts`     |
+| `npm run db:migrate`  | Apply pending migrations                             |
+| `npm run db:push`     | Push schema without generating migrations (dev only) |
+| `npm run db:studio`   | Drizzle Studio (DB browser)                          |
+| `npm test`            | Vitest run                                           |
 
 ## Project structure
 
@@ -138,7 +138,7 @@ docker compose exec -T postgres pg_restore \
 npm run db:migrate
 ```
 
-For a point-in-time restore use the most recent dump *before* the incident,
+For a point-in-time restore use the most recent dump _before_ the incident,
 then replay any application-level events from the audit log if needed.
 
 ### Graceful shutdown

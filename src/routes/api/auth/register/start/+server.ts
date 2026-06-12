@@ -9,7 +9,11 @@ import { enforce, RULES } from '$lib/server/rate-limit';
 
 const Body = z.object({
 	email: z.string().email(),
-	username: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_-]+$/)
+	username: z
+		.string()
+		.min(3)
+		.max(40)
+		.regex(/^[a-zA-Z0-9_-]+$/)
 });
 
 export const POST: RequestHandler = async (event) => {

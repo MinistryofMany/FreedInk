@@ -99,13 +99,13 @@ We do not set advertising or analytics cookies.
 
 ## Retention
 
-| Data | Kept for |
-| --- | --- |
-| Session rows (`sid` cookie target) | 30 days, or until you sign out |
-| SIWE / email / nonce tokens | Minutes (single-use) |
-| Audit log entries | 90 days |
-| Account profile, identity blobs, blog memberships | Until you delete your account |
-| Anonymous posts and comments | Indefinitely (deleting your account does **not** remove them — see below) |
+| Data                                              | Kept for                                                                  |
+| ------------------------------------------------- | ------------------------------------------------------------------------- |
+| Session rows (`sid` cookie target)                | 30 days, or until you sign out                                            |
+| SIWE / email / nonce tokens                       | Minutes (single-use)                                                      |
+| Audit log entries                                 | 90 days                                                                   |
+| Account profile, identity blobs, blog memberships | Until you delete your account                                             |
+| Anonymous posts and comments                      | Indefinitely (deleting your account does **not** remove them — see below) |
 
 ## Your rights
 

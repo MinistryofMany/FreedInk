@@ -107,7 +107,6 @@ describe('POST /api/blog/invite', () => {
 });
 
 describe('GET /api/blog/invite', () => {
-
 	it('owner can list; non-owner gets 403', async () => {
 		const owner = await makeUser({ username: 'list-o' });
 		const editor = await makeUser({ username: 'list-e' });
@@ -120,7 +119,9 @@ describe('GET /api/blog/invite', () => {
 		});
 
 		const ownerSess = await asUser(owner);
-		const ownerRes = await getJSON(`/api/blog/invite?blog_id=${blog.id}`, { cookie: ownerSess.cookie });
+		const ownerRes = await getJSON(`/api/blog/invite?blog_id=${blog.id}`, {
+			cookie: ownerSess.cookie
+		});
 		expect(ownerRes.status).toBe(200);
 		const json = await ownerRes.json();
 		expect(json.invitations).toHaveLength(1);

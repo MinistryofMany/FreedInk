@@ -14,10 +14,7 @@
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
-import {
-	createPostVersion,
-	getEditablePostForUser
-} from '$lib/db/post-editor';
+import { createPostVersion, getEditablePostForUser } from '$lib/db/post-editor';
 import { requireRole, ROLES_WRITING } from '$lib/server/auth';
 import { verifyMembership } from '$lib/server/semaphore';
 import { enforce, RULES } from '$lib/server/rate-limit';
@@ -70,7 +67,8 @@ export const POST: RequestHandler = async (event) => {
 	let result;
 	try {
 		const { normalizeLanguageCode, isValidLanguageCode } = await import('$lib/languages');
-		const lang = language && isValidLanguageCode(language) ? normalizeLanguageCode(language) : undefined;
+		const lang =
+			language && isValidLanguageCode(language) ? normalizeLanguageCode(language) : undefined;
 		result = await createPostVersion({
 			postId: row.post.id,
 			title,

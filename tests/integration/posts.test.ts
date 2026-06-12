@@ -73,7 +73,10 @@ describe('createPost', () => {
 		// nullifier) doesn't collide — but if the same user/identity tried to
 		// post against the same post_id with the same scope-based nullifier,
 		// they would. Simulate by manually inserting into the same post.
-		const posts = await db.select().from(schema.blogPosts).where(eq(schema.blogPosts.blogId, blogId));
+		const posts = await db
+			.select()
+			.from(schema.blogPosts)
+			.where(eq(schema.blogPosts.blogId, blogId));
 		const postId = posts[0].id;
 		await expect(
 			db.insert(schema.blogPostVersions).values({

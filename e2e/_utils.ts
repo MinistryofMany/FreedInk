@@ -22,10 +22,7 @@ export async function attachVirtualAuthenticator(
 	return { session: client, authenticatorId };
 }
 
-export async function detachVirtualAuthenticator(
-	session: CDPSession,
-	authenticatorId: string
-) {
+export async function detachVirtualAuthenticator(session: CDPSession, authenticatorId: string) {
 	try {
 		await session.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
 	} catch {

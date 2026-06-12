@@ -47,11 +47,7 @@ describe('POST /api/blog/settings', () => {
 		expect(json.blog.description).toBe('a new description');
 
 		// DB-side check.
-		const row = await db
-			.select()
-			.from(schema.blogs)
-			.where(eq(schema.blogs.id, blog.id))
-			.limit(1);
+		const row = await db.select().from(schema.blogs).where(eq(schema.blogs.id, blog.id)).limit(1);
 		expect(row[0].approvalNumerator).toBe(1);
 		expect(row[0].approvalDenominator).toBe(4);
 	});

@@ -103,13 +103,12 @@ export async function finishRegistration(opts: {
 		publicKey: credential.publicKey,
 		counter: credential.counter,
 		transports: (credential.transports ?? []) as string[],
-		aaguid: info.aaguid && info.aaguid !== '00000000-0000-0000-0000-000000000000' ? info.aaguid : null,
+		aaguid:
+			info.aaguid && info.aaguid !== '00000000-0000-0000-0000-000000000000' ? info.aaguid : null,
 		nickname: opts.nickname ?? null
 	});
 
-	await db
-		.delete(schema.webauthnChallenges)
-		.where(eq(schema.webauthnChallenges.id, challenge.id));
+	await db.delete(schema.webauthnChallenges).where(eq(schema.webauthnChallenges.id, challenge.id));
 	return { ok: true };
 }
 
@@ -204,9 +203,7 @@ export async function finishAuthentication(opts: {
 			lastUsedAt: new Date()
 		})
 		.where(eq(schema.passkeyCredentials.id, credential.id));
-	await db
-		.delete(schema.webauthnChallenges)
-		.where(eq(schema.webauthnChallenges.id, candidate.id));
+	await db.delete(schema.webauthnChallenges).where(eq(schema.webauthnChallenges.id, candidate.id));
 
 	return { userId: credential.userId };
 }

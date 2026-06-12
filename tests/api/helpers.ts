@@ -30,10 +30,7 @@ export async function postJSON(
 	});
 }
 
-export async function getJSON(
-	path: string,
-	opts: { cookie?: string } = {}
-): Promise<Response> {
+export async function getJSON(path: string, opts: { cookie?: string } = {}): Promise<Response> {
 	const headers: Record<string, string> = {};
 	if (opts.cookie) headers.cookie = opts.cookie;
 	return api(path, { headers });

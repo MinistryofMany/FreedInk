@@ -49,12 +49,7 @@
 	{/each}
 </ul>
 {#if nextCursor}
-	<form
-		method="get"
-		action="/b"
-		on:submit|preventDefault={loadMore}
-		class="load-more"
-	>
+	<form method="get" action="/b" on:submit|preventDefault={loadMore} class="load-more">
 		<input type="hidden" name="cursor" value={nextCursor} />
 		<button type="submit" disabled={loading}>
 			{loading ? $_('comments.loading') : $_('actions.load_more')}

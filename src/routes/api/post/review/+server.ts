@@ -35,10 +35,10 @@ const Body = z
 			.optional(),
 		proof: ProofSchema
 	})
-	.refine(
-		(b) => b.vote !== 'reject' || (b.rejection_reasons && b.rejection_reasons.length > 0),
-		{ message: 'rejection_reasons required when vote=reject', path: ['rejection_reasons'] }
-	);
+	.refine((b) => b.vote !== 'reject' || (b.rejection_reasons && b.rejection_reasons.length > 0), {
+		message: 'rejection_reasons required when vote=reject',
+		path: ['rejection_reasons']
+	});
 
 export const POST: RequestHandler = async (event) => {
 	await enforce(RULES.reviewCast, event, { keyBy: 'user' });

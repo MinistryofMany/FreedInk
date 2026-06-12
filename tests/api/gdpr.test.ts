@@ -170,9 +170,7 @@ describe('GDPR delete', () => {
 			.from(schema.auditLog)
 			.where(eq(schema.auditLog.event, 'gdpr.deletion'));
 		expect(
-			audits.some(
-				(r) => (r.metadata as { username?: string } | null)?.username === 'goodbye'
-			)
+			audits.some((r) => (r.metadata as { username?: string } | null)?.username === 'goodbye')
 		).toBe(true);
 	});
 });

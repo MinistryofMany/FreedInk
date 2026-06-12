@@ -10,8 +10,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) throw redirect(303, '/signup');
 	const blog = await getBlogBySlug(params.blog);
 	if (!blog) throw error(404, 'blog not found');
-	if (!(await hasRole(blog.id, locals.user.id, ROLES_REVIEWING)))
-		throw redirect(303, '/admin');
+	if (!(await hasRole(blog.id, locals.user.id, ROLES_REVIEWING))) throw redirect(303, '/admin');
 
 	const cursor = url.searchParams.get('cursor');
 	const limit = parseLimit(url.searchParams.get('limit'));

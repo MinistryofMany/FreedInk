@@ -17,7 +17,9 @@ test.describe('passkey register + identity create', () => {
 
 			// Should be redirected to /signup/identity.
 			await page.waitForURL('**/signup/identity', { timeout: 15_000 });
-			await expect(page.getByRole('heading', { name: /set your identity password/i })).toBeVisible();
+			await expect(
+				page.getByRole('heading', { name: /set your identity password/i })
+			).toBeVisible();
 
 			// Set a password and create the identity.
 			const password = 'aVeryStrongPassword12345';

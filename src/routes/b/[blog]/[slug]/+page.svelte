@@ -53,9 +53,7 @@
 	// raw HTML in og:description, so the only escaping that matters is the
 	// length cap.
 	$: ogDescription = (data.Post.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
-	$: publishedIso = data.Post.publishedAt
-		? new Date(data.Post.publishedAt).toISOString()
-		: null;
+	$: publishedIso = data.Post.publishedAt ? new Date(data.Post.publishedAt).toISOString() : null;
 
 	let body = '';
 	let password = '';
@@ -213,7 +211,9 @@
 	<h2>{data.Post.title}</h2>
 	<p class="meta">
 		{#if data.Post.publishedAt}
-			{$_('post.published_at', { values: { date: new Date(data.Post.publishedAt).toLocaleString() } })}
+			{$_('post.published_at', {
+				values: { date: new Date(data.Post.publishedAt).toLocaleString() }
+			})}
 		{:else}
 			{$_('post.status', { values: { status: data.Post.status } })}
 		{/if}

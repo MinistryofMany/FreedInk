@@ -111,10 +111,7 @@
 					</td>
 					<td>
 						{#if status === 'open' || status === 'reviewing'}
-							<textarea
-								rows="2"
-								placeholder="Notes (optional)"
-								bind:value={notesByRow[r.id]}
+							<textarea rows="2" placeholder="Notes (optional)" bind:value={notesByRow[r.id]}
 							></textarea>
 							<div class="btns">
 								<button

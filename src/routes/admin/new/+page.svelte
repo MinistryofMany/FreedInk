@@ -37,10 +37,13 @@
 	<input type="text" id="title" name="title" bind:value={title} required />
 
 	<label for="description">{$_('admin.description_label')}</label>
-	<textarea id="description" name="description" bind:value={description} required rows="5"></textarea>
+	<textarea id="description" name="description" bind:value={description} required rows="5"
+	></textarea>
 
 	{#if error}<p style="color: var(--color-red)">{error}</p>{/if}
-	<button type="submit" disabled={busy}>{busy ? $_('admin.creating') : $_('admin.create_button')}</button>
+	<button type="submit" disabled={busy}
+		>{busy ? $_('admin.creating') : $_('admin.create_button')}</button
+	>
 </form>
 
 <style>

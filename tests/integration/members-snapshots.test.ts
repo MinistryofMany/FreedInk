@@ -1,18 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createUserWithEmail } from '$lib/db/users';
 import { createBlog, getBlogById } from '$lib/db/blogs';
-import {
-	listMembers,
-	getActiveMember,
-	setRole,
-	removeMember,
-	isFirstOwner
-} from '$lib/db/members';
-import {
-	refreshSnapshot,
-	getSnapshotByRoot,
-	refreshSnapshotsForUser
-} from '$lib/db/snapshots';
+import { listMembers, getActiveMember, setRole, removeMember, isFirstOwner } from '$lib/db/members';
+import { refreshSnapshot, getSnapshotByRoot, refreshSnapshotsForUser } from '$lib/db/snapshots';
 import { db, schema } from '$lib/db/client';
 import { and, eq } from 'drizzle-orm';
 import { Identity } from '@semaphore-protocol/identity';

@@ -192,9 +192,9 @@ describe('acceptInvitation', () => {
 			role: 'author'
 		});
 		await acceptInvitation({ token: inv.token, userId: invitee.id });
-		await expect(
-			acceptInvitation({ token: inv.token, userId: invitee.id })
-		).rejects.toMatchObject({ status: 410 });
+		await expect(acceptInvitation({ token: inv.token, userId: invitee.id })).rejects.toMatchObject({
+			status: 410
+		});
 	});
 
 	it('rejects a revoked token with 410', async () => {
@@ -211,9 +211,9 @@ describe('acceptInvitation', () => {
 			role: 'author'
 		});
 		await revokeInvitation(inv.id, owner.id);
-		await expect(
-			acceptInvitation({ token: inv.token, userId: invitee.id })
-		).rejects.toMatchObject({ status: 410 });
+		await expect(acceptInvitation({ token: inv.token, userId: invitee.id })).rejects.toMatchObject({
+			status: 410
+		});
 	});
 
 	it('no-ops when user is already a member with the exact same role', async () => {
@@ -268,9 +268,9 @@ describe('acceptInvitation', () => {
 			email: 'inv@x.com',
 			role: 'author'
 		});
-		await expect(
-			acceptInvitation({ token: inv.token, userId: invitee.id })
-		).rejects.toMatchObject({ status: 409 });
+		await expect(acceptInvitation({ token: inv.token, userId: invitee.id })).rejects.toMatchObject({
+			status: 409
+		});
 
 		// Invitation NOT marked accepted on this failure path.
 		const rows = await db

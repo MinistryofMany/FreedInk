@@ -16,11 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { loadSessionUser, SESSION_COOKIE_NAME } from '$lib/server/session';
 import { log, reqLogger } from '$lib/server/log';
 import { maybeInitSentryServer, captureServerError } from '$lib/server/sentry';
-import {
-	withShutdownTracking,
-	installSignalHandlers,
-	isShuttingDown
-} from '$lib/server/shutdown';
+import { withShutdownTracking, installSignalHandlers, isShuttingDown } from '$lib/server/shutdown';
 import { negotiateLocale } from '$lib/server/locale';
 
 // Initialize Sentry once at module load. No-op if SENTRY_DSN is unset.
@@ -135,11 +131,7 @@ const mainHandle: Handle = async ({ event, resolve }) => {
 		userId: event.locals.user?.id ?? null
 	});
 	const logFn = response.status >= 500 ? child.error : child.info;
-	logFn.call(
-		child,
-		{ status: response.status, duration_ms: durationMs },
-		'request'
-	);
+	logFn.call(child, { status: response.status, duration_ms: durationMs }, 'request');
 
 	return response;
 };

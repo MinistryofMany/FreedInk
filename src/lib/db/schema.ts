@@ -36,12 +36,7 @@ const tsvectorType = customType<{ data: string; default: false }>({
 
 // ──────────────────────────── enums ────────────────────────────
 
-export const postStatus = pgEnum('post_status', [
-	'draft',
-	'under_review',
-	'published',
-	'rejected'
-]);
+export const postStatus = pgEnum('post_status', ['draft', 'under_review', 'published', 'rejected']);
 
 export const memberRole = pgEnum('member_role', [
 	'owner',
@@ -104,19 +99,9 @@ export const auditEvent = pgEnum('audit_event', [
 	'incident.resolved'
 ]);
 
-export const reportStatus = pgEnum('report_status', [
-	'open',
-	'reviewing',
-	'resolved',
-	'dismissed'
-]);
+export const reportStatus = pgEnum('report_status', ['open', 'reviewing', 'resolved', 'dismissed']);
 
-export const reportTarget = pgEnum('report_target', [
-	'post',
-	'comment',
-	'user',
-	'blog'
-]);
+export const reportTarget = pgEnum('report_target', ['post', 'comment', 'user', 'blog']);
 
 // Reasons a reviewer can attach to a reject vote. Authors see the aggregated
 // counts (no per-reviewer attribution because Semaphore proofs are unlinkable

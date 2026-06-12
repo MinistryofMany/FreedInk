@@ -90,7 +90,9 @@
 	<p><a href="/recover">{$_('recover.request_new')}</a></p>
 {:else}
 	<p>
-		{$_('recover.recovering_for', { values: { email: data.email ?? '', username: data.username ?? '' } })}
+		{$_('recover.recovering_for', {
+			values: { email: data.email ?? '', username: data.username ?? '' }
+		})}
 	</p>
 	<aside class="warning">
 		<strong>{$_('recover.warning_heading')}</strong>

@@ -258,7 +258,8 @@
 		<dt>{$_('settings.email_label')}</dt>
 		<dd>
 			{data.user.email ?? '—'}
-			{#if data.user.email && !data.user.emailVerified}<em>{$_('settings.email_unverified')}</em>{/if}
+			{#if data.user.email && !data.user.emailVerified}<em>{$_('settings.email_unverified')}</em
+				>{/if}
 		</dd>
 	</dl>
 </section>
@@ -284,7 +285,9 @@
 		<ul>
 			{#each passkeys as p}
 				<li>
-					{p.nickname ?? $_('settings.passkey_unnamed')} · {$_('settings.passkey_added', { values: { date: new Date(p.createdAt).toLocaleDateString() } })}
+					{p.nickname ?? $_('settings.passkey_unnamed')} · {$_('settings.passkey_added', {
+						values: { date: new Date(p.createdAt).toLocaleDateString() }
+					})}
 				</li>
 			{/each}
 		</ul>
@@ -349,11 +352,19 @@
 				<li>
 					<div class="meta">
 						<div>
-							<code title={s.userAgent ?? ''}>{(s.userAgent ?? $_('settings.unknown_agent')).slice(0, 80)}</code>
+							<code title={s.userAgent ?? ''}
+								>{(s.userAgent ?? $_('settings.unknown_agent')).slice(0, 80)}</code
+							>
 							{#if s.current}<span class="tag">{$_('settings.this_device')}</span>{/if}
 						</div>
 						<small>
-							{$_('settings.session_meta', { values: { ip: s.ip ?? '—', lastSeen: new Date(s.lastSeenAt).toLocaleString(), started: new Date(s.createdAt).toLocaleDateString() } })}
+							{$_('settings.session_meta', {
+								values: {
+									ip: s.ip ?? '—',
+									lastSeen: new Date(s.lastSeenAt).toLocaleString(),
+									started: new Date(s.createdAt).toLocaleDateString()
+								}
+							})}
 						</small>
 					</div>
 					{#if !s.current}
@@ -375,9 +386,9 @@
 <section>
 	<h3>Notifications</h3>
 	<p class="muted">
-		Get a desktop / mobile notification when a post needs review on a blog you
-		moderate, or when a new post is published on a blog you belong to. The
-		permission is per-browser; enable on each device separately.
+		Get a desktop / mobile notification when a post needs review on a blog you moderate, or when a
+		new post is published on a blog you belong to. The permission is per-browser; enable on each
+		device separately.
 	</p>
 	{#if pushStatus === 'unsupported'}
 		<button type="button" disabled>Push not supported in this browser</button>
@@ -398,9 +409,8 @@
 <section class="theme">
 	<h3>Appearance</h3>
 	<p class="muted">
-		Choose a theme. "System" follows your operating system's light/dark
-		setting; the other two pin the site to that palette across devices that
-		share this browser.
+		Choose a theme. "System" follows your operating system's light/dark setting; the other two pin
+		the site to that palette across devices that share this browser.
 	</p>
 	<fieldset class="theme-options">
 		<legend class="sr-only">Theme</legend>
@@ -472,10 +482,7 @@
 				<code>{data.user.username}</code>
 				{$_('settings.deletion_confirm_prompt_suffix')}
 			</p>
-			<form
-				on:submit|preventDefault={deleteAccount}
-				class="del-form"
-			>
+			<form on:submit|preventDefault={deleteAccount} class="del-form">
 				<input
 					type="text"
 					bind:value={deleteConfirm}

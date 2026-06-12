@@ -7,11 +7,11 @@ services:
       POSTGRES_PASSWORD: freedink
       POSTGRES_DB: freedink
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U freedink -d freedink"]
+      test: ['CMD-SHELL', 'pg_isready -U freedink -d freedink']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -38,10 +38,10 @@ services:
       ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
       SHUTDOWN_GRACE_SECONDS: ${SHUTDOWN_GRACE_SECONDS:-25}
     ports:
-      - "3000:3000"
+      - '3000:3000'
     healthcheck:
       # /healthz returns 200 only when the DB round-trips in <2s.
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/healthz || exit 1"]
+      test: ['CMD-SHELL', 'wget -q -O- http://localhost:3000/healthz || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -66,12 +66,12 @@ services:
     volumes:
       - freedink_backups:/backups
       - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
-    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    entrypoint: ['/bin/sh', '/usr/local/bin/backup.sh']
     healthcheck:
       # Healthy iff a backup completed within 2× the configured interval.
       # The sentinel file is rewritten on every successful pg_dump.
       test:
-        - "CMD-SHELL"
+        - 'CMD-SHELL'
         - 'now=$$(date +%s); last=$$(cat /backups/.last_ok_at 2>/dev/null || echo 0); max=$$((${BACKUP_INTERVAL_SECONDS:-21600} * 2)); test $$((now - last)) -lt $$max'
       interval: 60s
       timeout: 5s
@@ -96,11 +96,11 @@ services:
     environment:
       DATABASE_URL: postgres://freedink:freedink@postgres:5432/freedink
       CLEANUP_INTERVAL_SECONDS: ${CLEANUP_INTERVAL_SECONDS:-600}
-      CLEANUP_LOOP: "1"
+      CLEANUP_LOOP: '1'
       CLEANUP_SENTINEL: /tmp/cleanup.last_ok
       STATUS_PROBE_INTERVAL_SECONDS: ${STATUS_PROBE_INTERVAL_SECONDS:-30}
       STATUS_PROBE_URL: ${STATUS_PROBE_URL:-http://app:3000/healthz}
-      STATUS_PROBE_LOOP: "1"
+      STATUS_PROBE_LOOP: '1'
       STATUS_PROBE_SENTINEL: /tmp/status-probe.last_ok
       NODE_ENV: production
     working_dir: /app
@@ -111,7 +111,7 @@ services:
       - ./scripts:/app/scripts:ro
       - ./node_modules:/app/node_modules:ro
       - ./package.json:/app/package.json:ro
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: ['/bin/sh', '-c']
     command:
       - |
         set -e
@@ -124,7 +124,7 @@ services:
     healthcheck:
       # Healthy iff the sentinel file is younger than 2× the interval.
       test:
-        - "CMD-SHELL"
+        - 'CMD-SHELL'
         - 'now=$$(date +%s); last=$$(stat -c %Y /tmp/cleanup.last_ok 2>/dev/null || echo 0); max=$$((${CLEANUP_INTERVAL_SECONDS:-600} * 2)); test $$((now - last)) -lt $$max'
       interval: 60s
       timeout: 5s
@@ -137,8 +137,8 @@ services:
     depends_on:
       - app
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST:-freed.ink.localhost}
       ACME_EMAIL: ${ACME_EMAIL:-admin@freed.ink}

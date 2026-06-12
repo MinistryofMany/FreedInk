@@ -70,12 +70,7 @@
 		{/each}
 	</ul>
 	{#if nextCursor}
-		<form
-			method="get"
-			action="/search"
-			on:submit|preventDefault={loadMore}
-			class="load-more"
-		>
+		<form method="get" action="/search" on:submit|preventDefault={loadMore} class="load-more">
 			{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
 			{#if data.tag}<input type="hidden" name="tag" value={data.tag} />{/if}
 			<input type="hidden" name="cursor" value={nextCursor} />

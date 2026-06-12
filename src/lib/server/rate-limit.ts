@@ -32,7 +32,10 @@ export function buildKey(bucket: string, discriminator: string): string {
 // Increment the counter for the current window; return whether the request is
 // allowed. Implemented via INSERT ... ON CONFLICT to atomically bump count
 // without a read+write race.
-export async function consume(rule: RateLimitRule, key: string): Promise<{
+export async function consume(
+	rule: RateLimitRule,
+	key: string
+): Promise<{
 	allowed: boolean;
 	remaining: number;
 	resetAt: Date;
@@ -65,7 +68,7 @@ export async function enforce(
 ): Promise<void> {
 	const discriminator =
 		options.keyBy === 'user'
-			? event.locals.user?.id ?? event.getClientAddress()
+			? (event.locals.user?.id ?? event.getClientAddress())
 			: options.keyBy === 'both'
 				? `${event.locals.user?.id ?? 'anon'}@${event.getClientAddress()}`
 				: event.getClientAddress();
@@ -94,11 +97,19 @@ export const RULES = {
 	authStart: { bucket: 'auth:start', max: 10, windowSeconds: 60 } satisfies RateLimitRule,
 	authFinish: { bucket: 'auth:finish', max: 20, windowSeconds: 60 } satisfies RateLimitRule,
 	nonce: { bucket: 'api:nonce', max: 30, windowSeconds: 60 } satisfies RateLimitRule,
-	recoveryStart: { bucket: 'recovery:start', max: 3, windowSeconds: 60 * 60 } satisfies RateLimitRule,
+	recoveryStart: {
+		bucket: 'recovery:start',
+		max: 3,
+		windowSeconds: 60 * 60
+	} satisfies RateLimitRule,
 	// Authed endpoints — keyed by user.
 	postCreate: { bucket: 'post:create', max: 30, windowSeconds: 60 * 60 } satisfies RateLimitRule,
 	reviewCast: { bucket: 'review:cast', max: 60, windowSeconds: 60 * 60 } satisfies RateLimitRule,
 	commentPost: { bucket: 'comment:post', max: 30, windowSeconds: 5 * 60 } satisfies RateLimitRule,
-	identityRotate: { bucket: 'identity:rotate', max: 3, windowSeconds: 60 * 60 } satisfies RateLimitRule,
+	identityRotate: {
+		bucket: 'identity:rotate',
+		max: 3,
+		windowSeconds: 60 * 60
+	} satisfies RateLimitRule,
 	inviteSend: { bucket: 'invite:send', max: 20, windowSeconds: 60 * 60 } satisfies RateLimitRule
 } as const;

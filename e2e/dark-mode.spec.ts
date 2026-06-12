@@ -21,9 +21,7 @@ test.describe('dark mode', () => {
 
 	test('OS dark preference renders dark body background', async ({ page }) => {
 		await page.goto('/');
-		const bg = await page.evaluate(() =>
-			getComputedStyle(document.body).backgroundColor
-		);
+		const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 		const brightness = avgChannel(bg);
 		expect(brightness, `body bg=${bg}`).toBeLessThan(100);
 	});
@@ -43,9 +41,7 @@ test.describe('manual theme override', () => {
 		await page.goto('/');
 		// data-theme attribute applied by the layout's onMount.
 		await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
-		const bg = await page.evaluate(() =>
-			getComputedStyle(document.body).backgroundColor
-		);
+		const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 		const brightness = avgChannel(bg);
 		expect(brightness, `body bg=${bg}`).toBeGreaterThan(180);
 	});

@@ -80,8 +80,7 @@ async function ensureModerator(event: Parameters<Actions[keyof Actions]>[0], blo
 	if (!event.locals.user) throw redirect(303, '/signup');
 	const blog = await getBlogBySlug(blogSlug);
 	if (!blog) throw error(404, 'blog not found');
-	if (!(await hasRole(blog.id, event.locals.user.id, MODERATING)))
-		throw redirect(303, '/admin');
+	if (!(await hasRole(blog.id, event.locals.user.id, MODERATING))) throw redirect(303, '/admin');
 	return blog;
 }
 

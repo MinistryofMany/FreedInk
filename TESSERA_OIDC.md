@@ -11,6 +11,7 @@ re-sign-in (the second sign-in reuses the same FreedInk user).
 ## Files
 
 Added:
+
 - `src/lib/server/oidc.ts` — config from env, PKCE, discovery + JWKS cache,
   authorization-URL builder, code→claims exchange with `id_token`
   signature/iss/aud/nonce verification (via `jose`).
@@ -23,6 +24,7 @@ Added:
   session, redirects to `/signup/identity` (new) or `/admin`.
 
 Changed:
+
 - `src/lib/db/schema.ts` — two tables: `oidc_sessions` (pending PKCE auths)
   and `oidc_identities` (issuer+subject → user); `usersRelations` updated.
 - `src/routes/signup/+page.server.ts` — exposes `tesseraEnabled`.
@@ -98,7 +100,7 @@ optional display name/avatar — never an email or username. FreedInk stores
 a placeholder `tessera-…` username (rename-able in settings), and later
 sign-ins resolve the same user by that pair. If the user is already signed
 in (e.g. via passkey) when they click "Sign in with Tessera", the Tessera
-identity is *linked* to the existing account instead of creating a new one.
+identity is _linked_ to the existing account instead of creating a new one.
 
 ## Security
 

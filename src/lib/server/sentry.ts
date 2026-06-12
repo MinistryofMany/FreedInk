@@ -42,7 +42,10 @@ export function maybeInitSentryServer(): boolean {
 }
 
 // Best-effort error capture. Imported lazily for the same reasons as init.
-export async function captureServerError(err: unknown, context?: Record<string, unknown>): Promise<void> {
+export async function captureServerError(
+	err: unknown,
+	context?: Record<string, unknown>
+): Promise<void> {
 	if (!env.SENTRY_DSN) return;
 	try {
 		const Sentry = await import('@sentry/sveltekit');

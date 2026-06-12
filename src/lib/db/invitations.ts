@@ -215,9 +215,7 @@ export async function listInvitations(
 
 	// Resolve accepted-by usernames in a second query (drizzle aliasing of the
 	// same table is fiddly enough that a follow-up lookup is cleaner here).
-	const acceptedIds = rows
-		.map((r) => r.acceptedByUserId)
-		.filter((v): v is string => v !== null);
+	const acceptedIds = rows.map((r) => r.acceptedByUserId).filter((v): v is string => v !== null);
 	const userMap = new Map<string, string>();
 	if (acceptedIds.length > 0) {
 		const users = await db
@@ -228,7 +226,10 @@ export async function listInvitations(
 				// a small list is fine and avoids one more import.
 				acceptedIds.length === 1
 					? eq(accepter.id, acceptedIds[0])
-					: sql`${accepter.id} IN (${sql.join(acceptedIds.map((id) => sql`${id}`), sql`, `)})`
+					: sql`${accepter.id} IN (${sql.join(
+							acceptedIds.map((id) => sql`${id}`),
+							sql`, `
+						)})`
 			);
 		for (const u of users) userMap.set(u.id, u.username);
 	}
@@ -245,7 +246,7 @@ export async function listInvitations(
 			acceptedAt: r.acceptedAt,
 			revokedAt: r.revokedAt,
 			acceptedByUserId: r.acceptedByUserId,
-			acceptedByUsername: r.acceptedByUserId ? userMap.get(r.acceptedByUserId) ?? null : null,
+			acceptedByUsername: r.acceptedByUserId ? (userMap.get(r.acceptedByUserId) ?? null) : null,
 			invitedByUsername: r.inviterUsername
 		}));
 }
@@ -284,10 +285,7 @@ export async function revokeInvitation(
 		.update(schema.blogInvitations)
 		.set({ revokedAt: sql`now()` })
 		.where(
-			and(
-				eq(schema.blogInvitations.id, invitationId),
-				isNull(schema.blogInvitations.revokedAt)
-			)
+			and(eq(schema.blogInvitations.id, invitationId), isNull(schema.blogInvitations.revokedAt))
 		);
 	return { ok: true, alreadyRevoked: false };
 }

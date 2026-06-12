@@ -35,7 +35,10 @@ async function hashToField(message: string): Promise<bigint> {
 }
 
 function sluggify(s: string): string {
-	return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+	return s
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '');
 }
 
 function nowMinus(days: number, hours: number = 0): Date {
@@ -89,14 +92,14 @@ const sortedIdcs = allUsers
 	.sort((a, b) => a.id.localeCompare(b.id)) // since they're all created right now, tiebreak by id
 	.map((u) => u.identity.commitment.toString());
 // Get actual creation order from DB so the ordering matches what the app would compute.
-const orderedUsers = (await sql<{ user_id: string; created_at: Date; idc: string }[]>`
+const orderedUsers = await sql<{ user_id: string; created_at: Date; idc: string }[]>`
   SELECT u.id AS user_id, u.created_at, ui.idc
   FROM users u
   JOIN user_identities ui ON ui.user_id = u.id AND ui.status='active'
   JOIN blog_members bm ON bm.user_id = u.id AND bm.removed_at IS NULL AND bm.role IN ('owner','editor','reviewer','author')
   WHERE bm.blog_id = ${blogId}
   ORDER BY u.created_at ASC, u.id ASC
-`);
+`;
 const snapIdcs = orderedUsers.map((r) => r.idc);
 const group = new Group();
 for (const idc of snapIdcs) group.addMember(BigInt(idc));
@@ -186,10 +189,18 @@ Rotate often. Speak carefully. The cryptography only does what it does.`,
 });
 
 console.log('adding comments…');
-await addComment(p1.versionId, 'This is exactly the framing I needed for a conversation I was avoiding.', 240);
+await addComment(
+	p1.versionId,
+	'This is exactly the framing I needed for a conversation I was avoiding.',
+	240
+);
 await addComment(p1.versionId, 'The "supply has recovered" line is going to stay with me.', 18);
 await addComment(p2.versionId, 'Best three-paragraph intro to Semaphore I have read.', 96);
-await addComment(p2.versionId, 'Worth contrasting with ring signatures for readers who came from Monero.', 4);
+await addComment(
+	p2.versionId,
+	'Worth contrasting with ring signatures for readers who came from Monero.',
+	4
+);
 await addComment(p3.versionId, 'Brutal final line.', 1);
 
 console.log('seeding under-review post with REAL proofs…');
@@ -218,7 +229,11 @@ We sometimes mistake the privacy property for an information-theoretic shield ov
 
 const draftPostId = randomUUID();
 const draftVersionId = randomUUID();
-const submitProof = await buildRealProof(alice.identity, `post:${blogId}`, `${draftTitle}\n\n${draftBody}`);
+const submitProof = await buildRealProof(
+	alice.identity,
+	`post:${blogId}`,
+	`${draftTitle}\n\n${draftBody}`
+);
 await sql`INSERT INTO blog_posts (id, blog_id, status, current_version_id, created_at)
   VALUES (${draftPostId}, ${blogId}, 'under_review', ${draftVersionId}, ${nowMinus(0, 4)})`;
 await sql`INSERT INTO blog_post_versions

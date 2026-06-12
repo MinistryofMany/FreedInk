@@ -3,7 +3,11 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { startRegistration, startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/browser';
+	import {
+		startRegistration,
+		startAuthentication,
+		browserSupportsWebAuthn
+	} from '@simplewebauthn/browser';
 	import SIWE from '$lib/components/siwe.svelte';
 	import { _ } from '$lib/i18n';
 

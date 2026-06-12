@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { sluggify, unslug, hashToField } from './utils';
 
-const BN254 =
-	21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+const BN254 = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 
 describe('sluggify', () => {
 	it('lowercases and replaces spaces with hyphens', () => {

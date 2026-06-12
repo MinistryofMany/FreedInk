@@ -19,10 +19,12 @@ type BlogCursor = { key: string; id: string };
  * Cursor-paginated blog list (newest first). Keyset on (createdAt, id) so
  * concurrent inserts can't cause skips/duplicates between pages.
  */
-export async function listBlogsPage(opts: {
-	cursor?: string | null;
-	limit?: number;
-} = {}): Promise<Page<Blog>> {
+export async function listBlogsPage(
+	opts: {
+		cursor?: string | null;
+		limit?: number;
+	} = {}
+): Promise<Page<Blog>> {
 	const limit = Math.max(1, Math.min(opts.limit ?? 20, 100));
 	const cursor = decodeCursor<BlogCursor>(opts.cursor);
 
@@ -31,10 +33,7 @@ export async function listBlogsPage(opts: {
 				isNull(schema.blogs.archivedAt),
 				or(
 					lt(schema.blogs.createdAt, new Date(cursor.key)),
-					and(
-						eq(schema.blogs.createdAt, new Date(cursor.key)),
-						lt(schema.blogs.id, cursor.id)
-					)
+					and(eq(schema.blogs.createdAt, new Date(cursor.key)), lt(schema.blogs.id, cursor.id))
 				)
 			)
 		: isNull(schema.blogs.archivedAt);
@@ -111,15 +110,9 @@ export async function createBlog(
 }
 
 export async function archiveBlog(blogId: string): Promise<void> {
-	await db
-		.update(schema.blogs)
-		.set({ archivedAt: new Date() })
-		.where(eq(schema.blogs.id, blogId));
+	await db.update(schema.blogs).set({ archivedAt: new Date() }).where(eq(schema.blogs.id, blogId));
 }
 
 export async function unarchiveBlog(blogId: string): Promise<void> {
-	await db
-		.update(schema.blogs)
-		.set({ archivedAt: null })
-		.where(eq(schema.blogs.id, blogId));
+	await db.update(schema.blogs).set({ archivedAt: null }).where(eq(schema.blogs.id, blogId));
 }

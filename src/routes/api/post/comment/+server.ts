@@ -77,5 +77,8 @@ export const POST: RequestHandler = async (event) => {
 			comment_id: inserted.id
 		}
 	});
-	return json({ ok: true, comment: { id: inserted.id, body: inserted.body, createdAt: inserted.createdAt } });
+	return json({
+		ok: true,
+		comment: { id: inserted.id, body: inserted.body, createdAt: inserted.createdAt }
+	});
 };

@@ -7,11 +7,11 @@ without individual attribution.
 
 **2. User Roles & Permissions:**
 
-*   **Writer:** Can submit draft articles for review.
-*   **Commenter:** Can add comments to articles for discussion and feedback. Does *not* participate in voting.
-*   **Editor:** Can review drafts, add comments, and initiate the voting process.
-*   **Voter:** Can vote to approve or reject an article’s publication.
-*   **Owner:** (Platform Owner & Organization Owners) – Has full administrative control over users, content, and settings.
+- **Writer:** Can submit draft articles for review.
+- **Commenter:** Can add comments to articles for discussion and feedback. Does _not_ participate in voting.
+- **Editor:** Can review drafts, add comments, and initiate the voting process.
+- **Voter:** Can vote to approve or reject an article’s publication.
+- **Owner:** (Platform Owner & Organization Owners) – Has full administrative control over users, content, and settings.
 
 **3. Workflow:**
 
@@ -23,25 +23,24 @@ without individual attribution.
 
 **4. Content Management:**
 
-*   Article Submission: Draft articles are stored in a draft state.
-*   Publishing: Approved articles are made publicly available.
-*   Archiving:  A system for archiving articles will be implemented.
+- Article Submission: Draft articles are stored in a draft state.
+- Publishing: Approved articles are made publicly available.
+- Archiving: A system for archiving articles will be implemented.
 
 **5. Discovery & Navigation:**
 
-*   Chronological Feed:  Displays articles in chronological order.
-*   Tagging: Articles are categorized using tags for enhanced discoverability.
-*   Search: Users can search for articles based on keywords.
+- Chronological Feed: Displays articles in chronological order.
+- Tagging: Articles are categorized using tags for enhanced discoverability.
+- Search: Users can search for articles based on keywords.
 
 **6. Administrative Controls:**
 
-*   User Management: Add, edit, and delete user accounts.
-*   Content Moderation: (Owner Level) – Flagging inappropriate content (handled externally through the zero-knowledge cryptography layer).
-*   Analytics Reporting: (Owner Level) –  Aggregate data (without identifying users).
+- User Management: Add, edit, and delete user accounts.
+- Content Moderation: (Owner Level) – Flagging inappropriate content (handled externally through the zero-knowledge cryptography layer).
+- Analytics Reporting: (Owner Level) – Aggregate data (without identifying users).
 
 **7. Technical Considerations (To be fleshed out in subsequent phases):**
 
-*   Database: SQL database.
-*   Anonymity: Zero-knowledge cryptography.
-*   Scalability:  Scalability considerations will be addressed in later phases.
-
+- Database: SQL database.
+- Anonymity: Zero-knowledge cryptography.
+- Scalability: Scalability considerations will be addressed in later phases.

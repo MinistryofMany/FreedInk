@@ -42,9 +42,7 @@ describe('notifications: smoke', () => {
 		await expect(notifyReviewersOfNewSubmission(blogId, r.version.id)).resolves.toBeUndefined();
 
 		await setPostStatus(r.post.id, r.version.id, 'published');
-		await expect(
-			notifyMembersOfNewPublishedPost(blogId, r.version.id)
-		).resolves.toBeUndefined();
+		await expect(notifyMembersOfNewPublishedPost(blogId, r.version.id)).resolves.toBeUndefined();
 	});
 });
 
@@ -135,10 +133,7 @@ describe('notifications: recipient list', () => {
 		const owner = await makeUser({ username: 'nox', email: 'nox@x.com' });
 		const noEmail = await makeUser({ username: 'noEmail' });
 		// Strip the email entirely.
-		await db
-			.update(schema.users)
-			.set({ email: null })
-			.where(eq(schema.users.id, noEmail.id));
+		await db.update(schema.users).set({ email: null }).where(eq(schema.users.id, noEmail.id));
 		const unverified = await makeUser({ username: 'unv2', email: 'unv2@x.com' });
 		// owner verified; others not
 		await verifyEmail(owner.id);

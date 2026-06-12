@@ -12,10 +12,9 @@
 	<p><a href="/admin/platform">&larr; Overview</a></p>
 	<h2>Users</h2>
 	<p class="note">
-		"Suspend" revokes every active session for the user; they will be signed out
-		from all devices. A true ban requires a schema change (users.suspended) and
-		is not implemented in this wave — repeat offenders can be GDPR-deleted as a
-		stopgap.
+		"Suspend" revokes every active session for the user; they will be signed out from all devices. A
+		true ban requires a schema change (users.suspended) and is not implemented in this wave — repeat
+		offenders can be GDPR-deleted as a stopgap.
 	</p>
 </header>
 

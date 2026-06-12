@@ -23,8 +23,14 @@ export const POST: RequestHandler = async (event) => {
 	if (!locals.user) throw error(401, 'sign in required');
 	const parsed = Body.safeParse(await request.json());
 	if (!parsed.success) throw error(422, parsed.error.message);
-	const { blog_id, approval_numerator, approval_denominator, description, title, default_language } =
-		parsed.data;
+	const {
+		blog_id,
+		approval_numerator,
+		approval_denominator,
+		description,
+		title,
+		default_language
+	} = parsed.data;
 
 	const blog = await getBlogById(blog_id);
 	if (!blog) throw error(404, 'blog not found');

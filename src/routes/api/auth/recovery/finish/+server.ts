@@ -2,11 +2,7 @@ import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { finishRegistration } from '$lib/server/webauthn';
-import {
-	createSession,
-	revokeAllSessions,
-	setSessionCookie
-} from '$lib/server/session';
+import { createSession, revokeAllSessions, setSessionCookie } from '$lib/server/session';
 import { consumeRecovery, lookupRecovery } from '$lib/server/recovery';
 import { audit } from '$lib/server/audit';
 

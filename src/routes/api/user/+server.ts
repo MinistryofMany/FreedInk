@@ -4,7 +4,12 @@ import { error, json } from '@sveltejs/kit';
 import { updateUserProfile } from '$lib/db/users';
 
 const Body = z.object({
-	username: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+	username: z
+		.string()
+		.min(3)
+		.max(40)
+		.regex(/^[a-zA-Z0-9_-]+$/)
+		.optional(),
 	displayName: z.string().max(80).nullable().optional()
 });
 

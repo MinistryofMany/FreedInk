@@ -80,7 +80,10 @@ export async function createPostVersion(input: CreatePostVersionInput) {
 		// race on the same N. The composite unique index on
 		// (post_id, nullifier) is the ultimate guard against duplicate submit.
 		const latest = await tx
-			.select({ version: schema.blogPostVersions.version, language: schema.blogPostVersions.language })
+			.select({
+				version: schema.blogPostVersions.version,
+				language: schema.blogPostVersions.language
+			})
 			.from(schema.blogPostVersions)
 			.where(eq(schema.blogPostVersions.postId, input.postId))
 			.orderBy(desc(schema.blogPostVersions.version))

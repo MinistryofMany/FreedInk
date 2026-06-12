@@ -109,10 +109,7 @@ export async function getPostsUnderReview(blogIds: string[]) {
 			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
 		)
 		.where(
-			and(
-				inArray(schema.blogPosts.blogId, blogIds),
-				eq(schema.blogPosts.status, 'under_review')
-			)
+			and(inArray(schema.blogPosts.blogId, blogIds), eq(schema.blogPosts.status, 'under_review'))
 		)
 		.orderBy(desc(schema.blogPosts.createdAt));
 }

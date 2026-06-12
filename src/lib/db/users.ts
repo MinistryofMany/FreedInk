@@ -35,16 +35,10 @@ export async function getUserByWalletAddress(address: string): Promise<User | nu
 	return rows[0]?.user ?? null;
 }
 
-export async function createUserWithWallet(
-	address: string,
-	username?: string
-): Promise<User> {
+export async function createUserWithWallet(address: string, username?: string): Promise<User> {
 	const normalized = address.toLowerCase();
 	const placeholder = username ?? `0x${normalized.slice(2, 10)}`;
-	const inserted = await db
-		.insert(schema.users)
-		.values({ username: placeholder })
-		.returning();
+	const inserted = await db.insert(schema.users).values({ username: placeholder }).returning();
 	const user = inserted[0];
 	await db.insert(schema.walletAddresses).values({ userId: user.id, address: normalized });
 	return user;
@@ -91,10 +85,7 @@ export async function markEmailVerified(userId: string): Promise<void> {
 }
 
 export async function getUserWallets(userId: string) {
-	return db
-		.select()
-		.from(schema.walletAddresses)
-		.where(eq(schema.walletAddresses.userId, userId));
+	return db.select().from(schema.walletAddresses).where(eq(schema.walletAddresses.userId, userId));
 }
 
 export async function getUserPasskeys(userId: string) {

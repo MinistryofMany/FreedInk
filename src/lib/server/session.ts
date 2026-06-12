@@ -29,10 +29,7 @@ export function unpackCookie(raw: string): string | null {
 	const id = raw.slice(0, idx);
 	const sig = raw.slice(idx + 1);
 	const expected = sign(id);
-	if (
-		sig.length !== expected.length ||
-		!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
-	) {
+	if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
 		return null;
 	}
 	return id;
@@ -113,14 +110,14 @@ export async function destroySession(rawCookie: string | undefined): Promise<voi
 // one we just minted as part of the same flow). Used by account recovery and
 // identity rotation to invalidate other devices that might still hold a
 // session for an account whose credential surface just changed.
-export async function revokeAllSessions(
-	userId: string,
-	exceptSessionId?: string
-): Promise<number> {
+export async function revokeAllSessions(userId: string, exceptSessionId?: string): Promise<number> {
 	const where = exceptSessionId
 		? and(eq(schema.sessions.userId, userId), ne(schema.sessions.id, exceptSessionId))
 		: eq(schema.sessions.userId, userId);
-	const deleted = await db.delete(schema.sessions).where(where).returning({ id: schema.sessions.id });
+	const deleted = await db
+		.delete(schema.sessions)
+		.where(where)
+		.returning({ id: schema.sessions.id });
 	return deleted.length;
 }
 

@@ -84,8 +84,18 @@
 				<span class="spark-label">New users</span>
 				<span class="spark-total">{seriesTotal(sparklines.users)}</span>
 			</div>
-			<svg viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="New users per day, last 30 days">
-				<polyline points={polylinePoints(sparklines.users)} fill="none" stroke="currentColor" stroke-width="1" />
+			<svg
+				viewBox="0 0 100 30"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="New users per day, last 30 days"
+			>
+				<polyline
+					points={polylinePoints(sparklines.users)}
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1"
+				/>
 			</svg>
 		</article>
 		<article class="spark">
@@ -93,8 +103,18 @@
 				<span class="spark-label">New posts</span>
 				<span class="spark-total">{seriesTotal(sparklines.posts)}</span>
 			</div>
-			<svg viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="New posts per day, last 30 days">
-				<polyline points={polylinePoints(sparklines.posts)} fill="none" stroke="currentColor" stroke-width="1" />
+			<svg
+				viewBox="0 0 100 30"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="New posts per day, last 30 days"
+			>
+				<polyline
+					points={polylinePoints(sparklines.posts)}
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1"
+				/>
 			</svg>
 		</article>
 		<article class="spark">
@@ -102,8 +122,18 @@
 				<span class="spark-label">New comments</span>
 				<span class="spark-total">{seriesTotal(sparklines.comments)}</span>
 			</div>
-			<svg viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="New comments per day, last 30 days">
-				<polyline points={polylinePoints(sparklines.comments)} fill="none" stroke="currentColor" stroke-width="1" />
+			<svg
+				viewBox="0 0 100 30"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="New comments per day, last 30 days"
+			>
+				<polyline
+					points={polylinePoints(sparklines.comments)}
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1"
+				/>
 			</svg>
 		</article>
 	</div>

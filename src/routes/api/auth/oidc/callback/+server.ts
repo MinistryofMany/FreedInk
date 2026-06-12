@@ -34,9 +34,7 @@ export const GET: RequestHandler = async (event) => {
 	const [pending] = await db
 		.select()
 		.from(schema.oidcSessions)
-		.where(
-			and(eq(schema.oidcSessions.state, state), gt(schema.oidcSessions.expiresAt, new Date()))
-		)
+		.where(and(eq(schema.oidcSessions.state, state), gt(schema.oidcSessions.expiresAt, new Date())))
 		.limit(1);
 	if (!pending) throw error(400, 'invalid or expired sign-in state');
 	await db.delete(schema.oidcSessions).where(eq(schema.oidcSessions.state, state));
@@ -103,10 +101,7 @@ async function hasNoActiveIdentity(userId: string): Promise<boolean> {
 		.select({ id: schema.userIdentities.id })
 		.from(schema.userIdentities)
 		.where(
-			and(
-				eq(schema.userIdentities.userId, userId),
-				eq(schema.userIdentities.status, 'active')
-			)
+			and(eq(schema.userIdentities.userId, userId), eq(schema.userIdentities.status, 'active'))
 		)
 		.limit(1);
 	return rows.length === 0;

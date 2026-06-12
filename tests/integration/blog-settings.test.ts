@@ -63,9 +63,9 @@ describe('updateBlogSettings: thresholds', () => {
 		const owner = await makeUser({ username: 'owner' });
 		const { id: blogId } = await makeBlogWith({ owner });
 		// Default is 2/3. Try to push numerator to 4 — should fail (4 > 3).
-		await expect(
-			updateBlogSettings(blogId, { approvalNumerator: 4 })
-		).rejects.toMatchObject({ status: 422 });
+		await expect(updateBlogSettings(blogId, { approvalNumerator: 4 })).rejects.toMatchObject({
+			status: 422
+		});
 	});
 });
 
@@ -87,11 +87,7 @@ describe('updateBlogSettings: title + description', () => {
 		expect(updated.slug).toBe('new-fancy-name');
 
 		// Confirm the DB row reflects it.
-		const fresh = await db
-			.select()
-			.from(schema.blogs)
-			.where(eq(schema.blogs.id, blogId))
-			.limit(1);
+		const fresh = await db.select().from(schema.blogs).where(eq(schema.blogs.id, blogId)).limit(1);
 		expect(fresh[0].slug).toBe('new-fancy-name');
 	});
 
@@ -112,11 +108,7 @@ describe('updateBlogSettings: title + description', () => {
 	it('no-op when patch is empty returns the current row unchanged', async () => {
 		const owner = await makeUser({ username: 'owner' });
 		const { id: blogId } = await makeBlogWith({ owner, title: 'Stable' });
-		const before = await db
-			.select()
-			.from(schema.blogs)
-			.where(eq(schema.blogs.id, blogId))
-			.limit(1);
+		const before = await db.select().from(schema.blogs).where(eq(schema.blogs.id, blogId)).limit(1);
 		const after = await updateBlogSettings(blogId, {});
 		expect(after.title).toBe(before[0].title);
 		expect(after.approvalNumerator).toBe(before[0].approvalNumerator);

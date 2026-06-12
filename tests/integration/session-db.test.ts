@@ -61,14 +61,12 @@ describe('session DB roundtrip', () => {
 	it('lastSeenAt bumps on load', async () => {
 		const u = await makeUser({ username: 'sess5' });
 		const sid = await createSession(u.id, {});
-		const before = (
-			await db.select().from(schema.sessions).where(eq(schema.sessions.id, sid))
-		)[0].lastSeenAt;
+		const before = (await db.select().from(schema.sessions).where(eq(schema.sessions.id, sid)))[0]
+			.lastSeenAt;
 		await new Promise((r) => setTimeout(r, 20));
 		await loadSessionUser(packCookie(sid));
-		const after = (
-			await db.select().from(schema.sessions).where(eq(schema.sessions.id, sid))
-		)[0].lastSeenAt;
+		const after = (await db.select().from(schema.sessions).where(eq(schema.sessions.id, sid)))[0]
+			.lastSeenAt;
 		expect(after.getTime()).toBeGreaterThan(before.getTime());
 	});
 

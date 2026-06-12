@@ -45,28 +45,26 @@ self.addEventListener('notificationclick', (event) => {
 	// with existing client URLs.
 	const targetUrl = new URL(target, self.location.origin).href;
 	event.waitUntil(
-		self.clients
-			.matchAll({ type: 'window', includeUncontrolled: true })
-			.then((clientList) => {
-				for (const client of clientList) {
-					// Same origin → reuse the tab. Navigate if it's pointing somewhere
-					// else, then focus.
-					try {
-						const url = new URL(client.url);
-						if (url.origin === self.location.origin && 'focus' in client) {
-							if (client.url !== targetUrl && 'navigate' in client) {
-								return client.navigate(targetUrl).then(() => client.focus());
-							}
-							return client.focus();
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+			for (const client of clientList) {
+				// Same origin → reuse the tab. Navigate if it's pointing somewhere
+				// else, then focus.
+				try {
+					const url = new URL(client.url);
+					if (url.origin === self.location.origin && 'focus' in client) {
+						if (client.url !== targetUrl && 'navigate' in client) {
+							return client.navigate(targetUrl).then(() => client.focus());
 						}
-					} catch {
-						// ignore malformed client URL and keep looking
+						return client.focus();
 					}
+				} catch {
+					// ignore malformed client URL and keep looking
 				}
-				if (self.clients.openWindow) {
-					return self.clients.openWindow(targetUrl);
-				}
-				return null;
-			})
+			}
+			if (self.clients.openWindow) {
+				return self.clients.openWindow(targetUrl);
+			}
+			return null;
+		})
 	);
 });

@@ -66,9 +66,7 @@ describe('metrics gauge helpers', () => {
 		const u = await makeUser({ username: 'bowner' });
 		const b1 = await createBlog(u.id, 'live blog', null);
 		await createBlog(u.id, 'another', null);
-		await db.execute(
-			sql`UPDATE blogs SET archived_at = now() WHERE id = ${b1.id}::uuid`
-		);
+		await db.execute(sql`UPDATE blogs SET archived_at = now() WHERE id = ${b1.id}::uuid`);
 		expect(await countBlogs({ archived: false })).toBe(1);
 		expect(await countBlogs({ archived: true })).toBe(1);
 	});
@@ -202,8 +200,20 @@ describe('metrics gauge helpers', () => {
 			status: 'under_review'
 		});
 		await db.insert(schema.postReviews).values([
-			{ postVersionId: version.id, vote: 'approve', proof: {}, snapshotRoot: 'r', nullifier: 'rv1' },
-			{ postVersionId: version.id, vote: 'approve', proof: {}, snapshotRoot: 'r', nullifier: 'rv2' },
+			{
+				postVersionId: version.id,
+				vote: 'approve',
+				proof: {},
+				snapshotRoot: 'r',
+				nullifier: 'rv1'
+			},
+			{
+				postVersionId: version.id,
+				vote: 'approve',
+				proof: {},
+				snapshotRoot: 'r',
+				nullifier: 'rv2'
+			},
 			{ postVersionId: version.id, vote: 'reject', proof: {}, snapshotRoot: 'r', nullifier: 'rv3' }
 		]);
 		const byVote = await countReviewsByVote();

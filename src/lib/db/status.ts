@@ -111,7 +111,9 @@ export async function dailyUptime(days = 90): Promise<UptimeDay[]> {
 	// postgres-js returns the rows as an array directly; drizzle .execute
 	// passes them through as the result. Some adapter versions wrap with
 	// .rows — handle both defensively.
-	const rows = (Array.isArray(result) ? result : (result as { rows: unknown[] }).rows ?? []) as Array<{
+	const rows = (
+		Array.isArray(result) ? result : ((result as { rows: unknown[] }).rows ?? [])
+	) as Array<{
 		day: string;
 		worst: number;
 	}>;
@@ -226,7 +228,10 @@ export async function getIncidentWithUpdates(
 export async function listIncidentsForOperator(
 	filter: 'active' | 'all' = 'active'
 ): Promise<StatusIncident[]> {
-	const q = db.select().from(schema.statusIncidents).orderBy(desc(schema.statusIncidents.startedAt));
+	const q = db
+		.select()
+		.from(schema.statusIncidents)
+		.orderBy(desc(schema.statusIncidents.startedAt));
 	if (filter === 'active') {
 		return q.where(ne(schema.statusIncidents.status, 'resolved'));
 	}
