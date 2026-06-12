@@ -287,6 +287,45 @@ export const userIdentities = pgTable(
 	})
 );
 
+// ──────────────────────────── oidc (sign in with tessera) ────────────────────────────
+
+// Short-lived pending OIDC authorizations. One row per "start": carries the
+// PKCE verifier + nonce until the IdP redirects back with a code. Resolved by
+// `state` and deleted on use; expired rows reaped by the cleanup job.
+export const oidcSessions = pgTable(
+	'oidc_sessions',
+	{
+		state: text('state').primaryKey(),
+		nonce: text('nonce').notNull(),
+		codeVerifier: text('code_verifier').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(t) => ({
+		expiresIdx: index('oidc_sessions_expires_idx').on(t.expiresAt)
+	})
+);
+
+// Links an external OIDC identity (issuer + pairwise subject) to a FreedInk
+// user. An OIDC `sub` is unique only per (issuer, client), so we key on the
+// pair. A user can hold several identities at once (Tessera, passkey, wallet).
+export const oidcIdentities = pgTable(
+	'oidc_identities',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		issuer: text('issuer').notNull(),
+		subject: text('subject').notNull(),
+		linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => ({
+		issuerSubjectIdx: uniqueIndex('oidc_identities_issuer_subject_key').on(t.issuer, t.subject),
+		userIdx: index('oidc_identities_user_idx').on(t.userId)
+	})
+);
+
 // ──────────────────────────── blogs ────────────────────────────
 
 export const blogs = pgTable(
@@ -827,6 +866,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 	wallets: many(walletAddresses),
 	passkeys: many(passkeyCredentials),
 	identities: many(userIdentities),
+	oidcIdentities: many(oidcIdentities),
 	sessions: many(sessions),
 	memberships: many(blogMembers)
 }));

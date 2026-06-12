@@ -194,6 +194,14 @@
 
 		<p>{$_('auth.prefer_wallet')}</p>
 		<SIWE address={null} />
+
+		{#if data.tesseraEnabled}
+			<hr />
+			<p>Or use your Tessera identity:</p>
+			<a class="tessera-btn" href="/api/auth/oidc/start" data-sveltekit-reload>
+				Sign in with Tessera
+			</a>
+		{/if}
 	{/if}
 </section>
 
@@ -232,5 +240,19 @@
 		background: var(--color-green-lightest, #eef5e7);
 		border: 1px solid var(--color-green-light, #cfe1bf);
 		border-radius: 4px;
+	}
+	.tessera-btn {
+		display: inline-block;
+		text-align: center;
+		padding: 0.6rem 1rem;
+		border: 1px solid var(--color-green-light, #cfe1bf);
+		border-radius: 4px;
+		background: var(--color-green-lightest, #eef5e7);
+		color: inherit;
+		text-decoration: none;
+		font-weight: 600;
+	}
+	.tessera-btn:hover {
+		background: var(--color-green-light, #cfe1bf);
 	}
 </style>
