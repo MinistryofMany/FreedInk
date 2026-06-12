@@ -92,7 +92,12 @@ test('browser-side post creation: real Semaphore proof, post lands in review que
 		const postTitle = `Post ${stamp}`;
 		const postBody = 'The body of a real browser-proven post.';
 		await page.getByLabel('Post Title').fill(postTitle);
-		await page.getByLabel('Content').fill(postBody);
+		// The content field is the Tiptap MarkdownEditor (contenteditable), not a
+		// labelable form control, so label-based lookup can't reach it.
+		await page
+			.getByTestId('markdown-editor-surface')
+			.locator('[contenteditable="true"]')
+			.fill(postBody);
 		await page.getByRole('button', { name: /create post/i }).click();
 
 		// Successful submit redirects to /admin.
@@ -141,7 +146,12 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 		const postTitle = `Vote Post ${stamp}`;
 		const postBody = 'Body to be published.';
 		await page.getByLabel('Post Title').fill(postTitle);
-		await page.getByLabel('Content').fill(postBody);
+		// The content field is the Tiptap MarkdownEditor (contenteditable), not a
+		// labelable form control, so label-based lookup can't reach it.
+		await page
+			.getByTestId('markdown-editor-surface')
+			.locator('[contenteditable="true"]')
+			.fill(postBody);
 		await page.getByRole('button', { name: /create post/i }).click();
 		await page.waitForURL('**/admin', { timeout: 180_000 });
 
