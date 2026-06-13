@@ -49,8 +49,7 @@ async function recipientsByRole(blogId: string, roles: MemberRole[]): Promise<Re
 				eq(schema.blogMembers.blogId, blogId),
 				isNull(schema.blogMembers.removedAt),
 				inArray(schema.blogMembers.role, roles),
-				isNotNull(schema.users.email),
-				isNotNull(schema.users.emailVerifiedAt)
+				isNotNull(schema.users.email)
 			)
 		);
 	// De-dupe by user id — a single user could in principle hold multiple

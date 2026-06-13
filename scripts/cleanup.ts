@@ -27,11 +27,7 @@ if (existsSync('.env')) {
 
 export type CleanupStats = {
 	sessions: number;
-	siwe_nonces: number;
-	webauthn_challenges: number;
-	email_verifications: number;
 	post_submission_nonces: number;
-	account_recoveries: number;
 	rate_limits: number;
 	blog_invitations: number;
 	status_checks: number;
@@ -55,11 +51,7 @@ type Sql = ReturnType<typeof postgres>;
 export async function runCleanupOnce(sql: Sql): Promise<CleanupStats> {
 	const stats: CleanupStats = {
 		sessions: 0,
-		siwe_nonces: 0,
-		webauthn_challenges: 0,
-		email_verifications: 0,
 		post_submission_nonces: 0,
-		account_recoveries: 0,
 		rate_limits: 0,
 		blog_invitations: 0,
 		status_checks: 0
@@ -72,41 +64,10 @@ export async function runCleanupOnce(sql: Sql): Promise<CleanupStats> {
 	`
 	).count;
 
-	// siwe_nonces: either expired or already consumed.
-	stats.siwe_nonces = (
-		await sql`
-		DELETE FROM siwe_nonces
-		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`
-	).count;
-
-	// webauthn_challenges: only have expires_at; reap when past.
-	stats.webauthn_challenges = (
-		await sql`
-		DELETE FROM webauthn_challenges WHERE expires_at < now()
-	`
-	).count;
-
-	// email_verifications: expired or consumed.
-	stats.email_verifications = (
-		await sql`
-		DELETE FROM email_verifications
-		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`
-	).count;
-
 	// post_submission_nonces: one-shot — expired or already consumed.
 	stats.post_submission_nonces = (
 		await sql`
 		DELETE FROM post_submission_nonces
-		WHERE expires_at < now() OR consumed_at IS NOT NULL
-	`
-	).count;
-
-	// account_recoveries: expired or consumed.
-	stats.account_recoveries = (
-		await sql`
-		DELETE FROM account_recoveries
 		WHERE expires_at < now() OR consumed_at IS NOT NULL
 	`
 	).count;

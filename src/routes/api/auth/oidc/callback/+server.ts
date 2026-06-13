@@ -3,7 +3,13 @@ import { error, redirect } from '@sveltejs/kit';
 import { and, eq, gt } from 'drizzle-orm';
 import { db, schema } from '$lib/db/client';
 import { enforce, RULES } from '$lib/server/rate-limit';
-import { oidcConfig, exchangeCodeForClaims, issuerKey } from '$lib/server/oidc';
+import {
+	oidcConfig,
+	exchangeCodeForClaims,
+	issuerKey,
+	safeNext,
+	NEXT_COOKIE
+} from '$lib/server/oidc';
 import {
 	getUserByOidcIdentity,
 	createUserWithOidcIdentity,
@@ -90,10 +96,19 @@ export const GET: RequestHandler = async (event) => {
 		metadata: { method: 'oidc', issuer: iss, new_user: newUser, linked }
 	});
 
-	// New accounts have no Semaphore identity yet — send them to set one up,
-	// mirroring the wallet/passkey sign-up paths.
+	// Honor an optional post-login destination (e.g. an invitation link) that
+	// `start` stashed before the round-trip. Consumed once.
+	const next = safeNext(cookies.get(NEXT_COOKIE));
+	if (next) cookies.delete(NEXT_COOKIE, { path: '/' });
+
+	// New accounts have no Semaphore identity yet — send them to set one up
+	// first, carrying `next` through so they still land where they intended.
 	const needsIdentity = await hasNoActiveIdentity(user.id);
-	throw redirect(303, needsIdentity ? '/signup/identity' : '/admin');
+	if (needsIdentity) {
+		const dest = next ? `/signup/identity?next=${encodeURIComponent(next)}` : '/signup/identity';
+		throw redirect(303, dest);
+	}
+	throw redirect(303, next ?? '/admin');
 };
 
 async function hasNoActiveIdentity(userId: string): Promise<boolean> {

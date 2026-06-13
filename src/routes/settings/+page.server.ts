@@ -1,16 +1,13 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getUserWallets, getUserPasskeys } from '$lib/db/users';
 import { db, schema } from '$lib/db/client';
 import { eq, desc } from 'drizzle-orm';
 import { SESSION_COOKIE_NAME, currentSessionId } from '$lib/server/session';
 
-export const load: PageServerLoad = async ({ locals, url, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(303, '/signup');
 	const current = currentSessionId(cookies.get(SESSION_COOKIE_NAME));
-	const [wallets, passkeys, identities, sessionRows] = await Promise.all([
-		getUserWallets(locals.user.id),
-		getUserPasskeys(locals.user.id),
+	const [identities, sessionRows] = await Promise.all([
 		db
 			.select({
 				id: schema.userIdentities.id,
@@ -47,13 +44,9 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 			id: locals.user.id,
 			username: locals.user.username,
 			displayName: locals.user.displayName,
-			email: locals.user.email,
-			emailVerified: !!locals.user.emailVerifiedAt
+			email: locals.user.email
 		},
-		wallets,
-		passkeys,
 		identities,
-		sessions,
-		verifiedFlash: url.searchParams.get('verified') === '1'
+		sessions
 	};
 };

@@ -1,10 +1,18 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { generateIdentity, encodeForWire, cacheUnlockedIdentity } from '$lib/client/vault';
 	import { _ } from '$lib/i18n';
 	import { get } from 'svelte/store';
 
 	export let data;
+
+	// Carried through from the Tessera callback when the user arrived mid-flow
+	// (e.g. accepting an invitation). Only same-origin paths are produced upstream.
+	function safeNext(raw: string | null): string {
+		if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\')) return raw;
+		return '/admin';
+	}
 	let password = '';
 	let confirm = '';
 	let busy = false;
@@ -34,7 +42,7 @@
 				return;
 			}
 			cacheUnlockedIdentity(identity);
-			goto('/admin');
+			goto(safeNext($page.url.searchParams.get('next')));
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {

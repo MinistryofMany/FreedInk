@@ -42,7 +42,6 @@ state, or moderator tools. Please do not ingest or index them.
 - ${ORIGIN}/api/
 - ${ORIGIN}/settings/
 - ${ORIGIN}/signup/
-- ${ORIGIN}/recover/
 
 ## Notes for LLMs
 

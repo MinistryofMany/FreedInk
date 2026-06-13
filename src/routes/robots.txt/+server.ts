@@ -20,8 +20,6 @@ Disallow: /settings
 Disallow: /settings/
 Disallow: /signup
 Disallow: /signup/
-Disallow: /recover
-Disallow: /recover/
 
 Sitemap: ${ORIGIN}/sitemap.xml
 `;

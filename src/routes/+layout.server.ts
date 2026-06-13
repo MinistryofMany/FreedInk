@@ -1,5 +1,4 @@
 import type { LayoutServerLoad } from './$types';
-import { getUserWallets } from '$lib/db/users';
 
 // Theme cookie name — shared with /settings page. Stored client-side via
 // document.cookie (or server-side via setCookie in a page action). Values:
@@ -16,8 +15,7 @@ function readTheme(raw: string | undefined): 'light' | 'dark' | null {
 export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 	const theme = readTheme(cookies.get(THEME_COOKIE));
 	const base = { theme, locale: locals.locale ?? 'en' } as const;
-	if (!locals.user) return { ...base, user: null, address: null };
-	const wallets = await getUserWallets(locals.user.id);
+	if (!locals.user) return { ...base, user: null };
 	return {
 		...base,
 		user: {
@@ -25,7 +23,6 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 			username: locals.user.username,
 			displayName: locals.user.displayName,
 			email: locals.user.email
-		},
-		address: wallets[0]?.address ?? null
+		}
 	};
 };

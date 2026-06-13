@@ -18,7 +18,6 @@ export const load: PageServerLoad = async () => {
 			username: schema.users.username,
 			displayName: schema.users.displayName,
 			email: schema.users.email,
-			emailVerifiedAt: schema.users.emailVerifiedAt,
 			createdAt: schema.users.createdAt,
 			lastSeenAt: sql<Date | null>`(
 				SELECT MAX(${schema.sessions.lastSeenAt})

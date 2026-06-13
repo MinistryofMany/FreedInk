@@ -59,10 +59,10 @@ describe('GET /admin/platform', () => {
 	});
 });
 
-// Sanity: /api/nonce works without any platform-operator state.
+// Sanity: a plain public route works without any platform-operator state.
 describe('platform: orthogonality', () => {
 	it('PLATFORM_OPERATORS does not affect non-platform routes', async () => {
-		const res = await api('/api/nonce');
+		const res = await api('/api/push/vapid');
 		await res.text();
 		expect(res.status).toBe(200);
 	});

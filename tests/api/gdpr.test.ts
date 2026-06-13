@@ -31,8 +31,7 @@ describe('GDPR export', () => {
 		const body = await res.json();
 		expect(body.user.id).toBe(user.id);
 		expect(body.user.username).toBe('exporter');
-		expect(Array.isArray(body.wallets)).toBe(true);
-		expect(Array.isArray(body.passkeys)).toBe(true);
+		expect(Array.isArray(body.oidcIdentities)).toBe(true);
 		expect(Array.isArray(body.identities)).toBe(true);
 		expect(Array.isArray(body.memberships)).toBe(true);
 		expect(Array.isArray(body.sessions)).toBe(true);
@@ -61,8 +60,7 @@ describe('GDPR export', () => {
 		}
 		const dataOnly = JSON.stringify({
 			user: body.user,
-			wallets: body.wallets,
-			passkeys: body.passkeys,
+			oidcIdentities: body.oidcIdentities,
 			identities: body.identities,
 			memberships: body.memberships,
 			sessions: body.sessions

@@ -3,28 +3,17 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import {
-		startRegistration,
-		startAuthentication,
-		browserSupportsWebAuthn
-	} from '@simplewebauthn/browser';
-	import SIWE from '$lib/components/siwe.svelte';
 	import { _ } from '$lib/i18n';
 
 	export let data;
 
-	let email = '';
-	let username = '';
-	let mode: 'register' | 'login' = 'register';
-	let busy = false;
 	let error = '';
-
-	$: webauthnAvailable = browser ? browserSupportsWebAuthn() : true;
 
 	// ── Invitation pickup (Wave: invitations) ─────────────────────
 	// If the URL carries ?invite=<token>, we route the success path through
-	// /api/invite/<token>/accept instead of /admin. If the user is already
-	// signed in when they land here, accept immediately and redirect.
+	// /api/invite/<token>/accept. If the user is already signed in when they
+	// land here, accept immediately and redirect. Otherwise the token rides
+	// along through the Tessera round-trip via the sign-in link's ?next=.
 	let inviteToken: string | null = null;
 
 	async function acceptInviteAndRedirect(token: string): Promise<boolean> {
@@ -46,85 +35,12 @@
 		}
 	});
 
-	async function registerPasskey() {
-		busy = true;
-		error = '';
-		try {
-			const startRes = await fetch('/api/auth/register/start', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ email, username })
-			});
-			if (!startRes.ok) {
-				error = await startRes.text();
-				return;
-			}
-			const { user_id, options } = await startRes.json();
-			const attResp = await startRegistration({ optionsJSON: options });
-			const finishRes = await fetch('/api/auth/register/finish', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ user_id, response: attResp, nickname: 'default' })
-			});
-			if (!finishRes.ok) {
-				error = await finishRes.text();
-				return;
-			}
-			// Accept the invite right after the session lands (before identity
-			// setup) so the membership is in place. Acceptance only requires a
-			// valid session — identity creation is a separate step the user
-			// completes next at /signup/identity.
-			if (inviteToken) {
-				const res = await fetch(`/api/invite/${inviteToken}/accept`, { method: 'POST' });
-				if (!res.ok) {
-					// Surface but still proceed to identity setup — the user can
-					// re-open the invite link later if it failed transiently.
-					error = `invite acceptance failed: ${await res.text()}`;
-				}
-			}
-			goto('/signup/identity');
-		} catch (e) {
-			error = (e as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function loginPasskey() {
-		busy = true;
-		error = '';
-		try {
-			const startRes = await fetch('/api/auth/login/start', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ email: email || undefined })
-			});
-			if (!startRes.ok) {
-				error = await startRes.text();
-				return;
-			}
-			const { options } = await startRes.json();
-			const assertion = await startAuthentication({ optionsJSON: options });
-			const finishRes = await fetch('/api/auth/login/finish', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ response: assertion, email: email || undefined })
-			});
-			if (!finishRes.ok) {
-				error = await finishRes.text();
-				return;
-			}
-			if (inviteToken) {
-				const accepted = await acceptInviteAndRedirect(inviteToken);
-				if (accepted) return;
-			}
-			goto('/admin');
-		} catch (e) {
-			error = (e as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
+	// Sign-in entry point. When an invite is in play, carry it through the
+	// Tessera round-trip so the user lands back on this page (signed in) and
+	// the onMount above accepts it.
+	$: tesseraHref = inviteToken
+		? `/api/auth/oidc/start?next=${encodeURIComponent(`/signup?invite=${inviteToken}`)}`
+		: '/api/auth/oidc/start';
 </script>
 
 <section class="stack">
@@ -145,7 +61,6 @@
 		<p>
 			{$_('auth.signed_in_prefix')}
 			<strong>{data.username}</strong>.
-			<!-- "Go to your dashboard" — split for translator-friendly link wrap. -->
 			<a href="/admin">{$_('auth.signed_in_dashboard_link')}</a>
 			{$_('auth.signed_in_suffix')}
 		</p>
@@ -154,58 +69,21 @@
 		<p>
 			<a href="/admin">{$_('auth.skip_to_dashboard')}</a>
 		</p>
+	{:else if data.tesseraEnabled}
+		<p>Tessera is your identity for Freed.Ink. Sign in to create or access your account.</p>
+		<a class="tessera-btn" href={tesseraHref} data-sveltekit-reload>Sign in with Tessera</a>
+		<p class="hint">
+			New here? Signing in with Tessera for the first time creates your account automatically.
+		</p>
 	{:else}
-		<div class="tabs">
-			<button class:active={mode === 'register'} on:click={() => (mode = 'register')}>
-				{$_('auth.create_account_tab')}
-			</button>
-			<button class:active={mode === 'login'} on:click={() => (mode = 'login')}>
-				{$_('auth.sign_in_tab')}
-			</button>
-		</div>
+		<p class="unavailable">
+			Sign-in is currently unavailable: this instance hasn't been configured with a Tessera
+			provider. Set the Tessera OIDC environment variables and reload.
+		</p>
+	{/if}
 
-		{#if mode === 'register'}
-			<form on:submit|preventDefault={registerPasskey}>
-				<label>
-					{$_('auth.email_label')}
-					<input type="email" bind:value={email} required autocomplete="email" />
-				</label>
-				<label>
-					{$_('auth.username_label')}
-					<input bind:value={username} required minlength="3" autocomplete="username" />
-				</label>
-				<button type="submit" disabled={busy || !webauthnAvailable}>
-					{webauthnAvailable ? $_('auth.register_passkey') : $_('auth.passkey_unsupported')}
-				</button>
-			</form>
-		{:else}
-			<form on:submit|preventDefault={loginPasskey}>
-				<label>
-					{$_('auth.email_optional_label')}
-					<input type="email" bind:value={email} autocomplete="email" />
-				</label>
-				<button type="submit" disabled={busy || !webauthnAvailable}>
-					{$_('auth.signin_passkey')}
-				</button>
-			</form>
-		{/if}
-
-		{#if error}
-			<p style="color: var(--color-red)">{error}</p>
-		{/if}
-
-		<hr />
-
-		<p>{$_('auth.prefer_wallet')}</p>
-		<SIWE address={null} />
-
-		{#if data.tesseraEnabled}
-			<hr />
-			<p>Or use your Tessera identity:</p>
-			<a class="tessera-btn" href="/api/auth/oidc/start" data-sveltekit-reload>
-				Sign in with Tessera
-			</a>
-		{/if}
+	{#if error}
+		<p style="color: var(--color-red)">{error}</p>
 	{/if}
 </section>
 
@@ -217,32 +95,20 @@
 		max-width: 36rem;
 		margin: 3rem auto;
 	}
-	.tabs {
-		display: flex;
-		gap: 0.5rem;
-	}
-	.tabs .active {
-		background: var(--color-green-light) !important;
-	}
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	hr {
-		border: none;
-		border-top: 1px solid var(--color-green-light);
-		margin: 0.5rem 0;
+	.hint {
+		color: var(--color-green-dark);
+		font-size: 0.9rem;
 	}
 	.invite-banner {
 		padding: 0.75rem 1rem;
 		background: var(--color-green-lightest, #eef5e7);
 		border: 1px solid var(--color-green-light, #cfe1bf);
+		border-radius: 4px;
+	}
+	.unavailable {
+		padding: 0.75rem 1rem;
+		background: color-mix(in srgb, var(--color-red) 8%, transparent);
+		border: 1px solid var(--color-red);
 		border-radius: 4px;
 	}
 	.tessera-btn {

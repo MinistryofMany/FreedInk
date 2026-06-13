@@ -272,12 +272,9 @@ describe('audit log: session.destroyed on signout', () => {
 
 describe('audit log: identity.created', () => {
 	it('records when a user installs their first identity', async () => {
-		// makeUser inserts an identity directly, so spin up a brand-new
-		// user-with-wallet (no identity) and POST through the endpoint.
-		const wallet = '0x' + 'a'.repeat(40);
-		// Create a user with a wallet but no identity row.
+		// makeUser inserts an identity directly, so spin up a brand-new bare user
+		// (no identity row) and POST the first identity through the endpoint.
 		const [u] = await db.insert(schema.users).values({ username: 'audit-id-user' }).returning();
-		await db.insert(schema.walletAddresses).values({ userId: u.id, address: wallet });
 
 		const { createSession, packCookie } = await import('$lib/server/session');
 		const sid = await createSession(u.id, { userAgent: 'vitest', ip: '127.0.0.1' });

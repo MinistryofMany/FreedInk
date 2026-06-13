@@ -50,9 +50,4 @@ describe('auth gates: unauthenticated requests are rejected', () => {
 		const res = await getJSON('/api/identity');
 		expect(res.status).toBe(401);
 	});
-
-	it('POST /api/auth/passkey/add unauthed → 401', async () => {
-		const res = await postJSON('/api/auth/passkey/add', {});
-		expect(res.status).toBe(401);
-	});
 });

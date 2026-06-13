@@ -37,12 +37,12 @@ describe('security headers', () => {
 		);
 	});
 
-	it('GET /api/nonce sets the same baseline non-CSP headers', async () => {
+	it('GET /api/push/vapid sets the same baseline non-CSP headers', async () => {
 		// SvelteKit applies CSP via its own emit-on-document path (only HTML
 		// pages get the CSP header). JSON API responses don't include it,
 		// which is correct — CSP doesn't apply to non-document content. The
 		// other headers come from hooks.server.ts and apply to all responses.
-		const res = await api('/api/nonce');
+		const res = await api('/api/push/vapid');
 		await res.text();
 		expect(res.headers.get('x-content-type-options')).toBe('nosniff');
 		expect(res.headers.get('x-frame-options')).toBe('DENY');
@@ -74,7 +74,7 @@ describe('security headers', () => {
 
 	it('echoes a client-provided X-Request-Id when supplied', async () => {
 		const provided = '11111111-2222-3333-4444-555555555555';
-		const res = await api('/api/nonce', { headers: { 'x-request-id': provided } });
+		const res = await api('/api/push/vapid', { headers: { 'x-request-id': provided } });
 		await res.text();
 		expect(res.headers.get('x-request-id')).toBe(provided);
 	});

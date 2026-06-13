@@ -30,11 +30,12 @@ describe('public routes', () => {
 		expect(res.headers.get('location')).toMatch(/\/signup$/);
 	});
 
-	it('GET /api/nonce → 200 and returns a non-empty nonce', async () => {
-		const res = await api('/api/nonce');
+	it('GET /api/push/vapid → 200 and returns a public key', async () => {
+		const res = await api('/api/push/vapid');
 		expect(res.status).toBe(200);
-		const t = await res.text();
-		expect(t.length).toBeGreaterThan(5);
+		const body = await res.json();
+		expect(typeof body.publicKey).toBe('string');
+		expect(body.publicKey.length).toBeGreaterThan(5);
 	});
 
 	it('GET unknown route → 404', async () => {

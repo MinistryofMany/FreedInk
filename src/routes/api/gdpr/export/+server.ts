@@ -1,7 +1,6 @@
 // GDPR / data-portability export. Returns a JSON document of everything we
 // hold linked to the requesting user. Deliberately omits material that would
-// be (a) useless to the user in isolation (passkey public keys), or (b)
-// already in the user's possession on their devices and risky to re-emit in
+// be already in the user's possession on their devices and risky to re-emit in
 // a file they might email around (identity ciphertext).
 //
 // Audit-logged as `gdpr.export`.
@@ -22,28 +21,16 @@ export const POST: RequestHandler = async (event) => {
 		.where(eq(schema.users.id, userId))
 		.limit(1);
 
-	const wallets = await db
+	// External sign-in links (Sign in with Tessera). Issuer + pairwise subject
+	// are the full extent of what we store for authentication.
+	const oidcIdentities = await db
 		.select({
-			address: schema.walletAddresses.address,
-			linkedAt: schema.walletAddresses.linkedAt
+			issuer: schema.oidcIdentities.issuer,
+			subject: schema.oidcIdentities.subject,
+			linkedAt: schema.oidcIdentities.linkedAt
 		})
-		.from(schema.walletAddresses)
-		.where(eq(schema.walletAddresses.userId, userId));
-
-	// Note: deliberately NOT returning public_key bytes — a hex-rendered
-	// public key is useless to the user but inflates the export.
-	const passkeys = await db
-		.select({
-			id: schema.passkeyCredentials.id,
-			credentialId: schema.passkeyCredentials.credentialId,
-			nickname: schema.passkeyCredentials.nickname,
-			transports: schema.passkeyCredentials.transports,
-			aaguid: schema.passkeyCredentials.aaguid,
-			createdAt: schema.passkeyCredentials.createdAt,
-			lastUsedAt: schema.passkeyCredentials.lastUsedAt
-		})
-		.from(schema.passkeyCredentials)
-		.where(eq(schema.passkeyCredentials.userId, userId));
+		.from(schema.oidcIdentities)
+		.where(eq(schema.oidcIdentities.userId, userId));
 
 	// Identities: include only public fields. NO ciphertext / kdfSalt / nonce
 	// because the user already has the secret vault locally; emitting it here
@@ -91,7 +78,7 @@ export const POST: RequestHandler = async (event) => {
 		notice:
 			'This export contains everything FreedInk holds that is linked to your user account. ' +
 			'Posts and comments are NOT included: they were submitted with Semaphore zero-knowledge ' +
-			'proofs and are not linked to any user in our database. Public keys and identity ' +
+			'proofs and are not linked to any user in our database. Identity public keys and ' +
 			'ciphertext are intentionally omitted — public keys are useless to you in isolation, ' +
 			'and the encrypted identity vault is already on your device.',
 		user: {
@@ -99,21 +86,10 @@ export const POST: RequestHandler = async (event) => {
 			username: profile?.username ?? null,
 			displayName: profile?.displayName ?? null,
 			email: profile?.email ?? null,
-			emailVerifiedAt: profile?.emailVerifiedAt ?? null,
 			createdAt: profile?.createdAt ?? null,
 			updatedAt: profile?.updatedAt ?? null
 		},
-		wallets,
-		// credentialId is bytea — render as base64url so it stays in JSON.
-		passkeys: passkeys.map((p) => ({
-			id: p.id,
-			credentialId: Buffer.from(p.credentialId).toString('base64url'),
-			nickname: p.nickname,
-			transports: p.transports,
-			aaguid: p.aaguid,
-			createdAt: p.createdAt,
-			lastUsedAt: p.lastUsedAt
-		})),
+		oidcIdentities,
 		identities,
 		memberships,
 		sessions

@@ -19,35 +19,33 @@ async function jsonPost(path: string, body: unknown, origin?: string): Promise<R
 	return api(path, { method: 'POST', headers, body: JSON.stringify(body) });
 }
 
+// The CSRF guard runs before any handler (and before auth), so any JSON POST
+// under /api/ exercises it. We use surviving authed endpoints; a cross-origin
+// request is rejected at 403 before the 401 auth check ever runs.
 describe('CSRF: same-origin guard for JSON API mutations', () => {
-	it('POST /api/auth/login/start with mismatched Origin → 403', async () => {
-		const res = await jsonPost('/api/auth/login/start', {}, EVIL_ORIGIN);
+	it('POST /api/identity with mismatched Origin → 403', async () => {
+		const res = await jsonPost('/api/identity', { idc: '1' }, EVIL_ORIGIN);
 		expect(res.status).toBe(403);
 	});
 
-	it('POST /api/auth/register/start with mismatched Origin → 403', async () => {
-		const res = await jsonPost(
-			'/api/auth/register/start',
-			{ email: 'a@b.com', username: 'someone' },
-			EVIL_ORIGIN
-		);
+	it('POST /api/user with mismatched Origin → 403', async () => {
+		const res = await jsonPost('/api/user', { username: 'someone' }, EVIL_ORIGIN);
 		expect(res.status).toBe(403);
 	});
 
-	it('POST /api/verify with mismatched Origin → 403', async () => {
-		const res = await jsonPost('/api/verify', { message: 'x', signature: 'x' }, EVIL_ORIGIN);
+	it('POST /api/identity/rotate with mismatched Origin → 403', async () => {
+		const res = await jsonPost('/api/identity/rotate', { idc: '1' }, EVIL_ORIGIN);
 		expect(res.status).toBe(403);
 	});
 
-	it('same-origin POST proceeds (may fail downstream, but NOT 403 from CSRF)', async () => {
-		const res = await jsonPost('/api/auth/login/start', {}, BASE_URL);
-		// Login/start with no email → validator returns 200 with empty options
-		// for our discovery-style flow; either way it MUST NOT be 403.
+	it('same-origin POST proceeds (may 401 downstream, but NOT 403 from CSRF)', async () => {
+		const res = await jsonPost('/api/identity', { idc: '1' }, BASE_URL);
+		// Unauthed → 401, but it MUST NOT be a 403 from the CSRF guard.
 		expect(res.status).not.toBe(403);
 	});
 
 	it('no Origin header is allowed (e.g. direct curl) — only browsers send it', async () => {
-		const res = await jsonPost('/api/auth/login/start', {});
+		const res = await jsonPost('/api/identity', { idc: '1' });
 		expect(res.status).not.toBe(403);
 	});
 
@@ -56,7 +54,7 @@ describe('CSRF: same-origin guard for JSON API mutations', () => {
 		// from a cross-origin caller. Our hook only covers JSON, but the
 		// platform default catches this case before our hook ever runs. We
 		// assert it just to document the layered behavior.
-		const res = await api('/api/auth/login/start', {
+		const res = await api('/api/identity', {
 			method: 'POST',
 			headers: {
 				'content-type': 'text/plain',

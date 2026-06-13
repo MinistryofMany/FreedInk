@@ -93,15 +93,10 @@ export async function enforce(
 // Common buckets used across the app. Other modules can declare their own
 // but centralizing the most common keeps tuning in one place.
 export const RULES = {
-	// Anon endpoints — keyed by IP.
+	// Anon endpoints — keyed by IP. authStart/authFinish guard the two halves
+	// of the Tessera "Sign in with Tessera" OIDC round-trip.
 	authStart: { bucket: 'auth:start', max: 10, windowSeconds: 60 } satisfies RateLimitRule,
 	authFinish: { bucket: 'auth:finish', max: 20, windowSeconds: 60 } satisfies RateLimitRule,
-	nonce: { bucket: 'api:nonce', max: 30, windowSeconds: 60 } satisfies RateLimitRule,
-	recoveryStart: {
-		bucket: 'recovery:start',
-		max: 3,
-		windowSeconds: 60 * 60
-	} satisfies RateLimitRule,
 	// Authed endpoints — keyed by user.
 	postCreate: { bucket: 'post:create', max: 30, windowSeconds: 60 * 60 } satisfies RateLimitRule,
 	reviewCast: { bucket: 'review:cast', max: 60, windowSeconds: 60 * 60 } satisfies RateLimitRule,

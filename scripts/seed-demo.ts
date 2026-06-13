@@ -49,15 +49,13 @@ function nowMinus(days: number, hours: number = 0): Date {
 console.log('wiping demo state…');
 await sql`TRUNCATE TABLE blog_post_tags, post_comments, post_reviews, blog_post_versions, blog_posts,
   post_submission_nonces, blog_member_snapshots, blog_invitations, blog_members, blogs, tags,
-  audit_log, rate_limits, account_recoveries, user_identities, sessions, siwe_nonces,
-  webauthn_challenges, email_verifications, passkey_credentials, wallet_addresses, users
+  audit_log, rate_limits, user_identities, sessions, oidc_sessions, oidc_identities, users
   RESTART IDENTITY CASCADE`;
 
 async function makeUser(email: string, username: string, seed: string) {
 	const id = randomUUID();
-	const verifiedAt = new Date();
-	await sql`INSERT INTO users (id, username, email, email_verified_at)
-	  VALUES (${id}, ${username}, ${email}, ${verifiedAt})`;
+	await sql`INSERT INTO users (id, username, email)
+	  VALUES (${id}, ${username}, ${email})`;
 	const identity = new Identity(seed);
 	const params = JSON.stringify({ name: 'PBKDF2', iterations: 100_000, hash: 'SHA-256' });
 	await sql`INSERT INTO user_identities (user_id, idc, public_key, ciphertext, kdf_salt, kdf_params, nonce, status)

@@ -28,7 +28,6 @@
 			<tr>
 				<th>Username</th>
 				<th>Email</th>
-				<th>Verified</th>
 				<th>Created</th>
 				<th>Last seen</th>
 				<th>Actions</th>
@@ -39,7 +38,6 @@
 				<tr>
 					<td>{u.username}</td>
 					<td>{u.email ?? '—'}</td>
-					<td>{u.emailVerifiedAt ? 'yes' : 'no'}</td>
 					<td>{new Date(u.createdAt).toLocaleDateString()}</td>
 					<td>{u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}</td>
 					<td>
@@ -64,10 +62,6 @@
 					<div>
 						<dt>Email</dt>
 						<dd>{u.email ?? '—'}</dd>
-					</div>
-					<div>
-						<dt>Verified</dt>
-						<dd>{u.emailVerifiedAt ? 'yes' : 'no'}</dd>
 					</div>
 					<div>
 						<dt>Created</dt>

@@ -1,9 +1,11 @@
 // Notification module:
 //   1. With no SMTP_URL, sendMail just logs — calling notify* must not throw.
 //   2. The previewNew* helpers compute the right recipient list:
-//        • reviewers: owner/editor/reviewer with verified email
-//        • published: every active member with verified email
-//      Users without a verified email are excluded from both lists.
+//        • reviewers: owner/editor/reviewer with a contact email
+//        • published: every active member with a contact email
+//      Sign-in is Tessera-only, so emails are self-asserted (no verification).
+//      A member is reachable iff they have set a contact email; members with a
+//      null email are excluded from both lists.
 import { describe, it, expect } from 'vitest';
 import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
@@ -16,17 +18,13 @@ import {
 	previewNewSubmission
 } from '$lib/server/notifications';
 
-async function verifyEmail(userId: string) {
-	await db
-		.update(schema.users)
-		.set({ emailVerifiedAt: new Date() })
-		.where(eq(schema.users.id, userId));
+async function clearEmail(userId: string) {
+	await db.update(schema.users).set({ email: null }).where(eq(schema.users.id, userId));
 }
 
 describe('notifications: smoke', () => {
 	it('does not throw when SMTP_URL is unset (logs instead)', async () => {
 		const owner = await makeUser({ username: 'no-smtp-owner' });
-		await verifyEmail(owner.id);
 		const { id: blogId } = await makeBlogWith({ owner });
 		const r = await createPost({
 			blogId,
@@ -47,20 +45,12 @@ describe('notifications: smoke', () => {
 });
 
 describe('notifications: recipient list', () => {
-	it('reviewer notifications include owner/editor/reviewer with verified email only', async () => {
+	it('reviewer notifications include only owner/editor/reviewer roles', async () => {
 		const owner = await makeUser({ username: 'owr', email: 'owr@x.com' });
 		const editor = await makeUser({ username: 'edr', email: 'edr@x.com' });
 		const reviewer = await makeUser({ username: 'rvw', email: 'rvw@x.com' });
 		const author = await makeUser({ username: 'auth', email: 'auth@x.com' });
 		const commenter = await makeUser({ username: 'comm', email: 'comm@x.com' });
-		const unverified = await makeUser({ username: 'unv', email: 'unv@x.com' });
-
-		// Verify everyone except `unverified`.
-		await verifyEmail(owner.id);
-		await verifyEmail(editor.id);
-		await verifyEmail(reviewer.id);
-		await verifyEmail(author.id);
-		await verifyEmail(commenter.id);
 
 		const { id: blogId } = await makeBlogWith({
 			owner,
@@ -68,8 +58,7 @@ describe('notifications: recipient list', () => {
 				{ user: editor, role: 'editor' },
 				{ user: reviewer, role: 'reviewer' },
 				{ user: author, role: 'author' },
-				{ user: commenter, role: 'commenter' },
-				{ user: unverified, role: 'reviewer' }
+				{ user: commenter, role: 'commenter' }
 			]
 		});
 		const r = await createPost({
@@ -82,25 +71,20 @@ describe('notifications: recipient list', () => {
 			status: 'under_review'
 		});
 
+		// author/commenter are excluded by role, not by email.
 		const { recipients } = await previewNewSubmission(blogId, r.version.id);
-		const ids = recipients.map((r) => r.id).sort();
+		const ids = recipients.map((x) => x.id).sort();
 		expect(ids).toEqual([owner.id, editor.id, reviewer.id].sort());
 	});
 
-	it('published-post notifications include every active member with verified email', async () => {
+	it('published-post notifications include every active member with an email', async () => {
 		const owner = await makeUser({ username: 'po', email: 'po@x.com' });
 		const editor = await makeUser({ username: 'pe', email: 'pe@x.com' });
 		const reviewer = await makeUser({ username: 'pr', email: 'pr@x.com' });
 		const author = await makeUser({ username: 'pa', email: 'pa@x.com' });
 		const commenter = await makeUser({ username: 'pc', email: 'pc@x.com' });
-		const unverified = await makeUser({ username: 'pu', email: 'pu@x.com' });
-
-		await verifyEmail(owner.id);
-		await verifyEmail(editor.id);
-		await verifyEmail(reviewer.id);
-		await verifyEmail(author.id);
-		await verifyEmail(commenter.id);
-		// unverified deliberately skipped
+		const noEmail = await makeUser({ username: 'pn', email: 'pn@x.com' });
+		await clearEmail(noEmail.id);
 
 		const { id: blogId } = await makeBlogWith({
 			owner,
@@ -109,7 +93,7 @@ describe('notifications: recipient list', () => {
 				{ user: reviewer, role: 'reviewer' },
 				{ user: author, role: 'author' },
 				{ user: commenter, role: 'commenter' },
-				{ user: unverified, role: 'commenter' }
+				{ user: noEmail, role: 'commenter' }
 			]
 		});
 		const r = await createPost({
@@ -124,25 +108,22 @@ describe('notifications: recipient list', () => {
 		await setPostStatus(r.post.id, r.version.id, 'published');
 
 		const { recipients } = await previewNewPublishedPost(blogId, r.version.id);
-		const ids = recipients.map((r) => r.id).sort();
+		const ids = recipients.map((x) => x.id).sort();
 		expect(ids).toEqual([owner.id, editor.id, reviewer.id, author.id, commenter.id].sort());
-		expect(ids).not.toContain(unverified.id);
+		expect(ids).not.toContain(noEmail.id);
 	});
 
-	it('excludes members with no email or no email_verified_at', async () => {
+	it('excludes members with no contact email', async () => {
 		const owner = await makeUser({ username: 'nox', email: 'nox@x.com' });
 		const noEmail = await makeUser({ username: 'noEmail' });
-		// Strip the email entirely.
-		await db.update(schema.users).set({ email: null }).where(eq(schema.users.id, noEmail.id));
-		const unverified = await makeUser({ username: 'unv2', email: 'unv2@x.com' });
-		// owner verified; others not
-		await verifyEmail(owner.id);
+		await clearEmail(noEmail.id);
+		const reachable = await makeUser({ username: 'reach', email: 'reach@x.com' });
 
 		const { id: blogId } = await makeBlogWith({
 			owner,
 			members: [
 				{ user: noEmail, role: 'reviewer' },
-				{ user: unverified, role: 'reviewer' }
+				{ user: reachable, role: 'reviewer' }
 			]
 		});
 		const r = await createPost({
@@ -155,6 +136,6 @@ describe('notifications: recipient list', () => {
 			status: 'under_review'
 		});
 		const { recipients } = await previewNewSubmission(blogId, r.version.id);
-		expect(recipients.map((r) => r.id)).toEqual([owner.id]);
+		expect(recipients.map((x) => x.id).sort()).toEqual([owner.id, reachable.id].sort());
 	});
 });

@@ -30,6 +30,20 @@ export function oidcEnabled(): boolean {
 	return oidcConfig() !== null;
 }
 
+// Cookie that carries an optional post-login destination across the OIDC
+// round-trip (e.g. an invitation link). Set by `start`, consumed by `callback`.
+export const NEXT_COOKIE = 'oidc_next';
+
+// A post-login destination is safe only if it's a same-origin absolute path
+// (`/foo`). Reject protocol-relative (`//evil`) and backslash tricks so this
+// can't be turned into an open redirect. Shared by start (on write) and
+// callback (re-validated on read).
+export function safeNext(raw: string | null | undefined): string | null {
+	if (!raw) return null;
+	if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return null;
+	return raw;
+}
+
 interface Discovery {
 	issuer: string;
 	authorization_endpoint: string;

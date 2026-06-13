@@ -57,7 +57,6 @@ const TRUNCATE_ORDER = [
 	'tags',
 	'audit_log',
 	'rate_limits',
-	'account_recoveries',
 	'abuse_reports',
 	'media_uploads',
 	'push_subscriptions',
@@ -68,11 +67,8 @@ const TRUNCATE_ORDER = [
 	'status_checks',
 	'user_identities',
 	'sessions',
-	'siwe_nonces',
-	'webauthn_challenges',
-	'email_verifications',
-	'passkey_credentials',
-	'wallet_addresses',
+	'oidc_sessions',
+	'oidc_identities',
 	'users'
 ];
 

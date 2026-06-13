@@ -3,7 +3,7 @@ import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { requireRole, ROLES_MANAGING } from '$lib/server/auth';
 import { setRole, removeMember, getActiveMember } from '$lib/db/members';
-import { getUserByUsername, getUserByWalletAddress } from '$lib/db/users';
+import { getUserByUsername } from '$lib/db/users';
 import { audit } from '$lib/server/audit';
 
 const RoleEnum = z.enum(['owner', 'editor', 'reviewer', 'author', 'commenter']);
@@ -11,8 +11,7 @@ const RoleEnum = z.enum(['owner', 'editor', 'reviewer', 'author', 'commenter']);
 const SetBody = z.object({
 	blog_id: z.string().uuid(),
 	target: z.object({
-		username: z.string().optional(),
-		address: z.string().optional()
+		username: z.string().optional()
 	}),
 	role: RoleEnum
 });
@@ -22,9 +21,8 @@ const RemoveBody = z.object({
 	target_user_id: z.string().uuid()
 });
 
-async function resolveTarget(target: { username?: string; address?: string }) {
+async function resolveTarget(target: { username?: string }) {
 	if (target.username) return getUserByUsername(target.username);
-	if (target.address) return getUserByWalletAddress(target.address.toLowerCase());
 	return null;
 }
 

@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { Identity } from '@semaphore-protocol/identity';
 import { Group } from '@semaphore-protocol/group';
 import { generateProof } from '@semaphore-protocol/proof';
-import { createUserWithEmail, createUserWithWallet } from '$lib/db/users';
+import { createUserWithEmail } from '$lib/db/users';
 import { createBlog } from '$lib/db/blogs';
 import { setRole } from '$lib/db/members';
 import { refreshSnapshot } from '$lib/db/snapshots';
@@ -37,14 +37,11 @@ export async function makeUser(
 		email?: string;
 		username?: string;
 		seed?: string;
-		wallet?: string;
 	} = {}
 ): Promise<TestUser> {
 	const username = opts.username ?? `u${Math.random().toString(36).slice(2, 8)}`;
 	const email = opts.email ?? `${username}@x.com`;
-	const user = opts.wallet
-		? await createUserWithWallet(opts.wallet, username)
-		: await createUserWithEmail(email, username);
+	const user = await createUserWithEmail(email, username);
 	const identity = new Identity(opts.seed ?? username);
 	await installIdentity(user.id, identity);
 	return { id: user.id, username, identity };

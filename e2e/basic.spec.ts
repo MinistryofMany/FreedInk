@@ -19,11 +19,9 @@ test.describe('public pages render', () => {
 		await expect(page.getByRole('button', { name: 'Search' })).toBeVisible();
 	});
 
-	test('signup page shows both passkey + SIWE paths', async ({ page }) => {
+	test('signup page offers Sign in with Tessera', async ({ page }) => {
 		await page.goto('/signup');
-		await expect(page.getByRole('button', { name: /create account/i })).toBeVisible();
-		await expect(page.getByRole('button', { name: /sign in$/i })).toBeVisible();
-		await expect(page.getByText(/prefer your wallet/i)).toBeVisible();
+		await expect(page.getByRole('link', { name: /sign in with tessera/i })).toBeVisible();
 	});
 
 	test('admin route redirects to /signup when unauthenticated', async ({ page }) => {

@@ -5,7 +5,6 @@ import {
 	text,
 	timestamp,
 	integer,
-	bigint,
 	boolean,
 	jsonb,
 	primaryKey,
@@ -47,8 +46,6 @@ export const memberRole = pgEnum('member_role', [
 ]);
 
 export const identityStatus = pgEnum('identity_status', ['active', 'revoked']);
-
-export const challengeKind = pgEnum('challenge_kind', ['register', 'auth']);
 
 export const reviewVote = pgEnum('review_vote', ['approve', 'reject']);
 
@@ -143,8 +140,10 @@ export const users = pgTable(
 		id: uuid('id').primaryKey().defaultRandom(),
 		username: text('username').notNull(),
 		displayName: text('display_name'),
+		// Optional contact address (notifications, blog invitations). Self-asserted
+		// and unverified — sign-in is Tessera-only, so there's no email-ownership
+		// proof. Populated by the user in settings; null for fresh Tessera accounts.
 		email: text('email'),
-		emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
 		// Set by platform operators to ban a user. Checked in session loader;
 		// suspended users can't acquire new sessions and existing ones are
 		// rejected at hook time. `suspendedReason` is operator-visible only
@@ -160,53 +159,6 @@ export const users = pgTable(
 		suspendedIdx: index('users_suspended_idx').on(t.suspendedAt)
 	})
 );
-
-export const walletAddresses = pgTable(
-	'wallet_addresses',
-	{
-		id: uuid('id').primaryKey().defaultRandom(),
-		userId: uuid('user_id')
-			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
-		address: text('address').notNull(),
-		linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow()
-	},
-	(t) => ({
-		addressIdx: uniqueIndex('wallet_addresses_address_key').on(t.address),
-		userIdx: index('wallet_addresses_user_idx').on(t.userId)
-	})
-);
-
-export const passkeyCredentials = pgTable(
-	'passkey_credentials',
-	{
-		id: uuid('id').primaryKey().defaultRandom(),
-		userId: uuid('user_id')
-			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
-		credentialId: byteaType('credential_id').notNull(),
-		publicKey: byteaType('public_key').notNull(),
-		counter: bigint('counter', { mode: 'number' }).notNull().default(0),
-		transports: text('transports').array(),
-		aaguid: uuid('aaguid'),
-		nickname: text('nickname'),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		lastUsedAt: timestamp('last_used_at', { withTimezone: true })
-	},
-	(t) => ({
-		credIdx: uniqueIndex('passkey_credentials_credential_id_key').on(t.credentialId),
-		userIdx: index('passkey_credentials_user_idx').on(t.userId)
-	})
-);
-
-export const webauthnChallenges = pgTable('webauthn_challenges', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
-	email: text('email'),
-	challenge: text('challenge').notNull(),
-	kind: challengeKind('kind').notNull(),
-	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
-});
 
 export const sessions = pgTable(
 	'sessions',
@@ -226,24 +178,6 @@ export const sessions = pgTable(
 		expiresIdx: index('sessions_expires_idx').on(t.expiresAt)
 	})
 );
-
-export const siweNonces = pgTable('siwe_nonces', {
-	nonce: text('nonce').primaryKey(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-	consumedAt: timestamp('consumed_at', { withTimezone: true })
-});
-
-export const emailVerifications = pgTable('email_verifications', {
-	token: text('token').primaryKey(),
-	userId: uuid('user_id')
-		.notNull()
-		.references(() => users.id, { onDelete: 'cascade' }),
-	email: text('email').notNull(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-	consumedAt: timestamp('consumed_at', { withTimezone: true })
-});
 
 // ──────────────────────────── identities ────────────────────────────
 
@@ -577,30 +511,6 @@ export const blogInvitations = pgTable(
 	})
 );
 
-// Account recovery tokens — sent to a user's verified email when they've lost
-// their passkey. Consuming the token issues a session and lets the user
-// register a fresh passkey on the same account. Note: recovery does NOT
-// restore the user's Semaphore identity (only the user themselves knows the
-// vault password). They'll need to rotate identity afterwards.
-export const accountRecoveries = pgTable(
-	'account_recoveries',
-	{
-		token: text('token').primaryKey(),
-		userId: uuid('user_id')
-			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
-		requestedIp: inetType('requested_ip'),
-		requestedUserAgent: text('requested_user_agent'),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-		consumedAt: timestamp('consumed_at', { withTimezone: true })
-	},
-	(t) => ({
-		userIdx: index('account_recoveries_user_idx').on(t.userId),
-		expiresIdx: index('account_recoveries_expires_idx').on(t.expiresAt)
-	})
-);
-
 // Token-bucket-ish rate limit counters. Each (key, window_start) is one row;
 // the limiter increments .count atomically. Cheap because the cleanup job
 // reaps anything past its window.
@@ -848,8 +758,6 @@ export const statusIncidentUpdates = pgTable(
 // ──────────────────────────── relations ────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
-	wallets: many(walletAddresses),
-	passkeys: many(passkeyCredentials),
 	identities: many(userIdentities),
 	oidcIdentities: many(oidcIdentities),
 	sessions: many(sessions),

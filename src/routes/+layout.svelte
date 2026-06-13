@@ -2,7 +2,6 @@
 	import { onMount, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import SIWE from '$lib/components/siwe.svelte';
 	import { prewarmForAuthedUser } from '$lib/client/semaphore';
 	import '$lib/styles/theme.css';
 	// Side-effect import: registers locales and initializes svelte-i18n on
@@ -45,7 +44,7 @@
 	}
 
 	// Mobile drawer state. The drawer holds the right-side nav (Dashboard /
-	// username / Sign out, or signup / SIWE). The brand + Blogs + Search stay
+	// username / Sign out, or the Sign in link). The brand + Blogs + Search stay
 	// visible at the top so users always have the primary entry points.
 	let drawerOpen = false;
 	let drawerEl: HTMLElement | null = null;
@@ -171,7 +170,6 @@
 				<button type="button" on:click={signOut}>{$_('nav.sign_out')}</button>
 			{:else}
 				<a href="/signup" class="btn" aria-current={isCurrent('/signup')}>{$_('nav.sign_in_up')}</a>
-				<SIWE address={data.address} />
 			{/if}
 		</div>
 
@@ -238,7 +236,6 @@
 			<button type="button" on:click={signOut}>{$_('nav.sign_out')}</button>
 		{:else}
 			<a href="/signup" class="btn" aria-current={isCurrent('/signup')}>{$_('nav.sign_in_up')}</a>
-			<SIWE address={data.address} />
 		{/if}
 	</nav>
 </div>

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { startRegistration } from '@simplewebauthn/browser';
 	import { page } from '$app/stores';
 	import {
 		generateIdentity,
@@ -19,7 +18,6 @@
 	import { get } from 'svelte/store';
 
 	export let data;
-	let nickname = '';
 	let busy = false;
 	let msg = '';
 
@@ -92,7 +90,6 @@
 	let rotatePassword = '';
 	let rotateConfirm = '';
 	let identities = data.identities;
-	let passkeys = data.passkeys;
 	let sessions = data.sessions;
 
 	// Data rights state — export & delete-account flows.
@@ -174,41 +171,6 @@
 		}
 	}
 
-	async function addPasskey() {
-		busy = true;
-		msg = '';
-		try {
-			const startRes = await fetch('/api/auth/passkey/add', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({})
-			});
-			if (!startRes.ok) {
-				msg = await startRes.text();
-				return;
-			}
-			const { options } = await startRes.json();
-			const att = await startRegistration({ optionsJSON: options });
-			const fin = await fetch('/api/auth/passkey/add/finish', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ response: att, nickname: nickname || undefined })
-			});
-			if (!fin.ok) {
-				msg = await fin.text();
-				return;
-			}
-			const { passkey } = await fin.json();
-			passkeys = [...passkeys, passkey];
-			nickname = '';
-			msg = get(_)('settings.passkey_added_msg');
-		} catch (e) {
-			msg = (e as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
-
 	async function rotateIdentity() {
 		const t = get(_);
 		if (rotatePassword.length < 12 || rotatePassword !== rotateConfirm) {
@@ -246,59 +208,14 @@
 
 <h2>{$_('settings.heading')}</h2>
 
-{#if data.verifiedFlash}
-	<p style="color: var(--color-green-dark)">{$_('settings.email_verified')}</p>
-{/if}
-
 <section>
 	<h3>{$_('settings.account_heading')}</h3>
 	<dl>
 		<dt>{$_('settings.username_label')}</dt>
 		<dd>{data.user.username}</dd>
 		<dt>{$_('settings.email_label')}</dt>
-		<dd>
-			{data.user.email ?? '—'}
-			{#if data.user.email && !data.user.emailVerified}<em>{$_('settings.email_unverified')}</em
-				>{/if}
-		</dd>
+		<dd>{data.user.email ?? '—'}</dd>
 	</dl>
-</section>
-
-<section>
-	<h3>{$_('settings.linked_wallets_heading')}</h3>
-	{#if data.wallets.length === 0}
-		<p>{$_('settings.no_wallets')}</p>
-	{:else}
-		<ul>
-			{#each data.wallets as w}
-				<li><code>{w.address}</code></li>
-			{/each}
-		</ul>
-	{/if}
-</section>
-
-<section>
-	<h3>{$_('settings.passkeys_heading')}</h3>
-	{#if passkeys.length === 0}
-		<p>{$_('settings.no_passkeys')}</p>
-	{:else}
-		<ul>
-			{#each passkeys as p}
-				<li>
-					{p.nickname ?? $_('settings.passkey_unnamed')} · {$_('settings.passkey_added', {
-						values: { date: new Date(p.createdAt).toLocaleDateString() }
-					})}
-				</li>
-			{/each}
-		</ul>
-	{/if}
-	<form on:submit|preventDefault={addPasskey}>
-		<label>
-			{$_('settings.nickname_optional')}
-			<input bind:value={nickname} />
-		</label>
-		<button type="submit" disabled={busy}>{$_('settings.add_passkey')}</button>
-	</form>
 </section>
 
 <section>
@@ -376,11 +293,6 @@
 			{/each}
 		</ul>
 	{/if}
-	<p>
-		{$_('settings.lost_device_prefix')}
-		<a href="/recover">{$_('settings.lost_device_link')}</a>
-		{$_('settings.lost_device_suffix')}
-	</p>
 </section>
 
 <section>
