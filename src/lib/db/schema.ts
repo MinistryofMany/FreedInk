@@ -191,7 +191,7 @@ export const userIdentities = pgTable(
 		idc: text('idc').notNull(),
 		publicKey: text('public_key').notNull(),
 		ciphertext: byteaType('ciphertext').notNull(),
-		kdf: text('kdf').notNull().default('argon2id'),
+		kdf: text('kdf').notNull().default('pbkdf2-sha256'),
 		kdfSalt: byteaType('kdf_salt').notNull(),
 		kdfParams: jsonb('kdf_params').notNull(),
 		nonce: byteaType('nonce').notNull(),
@@ -328,6 +328,10 @@ export const blogPosts = pgTable(
 			.references(() => blogs.id, { onDelete: 'cascade' }),
 		currentVersionId: uuid('current_version_id'),
 		status: postStatus('status').notNull().default('draft'),
+		// Moderation "delete" = unpublish/archive: hide from all public surfaces
+		// while preserving content + version history, fully restorable. Never a
+		// hard delete. Public reads must filter `archivedAt IS NULL`.
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({

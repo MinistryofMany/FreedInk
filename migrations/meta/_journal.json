@@ -43,6 +43,13 @@
 			"when": 1781320000000,
 			"tag": "0005_tessera_only_auth",
 			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1781325279000,
+			"tag": "0006_post_archive_and_kdf_default",
+			"breakpoints": true
 		}
 	]
 }
