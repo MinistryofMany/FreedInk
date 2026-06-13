@@ -171,7 +171,7 @@
 		</div>
 		<div class="field">
 			<label for="post-slug">Mock URL</label>
-			<input type="text" id="post-slug" bind:value={titleSlug} disabled />
+			<input type="text" id="post-slug" value={titleSlug} disabled />
 		</div>
 	</div>
 	<div class="field">

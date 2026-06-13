@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 
 vi.mock('$app/environment', () => ({ browser: true, dev: true }));
 
+import { mount } from 'svelte';
 import MarkdownEditor from './MarkdownEditor.svelte';
 
 // Tiptap uses `requestAnimationFrame` and `cancelAnimationFrame` internally.
@@ -62,12 +63,18 @@ beforeAll(() => {
 	}
 });
 
-function mountEditor(props: { value?: string } = {}) {
+function mountEditor(
+	props: { value?: string } = {},
+	events: Record<string, (e: Event) => void> = {}
+) {
 	const target = document.createElement('div');
 	document.body.appendChild(target);
-	const component = new MarkdownEditor({
+	// Svelte 5: instantiate via mount(); `events` is the compat path for the
+	// component's createEventDispatcher('change').
+	const component = mount(MarkdownEditor, {
 		target,
-		props: { value: '', ...props }
+		props: { value: '', ...props },
+		events
 	});
 	return { component, target };
 }
@@ -128,11 +135,12 @@ describe('MarkdownEditor', () => {
 		);
 		globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-		const { component, target } = mountEditor({ value: 'before' });
-		await waitForReady(target);
-
 		const changes: string[] = [];
-		component.$on('change', (e) => changes.push(e.detail));
+		const { target } = mountEditor(
+			{ value: 'before' },
+			{ change: (e) => changes.push((e as CustomEvent<string>).detail) }
+		);
+		await waitForReady(target);
 
 		// Drive an upload via the hidden file input — the same codepath the
 		// toolbar button and drag-drop both use.

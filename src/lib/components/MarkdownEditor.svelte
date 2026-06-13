@@ -269,7 +269,7 @@
 			on:click={() => editor?.chain().focus().toggleCode().run()}
 			disabled={!ready}
 		>
-			<code>{'<>'}</code>
+			<code>&lt;&gt;</code>
 		</button>
 		<button
 			type="button"

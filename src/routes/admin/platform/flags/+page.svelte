@@ -46,35 +46,42 @@
 			<tbody>
 				{#each flags as f (f.key)}
 					<tr>
-						<form method="POST" action="?/saveFlag" use:enhance>
-							<td><code>{f.key}</code><input type="hidden" name="key" value={f.key} /></td>
-							<td>
-								<input
-									type="text"
-									name="description"
-									value={f.description ?? ''}
-									placeholder="(no description)"
-								/>
-							</td>
-							<td>
-								<select name="enabled">
-									<option value="true" selected={f.enabled}>on</option>
-									<option value="false" selected={!f.enabled}>off</option>
-								</select>
-							</td>
-							<td>
-								<input
-									type="range"
-									name="rollout_percentage"
-									min="0"
-									max="100"
-									value={f.rolloutPercentage}
-								/>
-								<span class="pct">{f.rolloutPercentage}%</span>
-							</td>
-							<td><small>{new Date(f.updatedAt).toLocaleString()}</small></td>
-							<td><button type="submit">Save</button></td>
-						</form>
+						<td><code>{f.key}</code></td>
+						<td>
+							<input
+								type="text"
+								name="description"
+								form="flag-{f.key}"
+								value={f.description ?? ''}
+								placeholder="(no description)"
+							/>
+						</td>
+						<td>
+							<select name="enabled" form="flag-{f.key}">
+								<option value="true" selected={f.enabled}>on</option>
+								<option value="false" selected={!f.enabled}>off</option>
+							</select>
+						</td>
+						<td>
+							<input
+								type="range"
+								name="rollout_percentage"
+								form="flag-{f.key}"
+								min="0"
+								max="100"
+								value={f.rolloutPercentage}
+							/>
+							<span class="pct">{f.rolloutPercentage}%</span>
+						</td>
+						<td><small>{new Date(f.updatedAt).toLocaleString()}</small></td>
+						<td>
+							<!-- Form lives in this cell (valid HTML); the inputs above
+							     associate to it via their `form` attribute. -->
+							<form id="flag-{f.key}" method="POST" action="?/saveFlag" use:enhance>
+								<input type="hidden" name="key" value={f.key} />
+								<button type="submit">Save</button>
+							</form>
+						</td>
 					</tr>
 				{/each}
 			</tbody>

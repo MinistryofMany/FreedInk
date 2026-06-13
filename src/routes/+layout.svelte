@@ -210,7 +210,7 @@
 	></div>
 {/if}
 
-<aside
+<div
 	id="mobile-drawer"
 	class="drawer"
 	class:open={drawerOpen}
@@ -241,7 +241,7 @@
 			<SIWE address={data.address} />
 		{/if}
 	</nav>
-</aside>
+</div>
 
 <main id="main-content" tabindex="-1">
 	<slot></slot>
