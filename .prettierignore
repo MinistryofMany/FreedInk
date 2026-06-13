@@ -8,3 +8,6 @@ snark-artifacts.lock.json
 
 # Vendored Google Fonts CSS (self-hosted) — keep upstream formatting
 static/fonts/
+
+# Generated audit report (unicode-heavy tables; prettier oscillates)
+AUDIT.md
