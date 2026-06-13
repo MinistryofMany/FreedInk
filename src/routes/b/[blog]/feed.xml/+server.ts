@@ -3,7 +3,7 @@
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
 import { db, schema } from '$lib/db/client';
-import { and, eq, desc } from 'drizzle-orm';
+import { and, eq, desc, isNull } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { getBlogBySlug } from '$lib/db/blogs';
 import { buildRss, rssExcerpt, type RssItem } from '$lib/server/rss';
@@ -29,7 +29,13 @@ export const GET: RequestHandler = async ({ params }) => {
 			schema.blogPostVersions,
 			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
 		)
-		.where(and(eq(schema.blogPosts.blogId, blog.id), eq(schema.blogPosts.status, 'published')))
+		.where(
+			and(
+				eq(schema.blogPosts.blogId, blog.id),
+				eq(schema.blogPosts.status, 'published'),
+				isNull(schema.blogPosts.archivedAt)
+			)
+		)
 		.orderBy(desc(schema.blogPostVersions.publishedAt))
 		.limit(LIMIT);
 

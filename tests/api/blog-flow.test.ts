@@ -230,13 +230,15 @@ describe('full flow: post → vote → publish → comment', () => {
 		expect(vote1Json.status).toBe('under_review');
 		expect(vote1Json.threshold).toBe(2); // ceil(2/3 * 3) = 2
 
-		// 4) Reviewer tries to double-vote → 409.
+		// 4) Re-submitting the same vote upserts on the reviewer's stable
+		// nullifier (change-vote semantics) — it does NOT double-count.
 		const dupVote = await postJSON(
 			'/api/post/review',
 			{ post_version_id: version_id, vote: 'approve', proof: rev1Proof },
 			{ cookie: rev1Sess.cookie }
 		);
-		expect(dupVote.status).toBe(409);
+		expect(dupVote.status).toBe(200);
+		expect((await dupVote.json()).approves).toBe(1);
 
 		// 5) Second reviewer approves → auto-publish.
 		const rev2Sess = await asUser(rev2);
@@ -254,6 +256,16 @@ describe('full flow: post → vote → publish → comment', () => {
 		expect(vote2.status).toBe(200);
 		const vote2Json = await vote2.json();
 		expect(vote2Json.status).toBe('published');
+
+		// 5b) Voting is closed once published — a further vote is rejected.
+		// Reuse rev1's approve proof (message binds to 'approve') so we reach
+		// the voting-window guard rather than failing message-binding.
+		const lateVote = await postJSON(
+			'/api/post/review',
+			{ post_version_id: version_id, vote: 'approve', proof: rev1Proof },
+			{ cookie: rev1Sess.cookie }
+		);
+		expect(lateVote.status).toBe(409);
 
 		// 6) Post appears on the public blog page now.
 		const publicRes = await fetch(

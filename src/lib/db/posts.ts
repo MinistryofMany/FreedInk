@@ -33,6 +33,9 @@ export async function listPublishedPosts(blogId: string) {
 			and(
 				eq(schema.blogPosts.blogId, blogId),
 				eq(schema.blogPosts.status, 'published'),
+				// Archived (moderator-unpublished) posts are hidden from all public
+				// surfaces while their content + version history is preserved.
+				isNull(schema.blogPosts.archivedAt),
 				isNull(schema.blogPostVersions.deletedAt)
 			)
 		)
@@ -65,6 +68,11 @@ export async function listAllPosts(blogId: string) {
 	return rows;
 }
 
+// Public slug loader. This serves anonymous readers, so it must show ONLY
+// published, non-archived, non-deleted posts. Without the status/archive
+// filters, draft / under_review / rejected / archived posts would be readable
+// by anyone who knows (or guesses) the slug - a privacy leak, since those
+// posts are not yet public or were deliberately unpublished by a moderator.
 export async function getPostBySlug(blogId: string, postSlug: string) {
 	const rows = await db
 		.select({
@@ -80,6 +88,8 @@ export async function getPostBySlug(blogId: string, postSlug: string) {
 			and(
 				eq(schema.blogPosts.blogId, blogId),
 				eq(schema.blogPostVersions.slug, postSlug),
+				eq(schema.blogPosts.status, 'published'),
+				isNull(schema.blogPosts.archivedAt),
 				isNull(schema.blogPostVersions.deletedAt)
 			)
 		)
@@ -144,6 +154,9 @@ export async function listPublishedPostsPage(
 	const base = and(
 		eq(schema.blogPosts.blogId, blogId),
 		eq(schema.blogPosts.status, 'published'),
+		// Hide moderator-archived posts from the public listing, same as the
+		// unbounded listPublishedPosts variant.
+		isNull(schema.blogPosts.archivedAt),
 		isNull(schema.blogPostVersions.deletedAt)
 	);
 	// Keyset on (publishedAt, blogPosts.id). publishedAt is required for
@@ -405,6 +418,12 @@ export type CreatePostInput = {
 	content: string;
 	proof: unknown;
 	snapshotRoot: string;
+	// Semaphore nullifier proving authorship was anonymous-but-eligible. This is
+	// NOT a one-post-per-identity dedup guard: blogs are collective and an
+	// identity may author many posts. The only uniqueness is the per-post
+	// (post_id, nullifier) index in the schema, which just stops the exact same
+	// proof from being replayed against the same post row twice. Nothing here
+	// limits how many distinct posts an identity may create in a blog.
 	nullifier: string;
 	status: 'draft' | 'under_review';
 	// Optional. Falls back to the blog's defaultLanguage if unset.

@@ -1,5 +1,5 @@
 import { db, schema } from './client';
-import { and, eq, sql, ilike, desc, lt, or } from 'drizzle-orm';
+import { and, eq, sql, ilike, desc, lt, or, isNull } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 
@@ -50,13 +50,28 @@ export async function searchPublishedPosts(opts: {
 	blogId?: string;
 	limit?: number;
 }) {
-	const conditions = [eq(schema.blogPosts.status, 'published')];
+	const conditions = [
+		eq(schema.blogPosts.status, 'published'),
+		isNull(schema.blogPosts.archivedAt)
+	];
 	if (opts.blogId) conditions.push(eq(schema.blogPosts.blogId, opts.blogId));
 	if (opts.query) {
 		conditions.push(
 			sql`${schema.blogPostVersions.searchTsv} @@ websearch_to_tsquery('english', ${opts.query})`
 		);
 	}
+	// When there's a text query, rank by relevance (ts_rank) first, then break
+	// ties on (publishedAt, id) so the order is total and stable. Without a
+	// query there's no meaningful rank, so we order purely by recency.
+	const orderBy = opts.query
+		? [
+				desc(
+					sql`ts_rank(${schema.blogPostVersions.searchTsv}, websearch_to_tsquery('english', ${opts.query}))`
+				),
+				desc(schema.blogPostVersions.publishedAt),
+				desc(schema.blogPosts.id)
+			]
+		: [desc(schema.blogPostVersions.publishedAt), desc(schema.blogPosts.id)];
 	const base = db
 		.select({
 			postId: schema.blogPosts.id,
@@ -80,13 +95,13 @@ export async function searchPublishedPosts(opts: {
 			.innerJoin(schema.blogPostTags, eq(schema.blogPostTags.postId, schema.blogPosts.id))
 			.innerJoin(schema.tags, eq(schema.tags.id, schema.blogPostTags.tagId))
 			.where(and(...conditions, eq(schema.tags.slug, opts.tagSlug)))
-			.orderBy(desc(schema.blogPostVersions.publishedAt))
+			.orderBy(...orderBy)
 			.limit(opts.limit ?? 50);
 		return rows;
 	}
 	return base
 		.where(and(...conditions))
-		.orderBy(desc(schema.blogPostVersions.publishedAt))
+		.orderBy(...orderBy)
 		.limit(opts.limit ?? 50);
 }
 
@@ -103,6 +118,16 @@ export async function suggestTags(q: string, limit = 10) {
 /**
  * Cursor-paginated search. Keyset on (publishedAt, blogPosts.id) — same as
  * listPublishedPostsPage so the ordering is consistent across surfaces.
+ *
+ * Pagination caveat - why this path stays recency-ordered, not rank-ordered:
+ * keyset pagination requires the ORDER BY to match the cursor predicate
+ * exactly, or rows get skipped/duplicated across pages. Our cursor encodes
+ * (publishedAt, id), so the keyset sort must lead with those columns. ts_rank
+ * cannot be the primary sort key here without baking a stable rank value into
+ * the cursor, and Postgres ts_rank is not guaranteed reproducible across
+ * separate queries (normalization, statistics), so it is unsafe as a keyset
+ * key. Relevance ranking therefore lives on the non-paginated
+ * `searchPublishedPosts`; this paginated variant orders strictly by recency.
  */
 export async function searchPublishedPostsPage(opts: {
 	query?: string;
@@ -125,7 +150,10 @@ export async function searchPublishedPostsPage(opts: {
 	const limit = clampLimit(opts.limit);
 	const cursor = decodeCursor<DateIdCursor>(opts.cursor);
 
-	const conditions = [eq(schema.blogPosts.status, 'published')];
+	const conditions = [
+		eq(schema.blogPosts.status, 'published'),
+		isNull(schema.blogPosts.archivedAt)
+	];
 	if (opts.blogId) conditions.push(eq(schema.blogPosts.blogId, opts.blogId));
 	if (opts.query) {
 		conditions.push(

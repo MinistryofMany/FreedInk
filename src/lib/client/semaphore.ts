@@ -1,5 +1,6 @@
 import type { Identity } from '@semaphore-protocol/identity';
 import { hashToField } from '$lib/utils';
+import snarkLock from '../../../snark-artifacts.lock.json';
 
 // The Semaphore prover bundle (snarkjs + group + proof) is ~250–300 KB
 // gzipped. We don't want it in the initial chunk of any route — most users
@@ -82,12 +83,17 @@ export type ProofPayload = {
 	points: string[];
 };
 
-// snark-artifacts CDN — used only as a last-resort fallback. We vendor a copy
-// of every depth-N artifact at /snark-artifacts/semaphore/<N>/semaphore-<N>.*
-// (fetched via `npm run snark:fetch`, gitignored, served by adapter-node from
-// `static/`). Same-origin keeps proof generation off the network.
+// We vendor a copy of every depth-N artifact at
+// /snark-artifacts/semaphore/<N>/semaphore-<N>.* (fetched via
+// `npm run snark:fetch`, served by adapter-node from `static/`). Same-origin
+// keeps proof generation off the network and within `connect-src 'self'`.
+//
+// There is no live-CDN fallback at proof time: a silent fall-through to
+// snark-artifacts.pse.dev would mean generating a proof against artifacts we
+// never integrity-checked. If local artifacts are absent or fail their hash
+// check we fail loudly instead. (The build-time fetch script still uses the
+// CDN; that path is hash-pinned by the lockfile and runs offline of users.)
 const LOCAL_BASE = '/snark-artifacts/semaphore';
-const CDN_BASE = 'https://snark-artifacts.pse.dev/semaphore/latest';
 
 function localArtifactUrls(depth: number) {
 	return {
@@ -96,35 +102,63 @@ function localArtifactUrls(depth: number) {
 	};
 }
 
-function cdnArtifactUrls(depth: number) {
-	return {
-		wasm: `${CDN_BASE}/semaphore-${depth}.wasm`,
-		zkey: `${CDN_BASE}/semaphore-${depth}.zkey`
-	};
+// Pinned SHA-256 digests, keyed by depth, from snark-artifacts.lock.json - the
+// same lockfile `scripts/fetch-snark-artifacts.ts` writes. Verifying fetched
+// bytes against these before handing them to the prover stops a tampered or
+// drifted artifact (compromised origin, stale cache, MITM) from silently
+// producing proofs against a different circuit than verifiers expect.
+type LockArtifact = { sha256: string };
+type LockEntry = { wasm: LockArtifact; zkey: LockArtifact };
+const PINNED_HASHES = snarkLock.artifacts as Record<string, LockEntry>;
+
+// Bytes paired with their source URL, ready to feed the prover. snarkjs'
+// fastfile reader accepts a Uint8Array directly (wrapped as an in-memory
+// file), so we pass verified bytes rather than a URL the prover would re-fetch
+// unchecked.
+type VerifiedArtifacts = { wasm: Uint8Array; zkey: Uint8Array };
+
+function toHex(buf: ArrayBuffer): string {
+	const bytes = new Uint8Array(buf);
+	let hex = '';
+	for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+	return hex;
 }
 
-async function urlExists(url: string): Promise<boolean> {
-	try {
-		const res = await fetch(url, { method: 'HEAD' });
-		return res.ok;
-	} catch {
-		return false;
+async function fetchAndVerify(url: string, expectedSha256: string): Promise<Uint8Array> {
+	const res = await fetch(url, { cache: 'force-cache' });
+	if (!res.ok) {
+		throw new Error(`[semaphore] failed to fetch artifact ${url}: ${res.status} ${res.statusText}`);
 	}
-}
-
-async function chooseArtifacts(depth: number): Promise<{ wasm: string; zkey: string }> {
-	const local = localArtifactUrls(depth);
-	// HEAD both files in parallel; if either is missing locally, fall back to
-	// the CDN for both to keep them version-paired.
-	const [hasWasm, hasZkey] = await Promise.all([urlExists(local.wasm), urlExists(local.zkey)]);
-	if (hasWasm && hasZkey) return local;
-	if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-		console.warn(
-			`[semaphore] local artifacts for depth ${depth} not found, falling back to CDN — ` +
-				`run \`npm run snark:fetch\` to vendor them.`
+	// Keep one Uint8Array view over the body and digest the *view* (a TypedArray
+	// is accepted by SubtleCrypto.digest everywhere; passing a bare ArrayBuffer
+	// can trip cross-realm checks). The same view is returned to the prover.
+	const bytes = new Uint8Array(await res.arrayBuffer());
+	const digest = toHex(await crypto.subtle.digest('SHA-256', bytes));
+	if (digest !== expectedSha256) {
+		// Refuse to prove against bytes we can't pin. Don't fall back to a
+		// live CDN - that would just move the unverified-bytes problem.
+		throw new Error(
+			`[semaphore] artifact integrity check failed for ${url}: ` +
+				`expected sha256 ${expectedSha256}, got ${digest}`
 		);
 	}
-	return cdnArtifactUrls(depth);
+	return bytes;
+}
+
+async function loadArtifacts(depth: number): Promise<VerifiedArtifacts> {
+	const pinned = PINNED_HASHES[String(depth)];
+	if (!pinned) {
+		throw new Error(
+			`[semaphore] no pinned hashes for depth ${depth} in snark-artifacts.lock.json - ` +
+				`run \`npm run snark:fetch\` to vendor and pin this depth.`
+		);
+	}
+	const urls = localArtifactUrls(depth);
+	const [wasm, zkey] = await Promise.all([
+		fetchAndVerify(urls.wasm, pinned.wasm.sha256),
+		fetchAndVerify(urls.zkey, pinned.zkey.sha256)
+	]);
+	return { wasm, zkey };
 }
 
 // Build a Semaphore proof against the snapshot identities the server gave us.
@@ -152,7 +186,7 @@ export async function buildProof(opts: {
 	const leafIndex = group.indexOf(opts.identity.commitment);
 	const merkleProof = group.generateMerkleProof(leafIndex);
 	const depth = merkleProof.siblings.length || 1;
-	const artifacts = await chooseArtifacts(depth);
+	const artifacts = await loadArtifacts(depth);
 
 	const proof = await generateProof(
 		opts.identity,
@@ -160,7 +194,11 @@ export async function buildProof(opts: {
 		messageField,
 		scopeField,
 		depth,
-		artifacts
+		// @zk-kit/artifacts types SnarkArtifacts as Record<'wasm'|'zkey', string>
+		// (URLs only), but the underlying snarkjs fastfile reader also accepts a
+		// Uint8Array (treated as an in-memory file). We pass integrity-verified
+		// bytes, so this cast reflects the real runtime contract.
+		artifacts as unknown as { wasm: string; zkey: string }
 	);
 	return {
 		merkleTreeDepth: Number(proof.merkleTreeDepth),

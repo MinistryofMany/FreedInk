@@ -1,31 +1,52 @@
 // Prometheus exposition endpoint. Always returns text/plain; version=0.0.4 in
-// the standard format. By default the endpoint is open (operators are expected
-// to restrict it at the network layer — e.g. only the scraper IP can reach
-// it). If METRICS_BEARER is set in the environment, we additionally require
-// `Authorization: Bearer <that-value>` and 401 on anything else; this lets a
-// public-internet deployment expose /metrics safely without fronting it.
+// the standard format. The endpoint is NEVER public: a request is authorized
+// only if EITHER it carries `Authorization: Bearer <METRICS_BEARER>` (matched
+// constant-time) OR it comes from a logged-in platform operator session. If
+// METRICS_BEARER is unset there is no bearer path at all — an operator session
+// is then the only way in. Anything else gets 403.
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { collectAllMetrics, renderPrometheus } from '$lib/server/metrics';
+import { isPlatformOperator } from '$lib/server/operators';
 import type { RequestHandler } from './$types';
 
 const CONTENT_TYPE = 'text/plain; version=0.0.4; charset=utf-8';
 
-export const GET: RequestHandler = async ({ request }) => {
+// Constant-time string compare. We HMAC both sides to fixed-width digests
+// before comparing so timingSafeEqual never sees mismatched lengths (which it
+// throws on) and the comparison time does not leak the secret's length.
+function constantTimeEquals(a: string, b: string): boolean {
+	const key = 'metrics-bearer-compare';
+	const da = createHmac('sha256', key).update(a).digest();
+	const db = createHmac('sha256', key).update(b).digest();
+	return timingSafeEqual(da, db);
+}
+
+function bearerMatches(authHeader: string, bearer: string): boolean {
+	const prefix = 'Bearer ';
+	if (!authHeader.startsWith(prefix)) return false;
+	const presented = authHeader.slice(prefix.length).trim();
+	if (!presented) return false;
+	return constantTimeEquals(presented, bearer);
+}
+
+export const GET: RequestHandler = async ({ request, locals }) => {
 	const bearer = env.METRICS_BEARER?.trim();
-	if (bearer) {
-		const auth = request.headers.get('authorization') ?? '';
-		const expected = `Bearer ${bearer}`;
-		if (auth !== expected) {
-			return new Response('unauthorized\n', {
-				status: 401,
-				headers: {
-					'content-type': 'text/plain; charset=utf-8',
-					'cache-control': 'no-store',
-					// Hint to scrapers and humans alike.
-					'www-authenticate': 'Bearer realm="metrics"'
-				}
-			});
-		}
+	const auth = request.headers.get('authorization') ?? '';
+
+	const viaBearer = bearer ? bearerMatches(auth, bearer) : false;
+	const viaOperator = isPlatformOperator(locals.user);
+
+	if (!viaBearer && !viaOperator) {
+		const headers: Record<string, string> = {
+			'content-type': 'text/plain; charset=utf-8',
+			'cache-control': 'no-store'
+		};
+		// Only advertise the bearer challenge when a bearer is actually
+		// configured; otherwise it would mislead scrapers into retrying with a
+		// token that can never work.
+		if (bearer) headers['www-authenticate'] = 'Bearer realm="metrics"';
+		return new Response('forbidden\n', { status: 403, headers });
 	}
 
 	const metrics = await collectAllMetrics();

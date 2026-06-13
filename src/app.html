@@ -3,6 +3,11 @@
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<!-- Synchronous, render-blocking theme bootstrap. Runs before first
+		     paint so the freedink_theme cookie override applies with no flash
+		     of the wrong theme. External same-origin script (not inline) to
+		     satisfy the strict CSP in svelte.config.js. -->
+		<script src="%sveltekit.assets%/theme-init.js"></script>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="light dark" />
 		<meta name="description" content="FreedInk — anonymous collaborative blogging." />

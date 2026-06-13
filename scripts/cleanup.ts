@@ -27,6 +27,7 @@ if (existsSync('.env')) {
 
 export type CleanupStats = {
 	sessions: number;
+	oidc_sessions: number;
 	post_submission_nonces: number;
 	rate_limits: number;
 	blog_invitations: number;
@@ -51,6 +52,7 @@ type Sql = ReturnType<typeof postgres>;
 export async function runCleanupOnce(sql: Sql): Promise<CleanupStats> {
 	const stats: CleanupStats = {
 		sessions: 0,
+		oidc_sessions: 0,
 		post_submission_nonces: 0,
 		rate_limits: 0,
 		blog_invitations: 0,
@@ -61,6 +63,15 @@ export async function runCleanupOnce(sql: Sql): Promise<CleanupStats> {
 	stats.sessions = (
 		await sql`
 		DELETE FROM sessions WHERE expires_at < now()
+	`
+	).count;
+
+	// oidc_sessions: short-lived pending OIDC authorizations. Resolved rows are
+	// deleted on use; this reaps the ones that expired before the IdP redirected
+	// back (`expires_at < now()`), as the schema comment promises.
+	stats.oidc_sessions = (
+		await sql`
+		DELETE FROM oidc_sessions WHERE expires_at < now()
 	`
 	).count;
 

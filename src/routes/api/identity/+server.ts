@@ -78,6 +78,10 @@ export const POST: RequestHandler = async (event) => {
 		idc: parsed.data.idc,
 		publicKey: parsed.data.public_key,
 		ciphertext: b64urlToBytes(parsed.data.ciphertext),
+		// Write kdf explicitly rather than leaning on the column default - the
+		// blob schema pins it to 'pbkdf2-sha256', so writing it guarantees the
+		// stored row can never silently diverge from what the client used.
+		kdf: parsed.data.kdf,
 		kdfSalt: b64urlToBytes(parsed.data.salt),
 		nonce: b64urlToBytes(parsed.data.nonce),
 		kdfParams: parsed.data.kdf_params,

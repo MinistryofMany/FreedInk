@@ -4,10 +4,42 @@
 // blogs the user owned intact (blogs do NOT cascade on owner deletion;
 // blog_members rows do).
 import { describe, it, expect } from 'vitest';
-import { asUser, postJSON } from './helpers';
+import { asUser, postJSON, BASE_URL } from './helpers';
 import { makeUser, makeBlogWith } from '../setup/factories';
 import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
+import { existsSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Minimal valid 1x1 white JPEG (mirrors tests/api/media.test.ts). The upload
+// endpoint re-encodes via sharp, so the bytes must parse as a real image.
+const FAKE_JPEG = new Uint8Array(
+	Buffer.from(
+		'/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AAA//2Q==',
+		'base64'
+	)
+);
+
+// Upload a file via the real endpoint so the on-disk file + media_uploads row
+// are produced exactly as production does it. Returns the parsed JSON body.
+async function uploadAs(cookie: string, bytes: Uint8Array): Promise<{ url: string; hash: string }> {
+	const form = new FormData();
+	const buf = new ArrayBuffer(bytes.byteLength);
+	new Uint8Array(buf).set(bytes);
+	form.append('file', new Blob([buf], { type: 'image/jpeg' }), 'test.jpg');
+	// SvelteKit CSRF requires a same-origin Origin header on form-like POSTs.
+	const res = await fetch(BASE_URL + '/api/media/upload', {
+		method: 'POST',
+		headers: { origin: BASE_URL, cookie },
+		body: form
+	});
+	if (res.status !== 200) throw new Error(`upload failed: ${res.status} ${await res.text()}`);
+	return res.json();
+}
+
+function diskPath(url: string): string {
+	return join(process.cwd(), 'static', url.replace('/uploads/', 'uploads/'));
+}
 
 describe('GDPR export', () => {
 	it('rejects unauthenticated requests with 401', async () => {
@@ -170,5 +202,80 @@ describe('GDPR delete', () => {
 		expect(
 			audits.some((r) => (r.metadata as { username?: string } | null)?.username === 'goodbye')
 		).toBe(true);
+	});
+});
+
+describe('GDPR delete - media erasure (M3)', () => {
+	it('unlinks the leaving user image bytes from disk', async () => {
+		const user = await makeUser({ username: 'mediagone' });
+		const { cookie } = await asUser(user);
+
+		const up = await uploadAs(cookie, FAKE_JPEG);
+		const path = diskPath(up.url);
+		expect(existsSync(path)).toBe(true);
+
+		// Row exists for the uploader before deletion.
+		const before = await db
+			.select()
+			.from(schema.mediaUploads)
+			.where(eq(schema.mediaUploads.uploaderUserId, user.id));
+		expect(before.length).toBe(1);
+
+		const res = await postJSON('/api/gdpr/delete', { confirm: 'mediagone' }, { cookie });
+		expect(res.status).toBe(200);
+
+		// On-disk bytes are gone, and the row cascaded away with the user.
+		expect(existsSync(path)).toBe(false);
+		const after = await db
+			.select()
+			.from(schema.mediaUploads)
+			.where(eq(schema.mediaUploads.uploaderUserId, user.id));
+		expect(after.length).toBe(0);
+	});
+
+	it('keeps a file still referenced by another user (dedup guard)', async () => {
+		// Two users upload identical bytes → same sha256. The on-disk file is
+		// deduped per the sha256; deleting one user must NOT remove bytes another
+		// user still points at.
+		const keeper = await makeUser({ username: 'keepermedia' });
+		const leaver = await makeUser({ username: 'leavermedia' });
+		const keeperAuth = await asUser(keeper);
+		const leaverAuth = await asUser(leaver);
+
+		const keeperUp = await uploadAs(keeperAuth.cookie, FAKE_JPEG);
+		const leaverUp = await uploadAs(leaverAuth.cookie, FAKE_JPEG);
+		// Same content → identical hash.
+		expect(leaverUp.hash).toBe(keeperUp.hash);
+
+		const keeperPath = diskPath(keeperUp.url);
+		const leaverPath = diskPath(leaverUp.url);
+		expect(existsSync(keeperPath)).toBe(true);
+		expect(existsSync(leaverPath)).toBe(true);
+
+		const res = await postJSON(
+			'/api/gdpr/delete',
+			{ confirm: 'leavermedia' },
+			{ cookie: leaverAuth.cookie }
+		);
+		expect(res.status).toBe(200);
+
+		// The keeper still references the sha256, so the bytes survive on disk.
+		// This holds for the keeper's own file and, because the dedup guard sees
+		// the keeper's row, for the leaver's file path too (they coincide when the
+		// users' id prefixes collide).
+		expect(existsSync(keeperPath)).toBe(true);
+		expect(existsSync(leaverPath)).toBe(true);
+
+		// The keeper's media row is untouched by the leaver's deletion.
+		const keeperRows = await db
+			.select()
+			.from(schema.mediaUploads)
+			.where(eq(schema.mediaUploads.uploaderUserId, keeper.id));
+		expect(keeperRows.length).toBe(1);
+
+		// Cleanup the surviving fixture(s); leaver/keeper may share a path if
+		// their id prefixes collide, so guard each removal.
+		rmSync(keeperPath, { force: true });
+		if (leaverPath !== keeperPath) rmSync(leaverPath, { force: true });
 	});
 });

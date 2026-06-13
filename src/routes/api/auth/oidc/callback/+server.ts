@@ -36,14 +36,17 @@ export const GET: RequestHandler = async (event) => {
 	const state = url.searchParams.get('state');
 	if (!code || !state) throw error(400, 'missing code or state');
 
-	// Resolve and consume the pending authorization by state (single-use).
+	// Atomically resolve-and-consume the pending authorization by state. A
+	// single DELETE ... RETURNING (gated on not-yet-expired) is the consume:
+	// at most one concurrent request can win the row, so a replayed `state`
+	// (double-submit, attacker race) finds nothing and is rejected. Splitting
+	// this into SELECT-then-DELETE left a TOCTOU window where two requests
+	// could both read the row before either deleted it.
 	const [pending] = await db
-		.select()
-		.from(schema.oidcSessions)
+		.delete(schema.oidcSessions)
 		.where(and(eq(schema.oidcSessions.state, state), gt(schema.oidcSessions.expiresAt, new Date())))
-		.limit(1);
+		.returning();
 	if (!pending) throw error(400, 'invalid or expired sign-in state');
-	await db.delete(schema.oidcSessions).where(eq(schema.oidcSessions.state, state));
 
 	let claims;
 	try {

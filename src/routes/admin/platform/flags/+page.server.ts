@@ -16,6 +16,7 @@ import {
 } from '$lib/server/flags';
 import { db, schema } from '$lib/db/client';
 import { sql, desc } from 'drizzle-orm';
+import { isPlatformOperator } from '$lib/server/operators';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const flags = await listFlags();
@@ -87,6 +88,10 @@ async function resolveUserByQuery(q: string): Promise<{ id: string } | null> {
 
 export const actions: Actions = {
 	createFlag: async (event) => {
+		// Form actions don't run the parent +layout.server.ts load, so the
+		// operator gate must be re-applied here on every action.
+		if (!isPlatformOperator(event.locals.user))
+			return fail(403, { error: 'platform operator only' });
 		const form = await event.request.formData();
 		const parsed = CreateFlagBody.safeParse({
 			key: String(form.get('key') ?? ''),
@@ -111,6 +116,8 @@ export const actions: Actions = {
 	},
 
 	saveFlag: async (event) => {
+		if (!isPlatformOperator(event.locals.user))
+			return fail(403, { error: 'platform operator only' });
 		const form = await event.request.formData();
 		const parsed = SaveFlagBody.safeParse({
 			key: String(form.get('key') ?? ''),
@@ -144,6 +151,8 @@ export const actions: Actions = {
 	},
 
 	setOverride: async (event) => {
+		if (!isPlatformOperator(event.locals.user))
+			return fail(403, { error: 'platform operator only' });
 		const form = await event.request.formData();
 		const parsed = SetOverrideBody.safeParse({
 			flag_key: String(form.get('flag_key') ?? ''),
@@ -165,6 +174,8 @@ export const actions: Actions = {
 	},
 
 	removeOverride: async (event) => {
+		if (!isPlatformOperator(event.locals.user))
+			return fail(403, { error: 'platform operator only' });
 		const form = await event.request.formData();
 		const parsed = RemoveOverrideBody.safeParse({
 			flag_key: String(form.get('flag_key') ?? ''),

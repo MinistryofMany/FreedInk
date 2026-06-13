@@ -131,15 +131,42 @@ describe('runCleanupOnce', () => {
 	it('returns zero counts when there is nothing to reap', async () => {
 		// resetDb fired in beforeEach (integration setupFiles); tables are empty.
 		// Wipe the ones beforeEach doesn't cover so we get a clean baseline.
-		await sql`TRUNCATE TABLE rate_limits, post_submission_nonces, blog_invitations RESTART IDENTITY CASCADE`;
+		await sql`TRUNCATE TABLE rate_limits, post_submission_nonces, blog_invitations, oidc_sessions RESTART IDENTITY CASCADE`;
 		const stats = await runCleanupOnce(sql);
 		expect(stats).toEqual({
 			sessions: 0,
+			oidc_sessions: 0,
 			post_submission_nonces: 0,
 			rate_limits: 0,
 			blog_invitations: 0,
 			status_checks: 0
 		});
+	});
+
+	it('reaps expired oidc_sessions and preserves pending ones', async () => {
+		// oidc_sessions isn't in the standard test truncate set, so wipe it for an
+		// exact delta. Seed one expired (past) and one still-pending (future) row.
+		await sql`TRUNCATE TABLE oidc_sessions RESTART IDENTITY CASCADE`;
+		await db.insert(schema.oidcSessions).values([
+			{
+				state: 'oidc-stale',
+				nonce: 'n-stale',
+				codeVerifier: 'v-stale',
+				expiresAt: PAST
+			},
+			{
+				state: 'oidc-fresh',
+				nonce: 'n-fresh',
+				codeVerifier: 'v-fresh',
+				expiresAt: FUTURE
+			}
+		]);
+
+		const stats = await runCleanupOnce(sql);
+		expect(stats.oidc_sessions).toBe(1);
+
+		const remaining = await sql`SELECT state FROM oidc_sessions ORDER BY state`;
+		expect(remaining.map((r) => r.state)).toEqual(['oidc-fresh']);
 	});
 
 	it('reaps status_checks rows older than 90 days', async () => {

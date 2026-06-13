@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { verifyMembership } from '$lib/server/semaphore';
+import { setRole, removeMember } from '$lib/db/members';
+import { currentMembership } from '$lib/db/snapshots';
 import { makeUser, makeBlogWith, buildTestProof } from '../setup/factories';
 
 describe('verifyMembership end-to-end', () => {
@@ -106,4 +108,101 @@ describe('verifyMembership end-to-end', () => {
 			})
 		).rejects.toMatchObject({ status: 400 });
 	}, 60_000);
+});
+
+// C3 (revocation): with requireCurrentRoot the proof must match the blog's
+// CURRENT snapshot root, not just any historical one. A member who built a
+// valid proof and is then removed (or whose snapshot rolls forward) can no
+// longer author or edit against the now-stale root.
+describe('verifyMembership requireCurrentRoot (C3)', () => {
+	it('accepts a current-root proof when requireCurrentRoot is set', async () => {
+		const owner = await makeUser({ username: 'owner', seed: 'owner-seed' });
+		const { id: blogId } = await makeBlogWith({ owner });
+		const proof = await buildTestProof({
+			blogId,
+			identity: owner.identity,
+			scope: 'post:t',
+			message: 'm'
+		});
+		const result = await verifyMembership({
+			blogId,
+			proof,
+			expectedScope: 'post:t',
+			expectedMessage: 'm',
+			requireCurrentRoot: true
+		});
+		expect(result.snapshot.root).toBe(proof.merkleTreeRoot);
+	}, 30_000);
+
+	it('rejects an authorship proof built against a now-stale root', async () => {
+		const owner = await makeUser({ username: 'owner', seed: 'owner-seed' });
+		const author = await makeUser({ username: 'author', seed: 'author-seed' });
+		const { id: blogId } = await makeBlogWith({
+			owner,
+			members: [{ user: author, role: 'author' }]
+		});
+		// author builds a valid proof against the current snapshot...
+		const proof = await buildTestProof({
+			blogId,
+			identity: author.identity,
+			scope: 'post:t',
+			message: 'm'
+		});
+		const staleRoot = proof.merkleTreeRoot;
+
+		// ...then the author is removed, rolling the current snapshot forward.
+		await removeMember(blogId, author.id);
+		const current = await currentMembership(blogId);
+		expect(current.root).not.toBe(staleRoot);
+
+		// The stale-root proof still references a KNOWN snapshot, so without the
+		// flag it passes the lookup (SNARK is still valid for the old root)...
+		const okWithoutFlag = await verifyMembership({
+			blogId,
+			proof,
+			expectedScope: 'post:t',
+			expectedMessage: 'm'
+		});
+		expect(okWithoutFlag.snapshot.root).toBe(staleRoot);
+
+		// ...but with requireCurrentRoot (the authorship/edit path) it's rejected.
+		await expect(
+			verifyMembership({
+				blogId,
+				proof,
+				expectedScope: 'post:t',
+				expectedMessage: 'm',
+				requireCurrentRoot: true
+			})
+		).rejects.toMatchObject({ status: 400 });
+	}, 30_000);
+
+	it('rejects a current-member proof once the snapshot rolls forward (C3)', async () => {
+		const owner = await makeUser({ username: 'owner', seed: 'owner-seed' });
+		const { id: blogId } = await makeBlogWith({ owner });
+		// owner builds a proof against the single-member snapshot...
+		const proof = await buildTestProof({
+			blogId,
+			identity: owner.identity,
+			scope: 'post:t',
+			message: 'm'
+		});
+		const staleRoot = proof.merkleTreeRoot;
+
+		// ...then a new member joins, advancing the current root.
+		const joiner = await makeUser({ username: 'joiner', seed: 'joiner-seed' });
+		await setRole(blogId, joiner.id, 'author', owner.id);
+		const current = await currentMembership(blogId);
+		expect(current.root).not.toBe(staleRoot);
+
+		await expect(
+			verifyMembership({
+				blogId,
+				proof,
+				expectedScope: 'post:t',
+				expectedMessage: 'm',
+				requireCurrentRoot: true
+			})
+		).rejects.toMatchObject({ status: 400 });
+	}, 30_000);
 });

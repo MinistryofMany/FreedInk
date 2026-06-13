@@ -47,7 +47,13 @@ export const GET: RequestHandler = async () => {
 			eq(schema.blogPostVersions.id, schema.blogPosts.currentVersionId)
 		)
 		.innerJoin(schema.blogs, eq(schema.blogs.id, schema.blogPosts.blogId))
-		.where(and(eq(schema.blogPosts.status, 'published'), isNull(schema.blogs.archivedAt)));
+		.where(
+			and(
+				eq(schema.blogPosts.status, 'published'),
+				isNull(schema.blogPosts.archivedAt),
+				isNull(schema.blogs.archivedAt)
+			)
+		);
 
 	const entries: string[] = [];
 	entries.push(urlEntry(`${ORIGIN}/`));

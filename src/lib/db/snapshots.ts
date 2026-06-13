@@ -80,15 +80,26 @@ async function rootOf(identities: string[]): Promise<string> {
 
 // Insert a snapshot row for the current proving-eligible state, idempotently
 // (skips insert if the latest snapshot already has the same root).
+// The blog's CURRENT proving membership, derived live from the member rows (not
+// from the newest snapshot row). This is the authoritative "current root": it is
+// exactly what the client proves against via fetchGroup/refreshSnapshot, and it
+// stays correct even when membership cycles back to a prior set (where the
+// newest snapshot *row* would be stale). Read-only - inserts nothing.
+export async function currentMembership(
+	blogId: string
+): Promise<{ root: string; identities: string[]; eligibleCount: number }> {
+	const identities = await currentEligibleIdentities(blogId);
+	const root = identities.length === 0 ? '0' : await rootOf(identities);
+	return { root, identities, eligibleCount: identities.length };
+}
+
 export async function refreshSnapshot(blogId: string): Promise<{
 	root: string;
 	identities: string[];
 	eligibleCount: number;
 	changed: boolean;
 }> {
-	const identities = await currentEligibleIdentities(blogId);
-	const root = identities.length === 0 ? '0' : await rootOf(identities);
-	const eligibleCount = identities.length;
+	const { root, identities, eligibleCount } = await currentMembership(blogId);
 
 	const existing = await db
 		.select({ root: schema.blogMemberSnapshots.root })
@@ -118,16 +129,6 @@ export async function getSnapshotByRoot(blogId: string, root: string) {
 		.where(
 			and(eq(schema.blogMemberSnapshots.blogId, blogId), eq(schema.blogMemberSnapshots.root, root))
 		)
-		.limit(1);
-	return rows[0] ?? null;
-}
-
-export async function getLatestSnapshot(blogId: string) {
-	const rows = await db
-		.select()
-		.from(schema.blogMemberSnapshots)
-		.where(eq(schema.blogMemberSnapshots.blogId, blogId))
-		.orderBy(schema.blogMemberSnapshots.createdAt)
 		.limit(1);
 	return rows[0] ?? null;
 }

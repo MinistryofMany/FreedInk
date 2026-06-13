@@ -57,7 +57,7 @@ describe('createPost', () => {
 		expect(r.version.submittedAt).toBeInstanceOf(Date);
 	});
 
-	it('enforces UNIQUE (post_id, nullifier) — second submission with the same nullifier is rejected at the DB layer', async () => {
+	it('enforces UNIQUE (post_id, nullifier) — re-inserting the SAME nullifier into the SAME post is rejected at the DB layer', async () => {
 		const owner = await makeUser({ username: 'owner' });
 		const { id: blogId } = await makeBlogWith({ owner });
 		await createPost({
@@ -69,10 +69,12 @@ describe('createPost', () => {
 			nullifier: 'shared',
 			status: 'draft'
 		});
-		// Same post creates a new row in blog_posts so the unique key (post_id,
-		// nullifier) doesn't collide — but if the same user/identity tried to
-		// post against the same post_id with the same scope-based nullifier,
-		// they would. Simulate by manually inserting into the same post.
+		// Calling createPost again would mint a NEW blog_posts row, so the
+		// (post_id, nullifier) composite would not collide — and that is fine:
+		// there is no one-post-per-identity rule (blogs are collective). The
+		// unique index only blocks re-inserting the same nullifier into the
+		// SAME post row, i.e. replaying the identical proof. Simulate that by
+		// manually inserting a second version into the existing post.
 		const posts = await db
 			.select()
 			.from(schema.blogPosts)
@@ -128,6 +130,8 @@ describe('getPostBySlug', () => {
 	it('looks up by (blog_id, version_slug) joining the current version', async () => {
 		const owner = await makeUser({ username: 'owner' });
 		const { id: blogId } = await makeBlogWith({ owner });
+		// getPostBySlug is the public surface: it serves only published,
+		// non-archived posts, so this lookup test publishes the post it expects.
 		const r = await createPost({
 			blogId,
 			title: 'Findable Post',
@@ -135,8 +139,9 @@ describe('getPostBySlug', () => {
 			proof: {},
 			snapshotRoot: 'r',
 			nullifier: 'n',
-			status: 'draft'
+			status: 'under_review'
 		});
+		await setPostStatus(r.post.id, r.version.id, 'published');
 		const got = await getPostBySlug(blogId, 'findable-post');
 		expect(got?.post.id).toBe(r.post.id);
 		expect(got?.version.title).toBe('Findable Post');

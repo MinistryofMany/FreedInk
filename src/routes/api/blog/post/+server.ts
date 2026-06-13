@@ -52,7 +52,10 @@ export const POST: RequestHandler = async (event) => {
 		blogId: blog.id,
 		proof,
 		expectedScope,
-		expectedMessage
+		expectedMessage,
+		// A removed or rotated-away member must not be able to author: the
+		// proof has to match the blog's current proving-eligible snapshot.
+		requireCurrentRoot: true
 	});
 
 	const status = submit_for_review ? 'under_review' : 'draft';

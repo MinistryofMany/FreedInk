@@ -1,11 +1,13 @@
-// Restore a soft-deleted post version (owner/editor only).
+// Restore (unarchive) a previously archived post: clears blog_posts.archived_at
+// so it becomes publicly visible again. Owner/editor only. Inverse of
+// api/post/delete; content and version history were never touched.
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '$lib/server/auth';
-import { restorePostVersion } from '$lib/db/moderation';
+import { unarchivePost } from '$lib/db/moderation';
 import { audit } from '$lib/server/audit';
 
 const MODERATING = ['owner', 'editor'] as const;
@@ -31,7 +33,7 @@ export const POST: RequestHandler = async (event) => {
 
 	await requireRole(row.post.blogId, locals.user.id, MODERATING);
 
-	await restorePostVersion(parsed.data.post_version_id);
+	await unarchivePost(row.post.id);
 
 	await audit(event, {
 		event: 'post.restored',

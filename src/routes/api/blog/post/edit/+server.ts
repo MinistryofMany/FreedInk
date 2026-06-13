@@ -62,7 +62,10 @@ export const POST: RequestHandler = async (event) => {
 		blogId: row.post.blogId,
 		proof,
 		expectedScope,
-		expectedMessage
+		expectedMessage,
+		// Same rule as authoring: an edit must be proven against the current
+		// snapshot, so a removed/rotated member can't push new versions.
+		requireCurrentRoot: true
 	});
 
 	let result;

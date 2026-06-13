@@ -8,7 +8,6 @@ import { verifyMembership } from '$lib/server/semaphore';
 import { evaluatePostReview } from '$lib/server/tally';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
-import { isUniqueViolation } from '$lib/server/db-errors';
 import { notifyMembersOfNewPublishedPost } from '$lib/server/notifications';
 import { isValidRejectionReason } from '$lib/rejection-reasons';
 
@@ -59,7 +58,9 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 	const row = versionRows[0];
 	if (!row) throw error(404, 'post version not found');
-	if (row.post.status !== 'under_review') throw error(409, 'post is not under review');
+	// Voting window: a vote is only accepted while the post is under review.
+	// Once it publishes or is rejected the window is closed for everyone.
+	if (row.post.status !== 'under_review') throw error(409, 'voting is closed for this post');
 
 	await requireRole(row.post.blogId, locals.user.id, ROLES_REVIEWING);
 
@@ -69,17 +70,28 @@ export const POST: RequestHandler = async (event) => {
 		blogId: row.post.blogId,
 		proof: parsed.data.proof,
 		expectedScope,
-		expectedMessage
+		expectedMessage,
+		// Reviews verify against the current snapshot so the voting population
+		// matches the one the tally threshold is computed from (M1). A removed
+		// or rotated-away member can no longer vote.
+		requireCurrentRoot: true
 	});
 
-	try {
-		// Deduplicate the reasons array (a UI bug could resend the same key).
-		// `as` cast: zod refined each string to RejectionReasonKey.
-		const reasons =
-			parsed.data.vote === 'reject' && parsed.data.rejection_reasons
-				? [...new Set(parsed.data.rejection_reasons)]
-				: null;
-		await db.insert(schema.postReviews).values({
+	// Change-vote (H2): a reviewer may flip their vote while the post is under
+	// review. The review nullifier scope is `review:<versionId>`, stable per
+	// identity per version, so the same reviewer always yields the same
+	// nullifier. The unique key (postVersionId, nullifier) lets us UPSERT and
+	// replace their prior vote instead of rejecting it as a duplicate. We also
+	// refresh proof + snapshotRoot so the stored row reflects the latest cast.
+	const reasons =
+		parsed.data.vote === 'reject' && parsed.data.rejection_reasons
+			? // Deduplicate the reasons array (a UI bug could resend the same key).
+				// `as` cast: zod refined each string to RejectionReasonKey.
+				[...new Set(parsed.data.rejection_reasons)]
+			: null;
+	await db
+		.insert(schema.postReviews)
+		.values({
 			postVersionId: parsed.data.post_version_id,
 			vote: parsed.data.vote,
 			proof: parsed.data.proof,
@@ -87,11 +99,17 @@ export const POST: RequestHandler = async (event) => {
 			nullifier,
 			comment: parsed.data.comment ?? null,
 			rejectionReasons: reasons as never
+		})
+		.onConflictDoUpdate({
+			target: [schema.postReviews.postVersionId, schema.postReviews.nullifier],
+			set: {
+				vote: parsed.data.vote,
+				proof: parsed.data.proof,
+				snapshotRoot: snapshot.root,
+				comment: parsed.data.comment ?? null,
+				rejectionReasons: reasons as never
+			}
 		});
-	} catch (e) {
-		if (isUniqueViolation(e)) throw error(409, 'you already voted on this post');
-		throw e;
-	}
 
 	const result = await evaluatePostReview(parsed.data.post_version_id);
 

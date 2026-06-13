@@ -1,13 +1,15 @@
-// Soft-delete a post version. Auth + role check: only owner/editor of the
-// blog that owns the post can hide it. The post stays in the DB; public
-// reads filter on deletedAt IS NULL.
+// Moderation unpublish/archive of a post. Auth + role check: only owner/editor
+// of the blog that owns the post can hide it. This is NOT a hard delete - the
+// post row, its content, and its full version history (incl. currentVersionId)
+// stay intact; we only stamp blog_posts.archived_at, which the public slug
+// loader and listings filter out. Reversible via api/post/restore.
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '$lib/server/auth';
-import { softDeletePostVersion } from '$lib/db/moderation';
+import { archivePost } from '$lib/db/moderation';
 import { audit } from '$lib/server/audit';
 
 const MODERATING = ['owner', 'editor'] as const;
@@ -33,7 +35,7 @@ export const POST: RequestHandler = async (event) => {
 
 	await requireRole(row.post.blogId, locals.user.id, MODERATING);
 
-	await softDeletePostVersion(parsed.data.post_version_id);
+	await archivePost(row.post.id);
 
 	await audit(event, {
 		event: 'post.deleted',
