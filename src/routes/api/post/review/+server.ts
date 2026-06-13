@@ -8,6 +8,7 @@ import { verifyMembership } from '$lib/server/semaphore';
 import { evaluatePostReview } from '$lib/server/tally';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
+import { isUniqueViolation } from '$lib/server/db-errors';
 import { notifyMembersOfNewPublishedPost } from '$lib/server/notifications';
 import { isValidRejectionReason } from '$lib/rejection-reasons';
 
@@ -88,8 +89,7 @@ export const POST: RequestHandler = async (event) => {
 			rejectionReasons: reasons as never
 		});
 	} catch (e) {
-		const err = e as { code?: string };
-		if (err.code === '23505') throw error(409, 'you already voted on this post');
+		if (isUniqueViolation(e)) throw error(409, 'you already voted on this post');
 		throw e;
 	}
 

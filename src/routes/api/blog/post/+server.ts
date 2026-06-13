@@ -7,6 +7,7 @@ import { requireRole, ROLES_WRITING } from '$lib/server/auth';
 import { verifyMembership } from '$lib/server/semaphore';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
+import { isUniqueViolation } from '$lib/server/db-errors';
 import { notifyReviewersOfNewSubmission } from '$lib/server/notifications';
 import { isValidLanguageCode, normalizeLanguageCode } from '$lib/languages';
 
@@ -68,8 +69,7 @@ export const POST: RequestHandler = async (event) => {
 			language: language ? normalizeLanguageCode(language) : undefined
 		});
 	} catch (err) {
-		const e = err as { code?: string };
-		if (e.code === '23505') throw error(409, 'duplicate submission (nullifier reuse)');
+		if (isUniqueViolation(err)) throw error(409, 'duplicate submission (nullifier reuse)');
 		throw err;
 	}
 	if (submit_for_review) {

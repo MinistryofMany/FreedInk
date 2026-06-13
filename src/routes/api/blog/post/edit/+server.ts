@@ -19,6 +19,7 @@ import { requireRole, ROLES_WRITING } from '$lib/server/auth';
 import { verifyMembership } from '$lib/server/semaphore';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
+import { isUniqueViolation } from '$lib/server/db-errors';
 
 const ProofSchema = z.object({
 	merkleTreeDepth: z.number().int().positive(),
@@ -80,8 +81,7 @@ export const POST: RequestHandler = async (event) => {
 			language: lang
 		});
 	} catch (err) {
-		const e = err as { code?: string };
-		if (e.code === '23505') throw error(409, 'duplicate edit (nullifier reuse)');
+		if (isUniqueViolation(err)) throw error(409, 'duplicate edit (nullifier reuse)');
 		throw err;
 	}
 

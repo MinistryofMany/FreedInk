@@ -7,6 +7,7 @@ import { requireRole, ROLES_COMMENTING } from '$lib/server/auth';
 import { verifyMembership } from '$lib/server/semaphore';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
+import { isUniqueViolation } from '$lib/server/db-errors';
 
 const ProofSchema = z.object({
 	merkleTreeDepth: z.number().int().positive(),
@@ -63,8 +64,7 @@ export const POST: RequestHandler = async (event) => {
 			})
 			.returning();
 	} catch (e) {
-		const err = e as { code?: string };
-		if (err.code === '23505') throw error(409, 'duplicate comment (nullifier reuse)');
+		if (isUniqueViolation(e)) throw error(409, 'duplicate comment (nullifier reuse)');
 		throw e;
 	}
 	await audit(event, {
