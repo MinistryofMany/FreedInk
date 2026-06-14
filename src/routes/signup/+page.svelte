@@ -13,7 +13,7 @@
 	// If the URL carries ?invite=<token>, we route the success path through
 	// /api/invite/<token>/accept. If the user is already signed in when they
 	// land here, accept immediately and redirect. Otherwise the token rides
-	// along through the Tessera round-trip via the sign-in link's ?next=.
+	// along through the Minister round-trip via the sign-in link's ?next=.
 	let inviteToken: string | null = null;
 
 	async function acceptInviteAndRedirect(token: string): Promise<boolean> {
@@ -36,9 +36,9 @@
 	});
 
 	// Sign-in entry point. When an invite is in play, carry it through the
-	// Tessera round-trip so the user lands back on this page (signed in) and
+	// Minister round-trip so the user lands back on this page (signed in) and
 	// the onMount above accepts it.
-	$: tesseraHref = inviteToken
+	$: ministerHref = inviteToken
 		? `/api/auth/oidc/start?next=${encodeURIComponent(`/signup?invite=${inviteToken}`)}`
 		: '/api/auth/oidc/start';
 </script>
@@ -69,16 +69,16 @@
 		<p>
 			<a href="/admin">{$_('auth.skip_to_dashboard')}</a>
 		</p>
-	{:else if data.tesseraEnabled}
-		<p>Tessera is your identity for Freed.Ink. Sign in to create or access your account.</p>
-		<a class="tessera-btn" href={tesseraHref} data-sveltekit-reload>Sign in with Tessera</a>
+	{:else if data.ministerEnabled}
+		<p>Minister is your identity for Freed.Ink. Sign in to create or access your account.</p>
+		<a class="minister-btn" href={ministerHref} data-sveltekit-reload>Sign in with Minister</a>
 		<p class="hint">
-			New here? Signing in with Tessera for the first time creates your account automatically.
+			New here? Signing in with Minister for the first time creates your account automatically.
 		</p>
 	{:else}
 		<p class="unavailable">
-			Sign-in is currently unavailable: this instance hasn't been configured with a Tessera
-			provider. Set the Tessera OIDC environment variables and reload.
+			Sign-in is currently unavailable: this instance hasn't been configured with a Minister
+			provider. Set the Minister OIDC environment variables and reload.
 		</p>
 	{/if}
 
@@ -111,7 +111,7 @@
 		border: 1px solid var(--color-red);
 		border-radius: 4px;
 	}
-	.tessera-btn {
+	.minister-btn {
 		display: inline-block;
 		text-align: center;
 		padding: 0.6rem 1rem;
@@ -122,7 +122,7 @@
 		text-decoration: none;
 		font-weight: 600;
 	}
-	.tessera-btn:hover {
+	.minister-btn:hover {
 		background: var(--color-green-light, #cfe1bf);
 	}
 </style>

@@ -3,7 +3,7 @@
 //   2. The previewNew* helpers compute the right recipient list:
 //        • reviewers: owner/editor/reviewer with a contact email
 //        • published: every active member with a contact email
-//      Sign-in is Tessera-only, so emails are self-asserted (no verification).
+//      Sign-in is Minister-only, so emails are self-asserted (no verification).
 //      A member is reachable iff they have set a contact email; members with a
 //      null email are excluded from both lists.
 import { describe, it, expect } from 'vitest';

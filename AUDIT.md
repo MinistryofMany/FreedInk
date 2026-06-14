@@ -1,6 +1,6 @@
 # FreedInk — Full Feature Audit
 
-_Anonymous-blogging platform: SvelteKit + Postgres/Drizzle, Semaphore ZK proofs for unlinkable authorship, "Sign in with Tessera" (OIDC) as the sole login._
+_Anonymous-blogging platform: SvelteKit + Postgres/Drizzle, Semaphore ZK proofs for unlinkable authorship, "Sign in with Minister" (OIDC) as the sole login._
 
 Audit method: seven parallel domain reviews reading implementation **and** tests. Status legend: ✅ working · ◐ partial · ⚠️ stub/mock · ❌ broken/missing.
 

@@ -11,8 +11,8 @@ import {
 	NEXT_COOKIE
 } from '$lib/server/oidc';
 
-// Begin "Sign in with Tessera". Generates PKCE + state + nonce, persists the
-// pending authorization, and redirects the browser to Tessera's consent
+// Begin "Sign in with Minister". Generates PKCE + state + nonce, persists the
+// pending authorization, and redirects the browser to Minister's consent
 // screen. A GET (not a JSON POST) so the signup page can link straight to it;
 // the per-request `state` is what protects the callback. An optional `?next=`
 // (same-origin path only) is stashed in a short-lived cookie so the callback
@@ -21,7 +21,7 @@ export const GET: RequestHandler = async (event) => {
 	await enforce(RULES.authStart, event, { keyBy: 'ip' });
 
 	const cfg = oidcConfig();
-	if (!cfg) throw error(503, 'Tessera sign-in is not configured');
+	if (!cfg) throw error(503, 'Minister sign-in is not configured');
 
 	const next = safeNext(event.url.searchParams.get('next'));
 	if (next) {

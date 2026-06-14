@@ -19,9 +19,9 @@ test.describe('public pages render', () => {
 		await expect(page.getByRole('button', { name: 'Search' })).toBeVisible();
 	});
 
-	test('signup page offers Sign in with Tessera', async ({ page }) => {
+	test('signup page offers Sign in with Minister', async ({ page }) => {
 		await page.goto('/signup');
-		await expect(page.getByRole('link', { name: /sign in with tessera/i })).toBeVisible();
+		await expect(page.getByRole('link', { name: /sign in with minister/i })).toBeVisible();
 	});
 
 	test('admin route redirects to /signup when unauthenticated', async ({ page }) => {

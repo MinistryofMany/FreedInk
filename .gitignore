@@ -39,6 +39,6 @@ static/uploads/
 data/
 data/vapid.json
 
-# DB dumps and per-env test secrets (added during Tessera OIDC integration)
+# DB dumps and per-env test secrets (added during Minister OIDC integration)
 backups/
 .env.test

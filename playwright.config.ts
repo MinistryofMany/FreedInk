@@ -53,14 +53,14 @@ export default defineConfig({
 			PUBLIC_RP_ID: 'localhost',
 			PUBLIC_RP_NAME: 'Freed Ink E2E',
 			NODE_ENV: 'production',
-			// Sign-in is Tessera-only. Point at an unreachable dummy issuer so the
-			// signup page renders the "Sign in with Tessera" button (config present)
+			// Sign-in is Minister-only. Point at an unreachable dummy issuer so the
+			// signup page renders the "Sign in with Minister" button (config present)
 			// without a live IdP. Tests authenticate by seeding a session directly
 			// (see e2e/_session.ts); the OIDC round-trip itself isn't exercised.
-			OIDC_TESSERA_ISSUER: 'http://localhost:1',
-			OIDC_TESSERA_CLIENT_ID: 'e2e-dummy-client',
-			OIDC_TESSERA_CLIENT_SECRET: 'e2e-dummy-secret',
-			OIDC_TESSERA_REDIRECT_URI: `${BASE_URL}/api/auth/oidc/callback`
+			OIDC_MINISTER_ISSUER: 'http://localhost:1',
+			OIDC_MINISTER_CLIENT_ID: 'e2e-dummy-client',
+			OIDC_MINISTER_CLIENT_SECRET: 'e2e-dummy-secret',
+			OIDC_MINISTER_REDIRECT_URI: `${BASE_URL}/api/auth/oidc/callback`
 		}
 	},
 	globalSetup: './e2e/global-setup.ts'

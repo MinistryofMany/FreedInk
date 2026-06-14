@@ -2,9 +2,9 @@
 // Semaphore proof generation. Local snark artifacts under /snark-artifacts/
 // make this fast enough to be reliable.
 //
-// Sign-in is Tessera-only and there's no live IdP here, so we seed the session
+// Sign-in is Minister-only and there's no live IdP here, so we seed the session
 // directly (see ./_session) instead of driving an OIDC round-trip. Each authed
-// test then starts at /signup/identity — exactly where a first Tessera sign-in
+// test then starts at /signup/identity — exactly where a first Minister sign-in
 // drops a brand-new user — and exercises the real identity + proof flows.
 import { test, expect } from '@playwright/test';
 import { signInAsNewUser } from './_session';

@@ -21,7 +21,7 @@ export const POST: RequestHandler = async (event) => {
 		.where(eq(schema.users.id, userId))
 		.limit(1);
 
-	// External sign-in links (Sign in with Tessera). Issuer + pairwise subject
+	// External sign-in links (Sign in with Minister). Issuer + pairwise subject
 	// are the full extent of what we store for authentication.
 	const oidcIdentities = await db
 		.select({

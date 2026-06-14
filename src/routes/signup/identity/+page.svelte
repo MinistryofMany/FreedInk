@@ -7,7 +7,7 @@
 
 	export let data;
 
-	// Carried through from the Tessera callback when the user arrived mid-flow
+	// Carried through from the Minister callback when the user arrived mid-flow
 	// (e.g. accepting an invitation). Only same-origin paths are produced upstream.
 	function safeNext(raw: string | null): string {
 		if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\')) return raw;

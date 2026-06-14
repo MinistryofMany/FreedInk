@@ -1,9 +1,9 @@
 // Smoke tests for the rate-limit middleware wired into endpoints.
 //
-// Strategy: hammer the "Sign in with Tessera" start endpoint until we cross
+// Strategy: hammer the "Sign in with Minister" start endpoint until we cross
 // the configured threshold and expect 429s after that point. The limiter runs
 // before the endpoint's own logic, so its status under the limit (302 redirect
-// when Tessera is configured, 503 when it isn't) is irrelevant — only the 429
+// when Minister is configured, 503 when it isn't) is irrelevant — only the 429
 // matters. `redirect: 'manual'` keeps us from chasing a 302 to an external IdP.
 // Between scenarios we truncate the rate_limits table for a fresh window.
 import { describe, it, expect, beforeEach } from 'vitest';

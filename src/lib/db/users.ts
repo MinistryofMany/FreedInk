@@ -26,7 +26,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 // Creates a bare user row with a username and an optional contact email. Sign-in
-// is Tessera-only (see src/lib/db/oidc.ts:createUserWithOidcIdentity for the real
+// is Minister-only (see src/lib/db/oidc.ts:createUserWithOidcIdentity for the real
 // account-creation path); this helper backs test factories and any flow that
 // seeds a user without an OIDC identity.
 export async function createUserWithEmail(email: string, username: string): Promise<User> {

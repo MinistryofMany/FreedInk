@@ -32,11 +32,11 @@ export async function createUserWithOidcIdentity(
 	subject: string,
 	opts: { displayName?: string } = {}
 ): Promise<User> {
-	// Tessera discloses only a pairwise `sub` (+ optional display name/avatar)
+	// Minister discloses only a pairwise `sub` (+ optional display name/avatar)
 	// over OIDC — no username or email. Mint a unique placeholder username
 	// derived from the subject; the user can rename later from settings, the
 	// same way the wallet sign-in path seeds a `0x…` placeholder.
-	const username = `tessera-${subject.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`;
+	const username = `minister-${subject.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`;
 	const [user] = await db
 		.insert(schema.users)
 		.values({ username, displayName: opts.displayName ?? null })

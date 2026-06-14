@@ -2,13 +2,13 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { env } from '$env/dynamic/private';
 
-// "Sign in with Tessera" — Tessera is an external OpenID Connect identity
+// "Sign in with Minister" — Minister is an external OpenID Connect identity
 // provider. We are the relying party: authorization-code flow with PKCE
 // (S256). Configuration comes from env (all four required to enable it):
-//   OIDC_TESSERA_ISSUER         e.g. http://localhost:3000
-//   OIDC_TESSERA_CLIENT_ID
-//   OIDC_TESSERA_CLIENT_SECRET
-//   OIDC_TESSERA_REDIRECT_URI   e.g. http://localhost:5173/api/auth/oidc/callback
+//   OIDC_MINISTER_ISSUER         e.g. http://localhost:3000
+//   OIDC_MINISTER_CLIENT_ID
+//   OIDC_MINISTER_CLIENT_SECRET
+//   OIDC_MINISTER_REDIRECT_URI   e.g. http://localhost:5173/api/auth/oidc/callback
 
 export interface OidcConfig {
 	issuer: string;
@@ -18,10 +18,10 @@ export interface OidcConfig {
 }
 
 export function oidcConfig(): OidcConfig | null {
-	const issuer = env.OIDC_TESSERA_ISSUER;
-	const clientId = env.OIDC_TESSERA_CLIENT_ID;
-	const clientSecret = env.OIDC_TESSERA_CLIENT_SECRET;
-	const redirectUri = env.OIDC_TESSERA_REDIRECT_URI;
+	const issuer = env.OIDC_MINISTER_ISSUER;
+	const clientId = env.OIDC_MINISTER_CLIENT_ID;
+	const clientSecret = env.OIDC_MINISTER_CLIENT_SECRET;
+	const redirectUri = env.OIDC_MINISTER_REDIRECT_URI;
 	if (!issuer || !clientId || !clientSecret || !redirectUri) return null;
 	return { issuer: issuer.replace(/\/$/, ''), clientId, clientSecret, redirectUri };
 }
@@ -108,19 +108,19 @@ export async function buildAuthorizationUrl(
 	return u.toString();
 }
 
-export interface TesseraClaims {
+export interface MinisterClaims {
 	sub: string;
 	name?: string;
 	picture?: string;
 }
 
 // Exchange the authorization code for tokens, verify the id_token's signature
-// against Tessera's JWKS, and check iss / aud / nonce. Returns the identity
+// against Minister's JWKS, and check iss / aud / nonce. Returns the identity
 // claims. Throws on any failure — the caller maps that to a 401.
 export async function exchangeCodeForClaims(
 	cfg: OidcConfig,
 	args: { code: string; codeVerifier: string; expectedNonce: string }
-): Promise<TesseraClaims> {
+): Promise<MinisterClaims> {
 	const d = await discover(cfg);
 	const res = await fetch(d.token_endpoint, {
 		method: 'POST',
@@ -156,9 +156,9 @@ export async function exchangeCodeForClaims(
 	};
 }
 
-// Stable key stored alongside the pairwise subject. Tessera's `sub` is unique
+// Stable key stored alongside the pairwise subject. Minister's `sub` is unique
 // only per (issuer, client), so we pair it with the issuer — a future second
-// OIDC provider then can't collide with Tessera's subject space.
+// OIDC provider then can't collide with Minister's subject space.
 export function issuerKey(cfg: OidcConfig): string {
 	return cfg.issuer;
 }

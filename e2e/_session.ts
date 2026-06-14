@@ -1,6 +1,6 @@
-// e2e auth seam for a Tessera-only world.
+// e2e auth seam for a Minister-only world.
 //
-// Sign-in is "Sign in with Tessera" (OIDC) only, and there's no live Tessera
+// Sign-in is "Sign in with Minister" (OIDC) only, and there's no live Minister
 // IdP in the e2e harness. Rather than mock the whole OIDC round-trip, we seed a
 // user + session row straight into the shared test DB and hand the browser the
 // signed `sid` cookie the app would have issued. The cookie format mirrors
@@ -37,7 +37,7 @@ export async function seedUserSession(opts: {
 }
 
 // Seed a fresh signed-in user (no Semaphore identity yet) and attach the
-// session cookie to the browser context. Mirrors what a first Tessera sign-in
+// session cookie to the browser context. Mirrors what a first Minister sign-in
 // produces: the user lands authenticated but still needs to set up an identity.
 export async function signInAsNewUser(
 	page: Page,

@@ -44,9 +44,9 @@ vi.mock('$lib/db/client', async () => {
 const exchangeCodeForClaims = vi.fn(async () => ({ sub: 'sub-1', name: 'Alice' }));
 
 vi.mock('$lib/server/oidc', () => ({
-	oidcConfig: () => ({ issuer: 'https://tessera.example', clientId: 'freedink' }),
+	oidcConfig: () => ({ issuer: 'https://ministry.id', clientId: 'freedink' }),
 	exchangeCodeForClaims,
-	issuerKey: () => 'https://tessera.example',
+	issuerKey: () => 'https://ministry.id',
 	safeNext: (raw: string | null | undefined) => (raw ? raw : null),
 	NEXT_COOKIE: 'oidc_next'
 }));

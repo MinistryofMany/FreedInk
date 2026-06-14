@@ -141,8 +141,8 @@ export const users = pgTable(
 		username: text('username').notNull(),
 		displayName: text('display_name'),
 		// Optional contact address (notifications, blog invitations). Self-asserted
-		// and unverified — sign-in is Tessera-only, so there's no email-ownership
-		// proof. Populated by the user in settings; null for fresh Tessera accounts.
+		// and unverified — sign-in is Minister-only, so there's no email-ownership
+		// proof. Populated by the user in settings; null for fresh Minister accounts.
 		email: text('email'),
 		// Set by platform operators to ban a user. Checked in session loader;
 		// suspended users can't acquire new sessions and existing ones are
@@ -206,7 +206,7 @@ export const userIdentities = pgTable(
 	})
 );
 
-// ──────────────────────────── oidc (sign in with tessera) ────────────────────────────
+// ──────────────────────────── oidc (sign in with minister) ────────────────────────────
 
 // Short-lived pending OIDC authorizations. One row per "start": carries the
 // PKCE verifier + nonce until the IdP redirects back with a code. Resolved by
@@ -227,7 +227,7 @@ export const oidcSessions = pgTable(
 
 // Links an external OIDC identity (issuer + pairwise subject) to a FreedInk
 // user. An OIDC `sub` is unique only per (issuer, client), so we key on the
-// pair. A user can hold several identities at once (Tessera, passkey, wallet).
+// pair. A user can hold several identities at once (Minister, passkey, wallet).
 export const oidcIdentities = pgTable(
 	'oidc_identities',
 	{

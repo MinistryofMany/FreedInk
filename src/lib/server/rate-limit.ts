@@ -94,7 +94,7 @@ export async function enforce(
 // but centralizing the most common keeps tuning in one place.
 export const RULES = {
 	// Anon endpoints — keyed by IP. authStart/authFinish guard the two halves
-	// of the Tessera "Sign in with Tessera" OIDC round-trip.
+	// of the Minister "Sign in with Minister" OIDC round-trip.
 	authStart: { bucket: 'auth:start', max: 10, windowSeconds: 60 } satisfies RateLimitRule,
 	authFinish: { bucket: 'auth:finish', max: 20, windowSeconds: 60 } satisfies RateLimitRule,
 	// Authed endpoints — keyed by user.

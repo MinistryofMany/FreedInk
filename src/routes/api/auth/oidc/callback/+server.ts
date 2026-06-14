@@ -18,7 +18,7 @@ import {
 import { createSession, setSessionCookie, SuspendedUserError } from '$lib/server/session';
 import { audit } from '$lib/server/audit';
 
-// Tessera redirects the browser here with ?code & ?state (or ?error). We
+// Minister redirects the browser here with ?code & ?state (or ?error). We
 // exchange the code, verify the id_token, then either link the identity to
 // the signed-in user or create a fresh FreedInk account, and issue a session.
 export const GET: RequestHandler = async (event) => {
@@ -26,7 +26,7 @@ export const GET: RequestHandler = async (event) => {
 	const { url, cookies, locals, request, getClientAddress } = event;
 
 	const cfg = oidcConfig();
-	if (!cfg) throw error(503, 'Tessera sign-in is not configured');
+	if (!cfg) throw error(503, 'Minister sign-in is not configured');
 
 	// The IdP can decline (user hit "Deny", invalid request, …).
 	const idpError = url.searchParams.get('error');
@@ -58,7 +58,7 @@ export const GET: RequestHandler = async (event) => {
 	} catch {
 		// Don't leak the underlying reason (bad code, sig mismatch, …) to the
 		// browser; SvelteKit logs the thrown error server-side.
-		throw error(401, 'Tessera sign-in failed');
+		throw error(401, 'Minister sign-in failed');
 	}
 
 	const iss = issuerKey(cfg);
@@ -67,7 +67,7 @@ export const GET: RequestHandler = async (event) => {
 	let linked = false;
 	if (!user) {
 		if (locals.user) {
-			// Already signed in (e.g. via passkey): attach Tessera as an
+			// Already signed in (e.g. via passkey): attach Minister as an
 			// additional identity on the existing account.
 			await linkOidcIdentityToUser(locals.user.id, iss, claims.sub);
 			user = locals.user;
