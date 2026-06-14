@@ -161,3 +161,9 @@ acquires it, and finds nothing to apply.
 - Session cookies: `HttpOnly`, `Secure` (prod), `SameSite=Lax`, signed with `SESSION_SECRET`.
 - Every Semaphore proof is verified server-side and its nullifier consumed (UNIQUE constraint) — no replays.
 - Anon key / Supabase RLS is no longer relevant; all writes go through SvelteKit endpoints that enforce role + proof.
+
+## License
+
+Copyright (c) 2026 AtHeartEngineering LLC. Part of the **Ministry of Many** project, authored by AtHeartEngineer.
+
+FreedInk is licensed under the **GNU Affero General Public License v3.0** (`AGPL-3.0-only`) - see [LICENSE](./LICENSE). Running a modified version as a network service requires publishing your source under the same license.

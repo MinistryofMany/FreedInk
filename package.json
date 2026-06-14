@@ -89,5 +89,7 @@
 		"snarkjs": "^0.7.6",
 		"circomkit": "^0.3.4",
 		"circom_tester": "^0.0.24"
-	}
+	},
+	"license": "AGPL-3.0-only",
+	"author": "AtHeartEngineer"
 }
