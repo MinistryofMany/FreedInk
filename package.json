@@ -71,7 +71,7 @@
 		"drizzle-orm": "^0.45.2",
 		"ethers": "^6.13.2",
 		"isomorphic-dompurify": "^2.20.0",
-		"@minister/client": "file:../minister-client",
+		"@minister/client": "git+https://github.com/MinistryofMany/minister-client.git",
 		"jose": "^6.2.3",
 		"marked": "^15.0.4",
 		"nodemailer": "^8.0.11",
