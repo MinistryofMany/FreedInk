@@ -2,14 +2,7 @@ import type { RequestHandler } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import { db, schema } from '$lib/db/client';
 import { enforce, RULES } from '$lib/server/rate-limit';
-import {
-	oidcConfig,
-	generatePkce,
-	randomUrlToken,
-	buildAuthorizationUrl,
-	safeNext,
-	NEXT_COOKIE
-} from '$lib/server/oidc';
+import { oidcConfig, beginAuthorization, safeNext, NEXT_COOKIE } from '$lib/server/oidc';
 
 // Begin "Sign in with Minister". Generates PKCE + state + nonce, persists the
 // pending authorization, and redirects the browser to Minister's consent
@@ -36,17 +29,14 @@ export const GET: RequestHandler = async (event) => {
 		event.cookies.delete(NEXT_COOKIE, { path: '/' });
 	}
 
-	const { verifier, challenge } = generatePkce();
-	const state = randomUrlToken();
-	const nonce = randomUrlToken();
+	const { url, flow } = await beginAuthorization(cfg);
 
 	await db.insert(schema.oidcSessions).values({
-		state,
-		nonce,
-		codeVerifier: verifier,
-		expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+		state: flow.state,
+		nonce: flow.nonce,
+		codeVerifier: flow.codeVerifier,
+		expiresAt: new Date(flow.expiresAt)
 	});
 
-	const url = await buildAuthorizationUrl(cfg, { state, nonce, codeChallenge: challenge });
 	throw redirect(302, url);
 };

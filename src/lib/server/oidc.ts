@@ -1,14 +1,20 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createMinisterClient, generatePkce, randomUrlToken } from '@minister/client';
+import type { MinisterClient, MinisterClaims, OidcFlowState } from '@minister/client';
 import { env } from '$env/dynamic/private';
 
 // "Sign in with Minister" — Minister is an external OpenID Connect identity
 // provider. We are the relying party: authorization-code flow with PKCE
-// (S256). Configuration comes from env (all four required to enable it):
+// (S256). The OIDC mechanics (discovery, PKCE, authorization-URL building,
+// token exchange, id_token verification) are delegated to `@minister/client`;
+// this module keeps only FreedInk's config and glue. Configuration comes from
+// env (all four required to enable it):
 //   OIDC_MINISTER_ISSUER         e.g. http://localhost:3000
 //   OIDC_MINISTER_CLIENT_ID
 //   OIDC_MINISTER_CLIENT_SECRET
 //   OIDC_MINISTER_REDIRECT_URI   e.g. http://localhost:5173/api/auth/oidc/callback
+
+// Scopes FreedInk requests. Identity only — no badge scopes are disclosed.
+const SCOPES = ['openid', 'profile'];
 
 export interface OidcConfig {
 	issuer: string;
@@ -44,116 +50,63 @@ export function safeNext(raw: string | null | undefined): string | null {
 	return raw;
 }
 
-interface Discovery {
-	issuer: string;
-	authorization_endpoint: string;
-	token_endpoint: string;
-	jwks_uri: string;
+// Build a Minister relying-party client from FreedInk's config. The SDK is
+// stateless, so a fresh client per request is cheap (discovery + JWKS are
+// cached inside the SDK per issuer for the process lifetime).
+function client(cfg: OidcConfig): MinisterClient {
+	return createMinisterClient({
+		issuer: cfg.issuer,
+		clientId: cfg.clientId,
+		clientSecret: cfg.clientSecret,
+		redirectUri: cfg.redirectUri
+	});
 }
 
-// Cache discovery doc + JWKS per issuer for the process lifetime. The JWKS
-// set fetches lazily and rotates keys on its own.
-const discoveryCache = new Map<string, Promise<Discovery>>();
-const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+// Start a flow: PKCE (async — Web Crypto), state, and nonce, plus the
+// authorization URL to redirect to. The returned `flow` is the per-request
+// state the caller MUST persist (in `oidc_sessions`) and consume atomically by
+// `state` in the callback.
+export async function beginAuthorization(
+	cfg: OidcConfig
+): Promise<{ url: string; flow: OidcFlowState }> {
+	const { verifier, challenge } = await generatePkce();
+	const state = randomUrlToken();
+	const nonce = randomUrlToken();
 
-async function discover(cfg: OidcConfig): Promise<Discovery> {
-	let p = discoveryCache.get(cfg.issuer);
-	if (!p) {
-		p = fetch(`${cfg.issuer}/.well-known/openid-configuration`).then(async (res) => {
-			if (!res.ok) throw new Error(`OIDC discovery failed: HTTP ${res.status}`);
-			return (await res.json()) as Discovery;
-		});
-		discoveryCache.set(cfg.issuer, p);
-	}
-	return p;
+	const url = await client(cfg).getAuthorizationUrl({
+		scopes: SCOPES,
+		state,
+		nonce,
+		codeChallenge: challenge
+	});
+
+	return {
+		url,
+		flow: {
+			state,
+			nonce,
+			codeVerifier: verifier,
+			// Persisted as a Date by Drizzle; the SDK's epoch-ms field is unused
+			// here because `oidc_sessions` enforces expiry in SQL.
+			expiresAt: Date.now() + 10 * 60 * 1000
+		}
+	};
 }
 
-function jwksFor(cfg: OidcConfig, jwksUri: string) {
-	let set = jwksCache.get(cfg.issuer);
-	if (!set) {
-		set = createRemoteJWKSet(new URL(jwksUri));
-		jwksCache.set(cfg.issuer, set);
-	}
-	return set;
-}
-
-function b64url(buf: Buffer): string {
-	return buf.toString('base64url');
-}
-
-export function generatePkce(): { verifier: string; challenge: string } {
-	const verifier = b64url(randomBytes(32));
-	const challenge = b64url(createHash('sha256').update(verifier).digest());
-	return { verifier, challenge };
-}
-
-export function randomUrlToken(bytes = 16): string {
-	return b64url(randomBytes(bytes));
-}
-
-export async function buildAuthorizationUrl(
-	cfg: OidcConfig,
-	args: { state: string; nonce: string; codeChallenge: string }
-): Promise<string> {
-	const d = await discover(cfg);
-	const u = new URL(d.authorization_endpoint);
-	u.searchParams.set('response_type', 'code');
-	u.searchParams.set('client_id', cfg.clientId);
-	u.searchParams.set('redirect_uri', cfg.redirectUri);
-	u.searchParams.set('scope', 'openid profile');
-	u.searchParams.set('state', args.state);
-	u.searchParams.set('nonce', args.nonce);
-	u.searchParams.set('code_challenge', args.codeChallenge);
-	u.searchParams.set('code_challenge_method', 'S256');
-	return u.toString();
-}
-
-export interface MinisterClaims {
-	sub: string;
-	name?: string;
-	picture?: string;
-}
-
-// Exchange the authorization code for tokens, verify the id_token's signature
-// against Minister's JWKS, and check iss / aud / nonce. Returns the identity
-// claims. Throws on any failure — the caller maps that to a 401.
+// Exchange the authorization code for tokens, verify the id_token (signature
+// via JWKS, iss/aud/nonce), and return the identity claims. Throws on any
+// failure — the caller maps that to a 401. FreedInk requests no badge scopes,
+// so the SDK's verified-badge list is empty and intentionally ignored here.
 export async function exchangeCodeForClaims(
 	cfg: OidcConfig,
 	args: { code: string; codeVerifier: string; expectedNonce: string }
 ): Promise<MinisterClaims> {
-	const d = await discover(cfg);
-	const res = await fetch(d.token_endpoint, {
-		method: 'POST',
-		headers: { 'content-type': 'application/x-www-form-urlencoded' },
-		body: new URLSearchParams({
-			grant_type: 'authorization_code',
-			code: args.code,
-			redirect_uri: cfg.redirectUri,
-			client_id: cfg.clientId,
-			client_secret: cfg.clientSecret,
-			code_verifier: args.codeVerifier
-		})
+	const { claims } = await client(cfg).exchangeCode({
+		code: args.code,
+		codeVerifier: args.codeVerifier,
+		expectedNonce: args.expectedNonce
 	});
-	if (!res.ok) {
-		const detail = await res.text().catch(() => '');
-		throw new Error(`token exchange failed: HTTP ${res.status} ${detail}`);
-	}
-	const tokens = (await res.json()) as { id_token?: string };
-	if (!tokens.id_token) throw new Error('token response missing id_token');
-
-	const { payload } = await jwtVerify(tokens.id_token, jwksFor(cfg, d.jwks_uri), {
-		issuer: d.issuer,
-		audience: cfg.clientId,
-		algorithms: ['EdDSA']
-	});
-	if (payload.nonce !== args.expectedNonce) throw new Error('id_token nonce mismatch');
-	if (typeof payload.sub !== 'string' || !payload.sub) throw new Error('id_token missing sub');
-
-	return {
-		sub: payload.sub,
-		name: typeof payload.name === 'string' ? payload.name : undefined,
-		picture: typeof payload.picture === 'string' ? payload.picture : undefined
-	};
+	return claims;
 }
 
 // Stable key stored alongside the pairwise subject. Minister's `sub` is unique
