@@ -25,7 +25,9 @@
 <Dialog.Root bind:open>
 	{#if trigger}
 		<Dialog.Trigger>
-			{@render trigger()}
+			{#snippet child({ props })}
+				<span {...props} style="display: inline-flex">{@render trigger()}</span>
+			{/snippet}
 		</Dialog.Trigger>
 	{/if}
 

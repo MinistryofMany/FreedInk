@@ -13,8 +13,10 @@
 
 <Tooltip.Provider>
 	<Tooltip.Root>
-		<Tooltip.Trigger class="fi-tooltip-trigger {klass}">
-			{@render children()}
+		<Tooltip.Trigger>
+			{#snippet child({ props })}
+				<span {...props} class="fi-tooltip-trigger {klass}">{@render children()}</span>
+			{/snippet}
 		</Tooltip.Trigger>
 		<Tooltip.Portal>
 			<Tooltip.Content class="fi-tooltip-content" sideOffset={6}>

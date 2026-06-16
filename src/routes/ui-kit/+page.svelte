@@ -106,10 +106,15 @@
 		<Card>
 			<Kicker>Essay · The Roundtable</Kicker>
 			<h2 class="head">What we couldn't say with our names on it</h2>
-			<Byline author="The Roundtable" meta={['14 authors · anonymous', 'June 2026', '7 min read']} />
+			<Byline
+				author="The Roundtable"
+				meta={['14 authors · anonymous', 'June 2026', '7 min read']}
+			/>
 			<Rule />
 			<p>Twelve novelists agreed to one rule before the first word was written.</p>
-			<PullQuote>The byline is the group. No reader will ever know which hand held the pen.</PullQuote>
+			<PullQuote
+				>The byline is the group. No reader will ever know which hand held the pen.</PullQuote
+			>
 		</Card>
 	</section>
 
@@ -141,7 +146,11 @@
 	<section>
 		<Kicker>Overlays</Kicker>
 		<div class="row">
-			<Dialog bind:open={dialogOpen} title="Invite a member" description="Send a one-time invite link.">
+			<Dialog
+				bind:open={dialogOpen}
+				title="Invite a member"
+				description="Send a one-time invite link."
+			>
 				{#snippet trigger()}<Button variant="ghost">Open dialog</Button>{/snippet}
 				<p style="margin-top: var(--space-3)">Dialog body content goes here.</p>
 			</Dialog>

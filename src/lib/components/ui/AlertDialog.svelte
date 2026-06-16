@@ -29,7 +29,9 @@
 <AlertDialog.Root bind:open>
 	{#if trigger}
 		<AlertDialog.Trigger>
-			{@render trigger()}
+			{#snippet child({ props })}
+				<span {...props} style="display: inline-flex">{@render trigger()}</span>
+			{/snippet}
 		</AlertDialog.Trigger>
 	{/if}
 
