@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Table, Card, Kicker } from '$lib/components/ui';
+
 	export let data;
 	$: ({ stats, sparklines, audit, eventFilter, eventTypes, operator } = data);
 
@@ -26,58 +28,97 @@
 		const target = e.currentTarget as HTMLSelectElement;
 		target.form?.submit();
 	}
+
+	const auditColumns = [
+		{ key: 'when', label: 'When' },
+		{ key: 'event', label: 'Event' },
+		{ key: 'actor', label: 'Actor' },
+		{ key: 'subject', label: 'Subject blog' }
+	];
 </script>
 
 <svelte:head>
 	<title>Platform admin</title>
 </svelte:head>
 
-<header>
-	<h2>Platform operator dashboard</h2>
-	<p class="meta">Signed in as <code>{operator.username}</code></p>
-	<nav>
-		<a href="/admin/platform">Overview</a>
-		<a href="/admin/platform/users">Users</a>
-		<a href="/admin/platform/reports">Reports</a>
-		<a href="/admin/platform/flags">Flags</a>
-		<a href="/admin/platform/audit">Audit log</a>
-	</nav>
-</header>
+<div class="page-header">
+	<div class="page-header__meta">
+		<Kicker>Platform operator</Kicker>
+		<h2 class="page-title">Dashboard</h2>
+		<p class="operator-line">
+			Signed in as <code>{operator.username}</code>
+		</p>
+	</div>
+</div>
 
 <section class="stats" aria-label="Platform overview">
-	<a class="card" href="/admin/platform/users">
-		<div class="label">Users</div>
-		<div class="num">{stats.users}</div>
+	<a class="stat-card" href="/admin/platform/users">
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Users</span>
+				<span class="stat-num">{stats.users}</span>
+			</div>
+		</Card>
 	</a>
-	<a class="card" href="/admin/platform/users">
-		<div class="label">Active (7d)</div>
-		<div class="num">{stats.activeUsers}</div>
+	<a class="stat-card" href="/admin/platform/users">
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Active (7d)</span>
+				<span class="stat-num">{stats.activeUsers}</span>
+			</div>
+		</Card>
 	</a>
-	<div class="card">
-		<div class="label">Blogs</div>
-		<div class="num">{stats.blogs}</div>
+	<div class="stat-card">
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Blogs</span>
+				<span class="stat-num">{stats.blogs}</span>
+			</div>
+		</Card>
 	</div>
-	<div class="card">
-		<div class="label">Published posts</div>
-		<div class="num">{stats.publishedPosts}</div>
+	<div class="stat-card">
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Published posts</span>
+				<span class="stat-num">{stats.publishedPosts}</span>
+			</div>
+		</Card>
 	</div>
-	<div class="card">
-		<div class="label">Reviews (7d)</div>
-		<div class="num">{stats.reviews7d}</div>
+	<div class="stat-card">
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Reviews (7d)</span>
+				<span class="stat-num">{stats.reviews7d}</span>
+			</div>
+		</Card>
 	</div>
-	<div class="card">
-		<div class="label">Comments (7d)</div>
-		<div class="num">{stats.comments7d}</div>
-		<div class="sub">{stats.comments} total</div>
+	<div class="stat-card">
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Comments (7d)</span>
+				<span class="stat-num">{stats.comments7d}</span>
+				<span class="stat-sub">{stats.comments} total</span>
+			</div>
+		</Card>
 	</div>
-	<a class="card" class:alert={stats.reportsOpen > 0} href="/admin/platform/reports">
-		<div class="label">Open reports</div>
-		<div class="num">{stats.reportsOpen}</div>
+	<a
+		class="stat-card"
+		class:stat-card--alert={stats.reportsOpen > 0}
+		href="/admin/platform/reports"
+	>
+		<Card padding="sm">
+			<div class="stat-inner">
+				<span class="stat-label">Open reports</span>
+				<span class="stat-num" class:stat-num--danger={stats.reportsOpen > 0}>
+					{stats.reportsOpen}
+				</span>
+			</div>
+		</Card>
 	</a>
 </section>
 
 <section class="sparklines" aria-label="30-day trends">
-	<h3>Last 30 days</h3>
+	<h3 class="section-heading">Last 30 days</h3>
 	<div class="spark-grid">
 		<article class="spark">
 			<div class="spark-head">
@@ -139,9 +180,9 @@
 	</div>
 </section>
 
-<section>
+<section class="audit-section">
 	<div class="audit-head">
-		<h3>Recent audit log</h3>
+		<h3 class="section-heading">Recent audit log</h3>
 		<form method="GET" class="filter">
 			<label for="event-filter" class="sr-only">Filter by event type</label>
 			<select id="event-filter" name="event" on:change={submitOwnForm}>
@@ -153,131 +194,180 @@
 			<noscript><button type="submit">Apply</button></noscript>
 		</form>
 	</div>
-	{#if audit.length === 0}
-		<p>No audit entries{eventFilter ? ` for "${eventFilter}"` : ''}.</p>
-	{:else}
-		<table>
-			<thead>
-				<tr>
-					<th>When</th>
-					<th>Event</th>
-					<th>Actor</th>
-					<th>Subject blog</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each audit as a}
-					<tr>
-						<td>{new Date(a.createdAt).toLocaleString()}</td>
-						<td><code>{a.event}</code></td>
-						<td><code>{a.actorUserId ?? '—'}</code></td>
-						<td><code>{a.subjectBlogId ?? '—'}</code></td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
+
+	<Table columns={auditColumns} rows={audit} caption="Recent audit log entries">
+		{#snippet cell(row, col)}
+			{#if col.key === 'when'}
+				{new Date(row.createdAt).toLocaleString()}
+			{:else if col.key === 'event'}
+				<code>{row.event}</code>
+			{:else if col.key === 'actor'}
+				<code>{row.actorUserId ?? '—'}</code>
+			{:else if col.key === 'subject'}
+				<code>{row.subjectBlogId ?? '—'}</code>
+			{/if}
+		{/snippet}
+		{#snippet empty()}
+			<p class="empty-msg">No audit entries{eventFilter ? ` for "${eventFilter}"` : ''}.</p>
+		{/snippet}
+	</Table>
 </section>
 
 <style>
-	header {
-		margin-bottom: 1.5rem;
+	.page-header {
+		margin-bottom: var(--space-5);
 	}
-	.meta {
-		color: #666;
-		font-size: 0.85rem;
+
+	.page-title {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		color: var(--color-text);
+		margin: var(--space-1) 0 0;
 	}
-	nav {
-		display: flex;
-		gap: 1rem;
-		margin-top: 0.5rem;
-		flex-wrap: wrap;
+
+	.operator-line {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		margin: var(--space-1) 0 0;
 	}
+
 	.stats {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 0.75rem;
-		margin-bottom: 2rem;
+		gap: var(--space-3);
+		margin-bottom: var(--space-6);
 	}
-	.card {
-		border: 1px solid #ddd;
-		padding: 1rem;
-		border-radius: 0.25rem;
-		text-align: center;
+
+	.stat-card {
 		text-decoration: none;
 		color: inherit;
 		display: block;
 	}
-	a.card:hover {
-		background: #f6f6f6;
+
+	.stat-card--alert :global(.card) {
+		border-color: var(--color-danger);
 	}
-	.card.alert {
-		border-color: #c33;
+
+	.stat-inner {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: var(--space-1);
 	}
-	.card.alert .num {
-		color: #c33;
+
+	.stat-label {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
 	}
-	.label {
-		color: #666;
-		font-size: 0.85rem;
-	}
-	.num {
-		font-size: 2rem;
+
+	.stat-num {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
 		font-weight: 600;
+		color: var(--color-text);
+		line-height: 1;
 	}
-	.sub {
-		color: #888;
-		font-size: 0.75rem;
-		margin-top: 0.15rem;
+
+	.stat-num--danger {
+		color: var(--color-danger);
 	}
+
+	.stat-sub {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
+	.section-heading {
+		font-family: var(--font-ui);
+		font-size: var(--text-base);
+		font-weight: 600;
+		color: var(--color-text);
+		margin: 0;
+	}
+
 	.sparklines {
-		margin-bottom: 2rem;
+		margin-bottom: var(--space-6);
 	}
+
 	.spark-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 0.75rem;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
 	}
+
 	.spark {
-		border: 1px solid #ddd;
-		border-radius: 0.25rem;
-		padding: 0.75rem 1rem;
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-3) var(--space-4);
 	}
+
 	.spark-head {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		margin-bottom: 0.4rem;
+		margin-bottom: var(--space-2);
 	}
+
 	.spark-label {
-		font-size: 0.85rem;
-		color: #666;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
 	}
+
 	.spark-total {
-		font-size: 1.1rem;
+		font-family: var(--font-display);
+		font-size: var(--text-lg);
 		font-weight: 600;
+		color: var(--color-text);
 	}
+
 	.spark svg {
 		width: 100%;
 		height: 50px;
-		color: #2a6ed4;
+		color: var(--color-accent);
 		display: block;
 	}
+
+	.audit-section {
+		margin-bottom: var(--space-6);
+	}
+
 	.audit-head {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
-		margin-bottom: 0.5rem;
+		gap: var(--space-4);
+		margin-bottom: var(--space-3);
 		flex-wrap: wrap;
 	}
+
 	.filter select {
-		padding: 0.3rem 0.5rem;
-		border: 1px solid #ccc;
-		border-radius: 0.25rem;
-		background: white;
-		font-size: 0.85rem;
+		padding: var(--space-1) var(--space-2);
+		border: var(--border-1) solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
 	}
+
+	.empty-msg {
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		padding: var(--space-3) 0;
+		margin: 0;
+	}
+
 	.sr-only {
 		position: absolute;
 		width: 1px;
@@ -289,19 +379,8 @@
 		white-space: nowrap;
 		border: 0;
 	}
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 0.85rem;
-	}
-	th,
-	td {
-		border-bottom: 1px solid #eee;
-		padding: 0.5rem;
-		text-align: left;
-		vertical-align: top;
-	}
+
 	code {
-		font-size: 0.8rem;
+		font-size: var(--text-xs);
 	}
 </style>

@@ -16,6 +16,7 @@ export { default as Rule } from './Rule.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as Stepper } from './Stepper.svelte';
 export { default as Tabs } from './Tabs.svelte';
+export { default as Table } from './Table.svelte';
 export { default as Tag } from './Tag.svelte';
 export { default as ThemeToggle } from './ThemeToggle.svelte';
 export { default as Tooltip } from './Tooltip.svelte';

@@ -10,6 +10,7 @@
 	import { buildProof, fetchGroup } from '$lib/client/semaphore';
 	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import { POST_LANGUAGES } from '$lib/languages';
+	import { Card, Field, Button, Badge, Kicker } from '$lib/components/ui';
 
 	export let data;
 
@@ -112,16 +113,11 @@
 	}
 </script>
 
-<h3>Edit post in: {data.blog.title}</h3>
-<p class="meta">
-	Editing version {data.post.version} (status: {data.post.status}). Saving will create version {data
-		.post.version + 1}.
-</p>
-
 {#if data.feedback && (data.feedback.reasonCounts.length > 0 || data.feedback.comments.length > 0)}
-	<section class="feedback" aria-labelledby="feedback-heading">
-		<h4 id="feedback-heading">Anonymous reviewer feedback</h4>
-		<p class="meta">
+	<Card class="feedback-card">
+		<Kicker>Anonymous reviewer feedback</Kicker>
+		<h2 class="page-heading" id="feedback-heading">Reviewer feedback</h2>
+		<p class="muted" aria-describedby="feedback-heading">
 			Aggregated across {data.feedback.approves + data.feedback.rejects} vote{data.feedback
 				.approves +
 				data.feedback.rejects ===
@@ -133,170 +129,262 @@
 		{#if data.feedback.reasonCounts.length > 0}
 			<ul class="reason-list">
 				{#each data.feedback.reasonCounts as r}
-					<li><strong>{r.label}</strong> · {r.count}</li>
+					<li>
+						<Badge tone="warning">{r.label} · {r.count}</Badge>
+					</li>
 				{/each}
 			</ul>
 		{/if}
 		{#if data.feedback.comments.length > 0}
-			<details>
+			<details class="comments-disclosure">
 				<summary>Reviewer comments ({data.feedback.comments.length})</summary>
 				<ul class="comment-list">
 					{#each data.feedback.comments as c}
 						<li>
-							<span class="comment-vote" class:approve={c.vote === 'approve'}>{c.vote}</span>
+							<Badge tone={c.vote === 'approve' ? 'success' : 'danger'}>{c.vote}</Badge>
 							<span class="comment-body">{c.comment}</span>
 						</li>
 					{/each}
 				</ul>
 			</details>
 		{/if}
-	</section>
+	</Card>
 {/if}
 
 {#if needsPassword}
-	<form on:submit|preventDefault={unlockFromForm}>
-		<label>
-			Identity password
-			<input type="password" bind:value={password} required autocomplete="current-password" />
-		</label>
-		<button type="submit">Unlock</button>
-	</form>
+	<Card class="unlock-card">
+		<Kicker>Locked identity</Kicker>
+		<h2 class="page-heading">Unlock your identity</h2>
+		<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
+			<Field
+				label="Identity password"
+				type="password"
+				bind:value={password}
+				required
+				autocomplete="current-password"
+			/>
+			<div class="form-actions">
+				<Button type="submit">Unlock</Button>
+			</div>
+		</form>
+	</Card>
 {/if}
 
-<form on:submit|preventDefault={submit}>
-	<div class="title-wrapper">
-		<div class="field">
-			<label for="post-title">Post Title</label>
-			<input type="text" id="post-title" name="title" bind:value={title} required />
+<Card>
+	<Kicker>Edit post</Kicker>
+	<h2 class="page-heading">{data.blog.title}</h2>
+	<p class="muted version-info">
+		Editing version {data.post.version} (status: {data.post.status}). Saving will create version {data
+			.post.version + 1}.
+	</p>
+
+	<form on:submit|preventDefault={submit}>
+		<div class="title-wrapper">
+			<Field label="Post Title" id="post-title" bind:value={title} required />
+			<div class="field-native">
+				<label class="native-label" for="post-slug">Mock URL</label>
+				<input type="text" id="post-slug" class="native-input" value={titleSlug} disabled />
+			</div>
 		</div>
-		<div class="field">
-			<label for="post-slug">Mock URL</label>
-			<input type="text" id="post-slug" value={titleSlug} disabled />
+		<div class="field-native">
+			<span class="native-label">Content</span>
+			<MarkdownEditor
+				bind:value={content}
+				placeholder="Edit your post — formatting saves as markdown."
+			/>
 		</div>
-	</div>
-	<div class="field">
-		<label for="post-content">Content</label>
-		<MarkdownEditor
-			bind:value={content}
-			placeholder="Edit your post — formatting saves as markdown."
-		/>
-	</div>
-	<div class="preview-controls">
-		<button type="button" on:click={() => (showRawMarkdown = !showRawMarkdown)}>
-			{showRawMarkdown ? 'Hide raw markdown' : 'Show raw markdown'}
-		</button>
-		<small
-			>The editor above renders formatting live. This toggle reveals the serialized markdown the
-			server will store.</small
-		>
-	</div>
-	{#if showRawMarkdown}
-		<pre class="raw-markdown" aria-label="Raw markdown preview">{content}</pre>
-	{/if}
-	<label>
-		Language
-		<select bind:value={language}>
-			{#each POST_LANGUAGES as l}
-				<option value={l.code}>{l.name}</option>
-			{/each}
-		</select>
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={submitForReview} />
-		Submit for review immediately (uncheck to save as draft)
-	</label>
-	{#if error}
-		<p style="color: var(--color-red)">{error}</p>
-	{/if}
-	<button type="submit" disabled={busy} style="max-width: 20ch">
-		{busy ? 'Saving…' : 'Save new version'}
-	</button>
-</form>
+		<div class="preview-controls">
+			<Button variant="ghost" size="sm" onclick={() => (showRawMarkdown = !showRawMarkdown)}>
+				{showRawMarkdown ? 'Hide raw markdown' : 'Show raw markdown'}
+			</Button>
+			<small class="muted"
+				>The editor above renders formatting live. This toggle reveals the serialized markdown the
+				server will store.</small
+			>
+		</div>
+		{#if showRawMarkdown}
+			<pre class="raw-markdown" aria-label="Raw markdown preview">{content}</pre>
+		{/if}
+		<div class="field-native">
+			<label class="native-label" for="post-language">Language</label>
+			<select id="post-language" class="native-select" bind:value={language}>
+				{#each POST_LANGUAGES as l}
+					<option value={l.code}>{l.name}</option>
+				{/each}
+			</select>
+		</div>
+		<label class="checkbox-row">
+			<input type="checkbox" bind:checked={submitForReview} />
+			<span>Submit for review immediately (uncheck to save as draft)</span>
+		</label>
+		{#if error}
+			<p class="error-text" role="alert">{error}</p>
+		{/if}
+		<div class="form-actions">
+			<Button type="submit" disabled={busy} loading={busy}>
+				{busy ? 'Saving…' : 'Save new version'}
+			</Button>
+		</div>
+	</form>
+</Card>
 
 <style>
+	.page-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		color: var(--color-text);
+		margin: var(--space-1) 0 var(--space-2);
+	}
+
+	.muted {
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
+	}
+
+	.version-info {
+		margin: 0 0 var(--space-5);
+	}
+
 	form {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
+		max-width: 80ch;
 	}
+
+	:global(.feedback-card),
+	:global(.unlock-card) {
+		margin-bottom: var(--space-5);
+	}
+
+	.unlock-form {
+		max-width: 40ch;
+	}
+
 	.title-wrapper {
 		display: flex;
-		gap: 1rem;
+		gap: var(--space-4);
+		flex-wrap: wrap;
 	}
-	.field {
+
+	.title-wrapper :global(.field),
+	.title-wrapper .field-native {
+		flex: 1 1 16rem;
+	}
+
+	.field-native {
 		display: flex;
 		flex-direction: column;
-		width: 100%;
+		gap: var(--space-1);
 	}
-	.field input {
-		width: 100%;
+
+	.native-label {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
 	}
-	.meta {
-		color: var(--color-green-dark);
-		font-size: 0.9rem;
+
+	.native-input,
+	.native-select {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-2) var(--space-3);
 	}
-	.feedback {
-		border: 1px solid var(--color-green-light);
-		border-radius: 6px;
-		padding: 0.75rem 1rem;
-		margin: 1rem 0;
-		background: var(--color-surface-alt, var(--color-green-white, transparent));
+
+	.native-input:disabled {
+		color: var(--color-text-muted);
+		background: var(--color-surface-alt);
 	}
-	.feedback h4 {
-		margin: 0 0 0.25rem;
+
+	.native-select {
+		max-width: 32ch;
 	}
+
+	.checkbox-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+	}
+
+	.checkbox-row input {
+		accent-color: var(--color-accent);
+	}
+
+	.error-text {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-danger);
+	}
+
+	.form-actions {
+		display: flex;
+	}
+
+	/* Feedback */
 	.reason-list {
 		list-style: none;
 		padding: 0;
-		margin: 0.5rem 0;
+		margin: var(--space-3) 0 0;
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem 1rem;
+		gap: var(--space-2);
 	}
-	.reason-list li {
-		padding: 0.15rem 0.5rem;
-		background: color-mix(in srgb, var(--color-red) 8%, transparent);
-		border-radius: 3px;
-		font-size: 0.85rem;
+
+	.comments-disclosure {
+		margin-top: var(--space-3);
 	}
+
+	.comments-disclosure summary {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
 	.comment-list {
 		list-style: none;
 		padding: 0;
-		margin: 0.5rem 0 0;
+		margin: var(--space-3) 0 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
+
 	.comment-list li {
-		padding: 0.4rem 0;
-		border-bottom: 1px dashed var(--color-border, var(--color-green-light));
-		font-size: 0.9rem;
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		padding-bottom: var(--space-2);
+		border-bottom: var(--border-1) solid var(--color-border);
+		font-size: var(--text-sm);
+		color: var(--color-text);
 	}
-	.comment-vote {
-		display: inline-block;
-		font-size: 0.7rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		padding: 0.05rem 0.35rem;
-		margin-right: 0.4rem;
-		background: var(--color-red);
-		color: white;
-		border-radius: 3px;
-	}
-	.comment-vote.approve {
-		background: var(--color-green, #1c8a4d);
-	}
+
+	/* Preview */
 	.preview-controls {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-3);
 		align-items: center;
 		flex-wrap: wrap;
 	}
+
 	.raw-markdown {
-		border: 1px solid var(--color-green-light);
-		padding: 1rem;
-		border-radius: 4px;
-		background: var(--color-green-lightest, #f8faf8);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.85rem;
+		border: var(--border-1) solid var(--color-border);
+		padding: var(--space-4);
+		border-radius: var(--radius-md);
+		background: var(--color-surface-alt);
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text);
 		white-space: pre-wrap;
 		overflow-x: auto;
 	}

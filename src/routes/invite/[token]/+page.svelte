@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { Card, Button, Kicker } from '$lib/components/ui';
 
 	export let data;
 
@@ -26,66 +27,61 @@
 </script>
 
 <section class="invite">
-	{#if !data.invitation}
-		<h2>Invitation unavailable</h2>
-		<p>
-			This invitation link is invalid, expired, or has already been used. Ask the person who invited
-			you to send a new one.
-		</p>
-		<p><a href="/">Back to home</a></p>
-	{:else}
-		<h2>You're invited to <em>{data.invitation.blogTitle}</em></h2>
-		<p>
-			<strong>{data.invitation.inviterUsername}</strong> invited you to join
-			<strong>{data.invitation.blogTitle}</strong> as a
-			<strong>{data.invitation.role}</strong>.
-		</p>
-		<p class="meta">Expires {new Date(data.invitation.expiresAt).toLocaleString()}.</p>
-
-		{#if data.signedIn}
-			<p>You're signed in as <strong>{data.username}</strong>.</p>
-			<button type="button" class="primary" on:click={accept} disabled={busy}>
-				{busy ? 'Accepting…' : 'Accept invitation'}
-			</button>
+	<Card padding="lg" elevated>
+		{#if !data.invitation}
+			<Kicker>Invitation</Kicker>
+			<h1>Invitation unavailable</h1>
+			<p>
+				This invitation link is invalid, expired, or has already been used. Ask the person who
+				invited you to send a new one.
+			</p>
+			<p><a href="/">Back to home</a></p>
 		{:else}
-			<p>Sign in or create an account to accept this invitation.</p>
-			<a class="primary btn" href="/signup?invite={data.token}">Sign up / Sign in</a>
-		{/if}
+			<Kicker>You're invited</Kicker>
+			<h1>Join <em>{data.invitation.blogTitle}</em></h1>
+			<p>
+				<strong>{data.invitation.inviterUsername}</strong> invited you to join
+				<strong>{data.invitation.blogTitle}</strong> as a
+				<strong>{data.invitation.role}</strong>.
+			</p>
+			<p class="meta">Expires {new Date(data.invitation.expiresAt).toLocaleString()}.</p>
 
-		{#if error}
-			<p class="error">{error}</p>
+			{#if data.signedIn}
+				<p>You're signed in as <strong>{data.username}</strong>.</p>
+				<Button onclick={accept} loading={busy}>
+					{busy ? 'Accepting…' : 'Accept invitation'}
+				</Button>
+			{:else}
+				<p>Sign in or create an account to accept this invitation.</p>
+				<Button href="/signup?invite={data.token}">Sign up / Sign in</Button>
+			{/if}
+
+			{#if error}
+				<p class="error">{error}</p>
+			{/if}
 		{/if}
-	{/if}
+	</Card>
 </section>
 
 <style>
 	.invite {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
 		max-width: 36rem;
-		margin: 3rem auto;
+		margin: var(--space-8) auto;
+		padding: 0 var(--space-4);
+	}
+	.invite :global(h1) {
+		font-size: var(--text-2xl);
+		margin: var(--space-2) 0 var(--space-4);
+	}
+	.invite p {
+		margin: 0 0 var(--space-3);
 	}
 	.meta {
-		color: var(--color-green-dark, #54635a);
-		font-size: 0.9rem;
-	}
-	.primary {
-		display: inline-block;
-		padding: 0.6rem 1.1rem;
-		background: var(--color-green);
-		color: var(--color-green-lightest);
-		text-decoration: none;
-		border-radius: 4px;
-		font-weight: 600;
-		border: none;
-		cursor: pointer;
-	}
-	.primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
 	}
 	.error {
-		color: var(--color-red);
+		margin-top: var(--space-3);
+		color: var(--color-danger);
 	}
 </style>

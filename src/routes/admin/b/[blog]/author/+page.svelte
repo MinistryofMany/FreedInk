@@ -10,6 +10,7 @@
 	import { buildProof, fetchGroup } from '$lib/client/semaphore';
 	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import { POST_LANGUAGES } from '$lib/languages';
+	import { Card, Field, Button, Kicker } from '$lib/components/ui';
 	// Note: prover prewarm happens at the root layout for any logged-in user,
 	// so this page doesn't need its own onMount hook.
 
@@ -101,81 +102,163 @@
 	}
 </script>
 
-<h3>New post for: {data.blog.title}</h3>
-
 {#if needsPassword}
-	<form on:submit|preventDefault={unlockFromForm}>
-		<label>
-			Identity password
-			<input type="password" bind:value={password} required autocomplete="current-password" />
-		</label>
-		<button type="submit">Unlock</button>
-	</form>
+	<Card class="unlock-card">
+		<Kicker>Locked identity</Kicker>
+		<h2 class="page-heading">Unlock your identity</h2>
+		<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
+			<Field
+				label="Identity password"
+				type="password"
+				bind:value={password}
+				required
+				autocomplete="current-password"
+			/>
+			<div class="form-actions">
+				<Button type="submit">Unlock</Button>
+			</div>
+		</form>
+	</Card>
 {/if}
 
-<form on:submit|preventDefault={submit}>
-	<div class="title-wrapper">
-		<div class="field">
-			<label for="post-title">Post Title</label>
-			<input type="text" id="post-title" name="title" bind:value={title} required />
+<Card>
+	<Kicker>New post</Kicker>
+	<h2 class="page-heading">{data.blog.title}</h2>
+
+	<form on:submit|preventDefault={submit}>
+		<div class="title-wrapper">
+			<Field label="Post Title" id="post-title" bind:value={title} required />
+			<div class="field-native">
+				<label class="native-label" for="post-slug">Mock URL</label>
+				<input type="text" id="post-slug" class="native-input" value={titleSlug} disabled />
+			</div>
 		</div>
-		<div class="field">
-			<label for="post-slug">Mock URL</label>
-			<input type="text" id="post-slug" value={titleSlug} disabled />
+		<div class="field-native">
+			<span class="native-label">Content</span>
+			<!--
+				MarkdownEditor exports markdown via bind:value so storage stays a
+				markdown string (same shape the server-side renderMarkdown helper
+				expects). It's the live preview AND the editor in one — we dropped
+				the separate preview panel on this page since the WYSIWYG renders
+				formatting inline already. The /edit page keeps its preview button
+				because users editing legacy markdown sometimes want a sanity check
+				against the rendered output.
+			-->
+			<MarkdownEditor
+				bind:value={content}
+				placeholder="Write your post — formatting saves as markdown."
+			/>
 		</div>
-	</div>
-	<div class="field">
-		<label for="post-content">Content</label>
-		<!--
-			MarkdownEditor exports markdown via bind:value so storage stays a
-			markdown string (same shape the server-side renderMarkdown helper
-			expects). It's the live preview AND the editor in one — we dropped
-			the separate preview panel on this page since the WYSIWYG renders
-			formatting inline already. The /edit page keeps its preview button
-			because users editing legacy markdown sometimes want a sanity check
-			against the rendered output.
-		-->
-		<MarkdownEditor
-			bind:value={content}
-			placeholder="Write your post — formatting saves as markdown."
-		/>
-	</div>
-	<label class="lang-field">
-		Language
-		<select bind:value={language}>
-			{#each POST_LANGUAGES as l}
-				<option value={l.code}>{l.name}</option>
-			{/each}
-		</select>
-	</label>
-	<label>
-		<input type="checkbox" bind:checked={submitForReview} />
-		Submit for review immediately (uncheck to save as draft)
-	</label>
-	{#if error}
-		<p style="color: var(--color-red)">{error}</p>
-	{/if}
-	<button type="submit" disabled={busy} style="max-width: 20ch">
-		{busy ? 'Submitting…' : 'Create Post'}
-	</button>
-</form>
+		<div class="field-native">
+			<label class="native-label" for="post-language">Language</label>
+			<select id="post-language" class="native-select" bind:value={language}>
+				{#each POST_LANGUAGES as l}
+					<option value={l.code}>{l.name}</option>
+				{/each}
+			</select>
+		</div>
+		<label class="checkbox-row">
+			<input type="checkbox" bind:checked={submitForReview} />
+			<span>Submit for review immediately (uncheck to save as draft)</span>
+		</label>
+		{#if error}
+			<p class="error-text" role="alert">{error}</p>
+		{/if}
+		<div class="form-actions">
+			<Button type="submit" disabled={busy} loading={busy}>
+				{busy ? 'Submitting…' : 'Create Post'}
+			</Button>
+		</div>
+	</form>
+</Card>
 
 <style>
+	.page-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		color: var(--color-text);
+		margin: var(--space-1) 0 var(--space-5);
+	}
+
 	form {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
+		max-width: 80ch;
 	}
+
+	:global(.unlock-card) {
+		margin-bottom: var(--space-5);
+	}
+
+	.unlock-form {
+		max-width: 40ch;
+	}
+
 	.title-wrapper {
 		display: flex;
-		gap: 1rem;
+		gap: var(--space-4);
+		flex-wrap: wrap;
 	}
-	.field {
+
+	.title-wrapper :global(.field),
+	.title-wrapper .field-native {
+		flex: 1 1 16rem;
+	}
+
+	.field-native {
 		display: flex;
 		flex-direction: column;
-		width: 100%;
+		gap: var(--space-1);
 	}
-	.field input {
-		width: 100%;
+
+	.native-label {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.native-input,
+	.native-select {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-2) var(--space-3);
+	}
+
+	.native-input:disabled {
+		color: var(--color-text-muted);
+		background: var(--color-surface-alt);
+	}
+
+	.native-select {
+		max-width: 32ch;
+	}
+
+	.checkbox-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+	}
+
+	.checkbox-row input {
+		accent-color: var(--color-accent);
+	}
+
+	.error-text {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-danger);
+	}
+
+	.form-actions {
+		display: flex;
 	}
 </style>
