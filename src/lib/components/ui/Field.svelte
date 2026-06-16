@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { HTMLInputAttributes } from 'svelte/elements';
 	interface Props {
 		label: string;
 		id?: string;
@@ -10,6 +11,10 @@
 		help?: string;
 		placeholder?: string;
 		class?: string;
+		maxlength?: number;
+		minlength?: number;
+		autocomplete?: HTMLInputAttributes['autocomplete'];
+		rows?: number;
 	}
 	let {
 		label,
@@ -21,7 +26,11 @@
 		error,
 		help,
 		placeholder,
-		class: klass = ''
+		class: klass = '',
+		maxlength,
+		minlength,
+		autocomplete,
+		rows
 	}: Props = $props();
 
 	// SSR-stable unique id (consistent across server render + hydration).
@@ -42,6 +51,10 @@
 			bind:value
 			{required}
 			{placeholder}
+			{maxlength}
+			{minlength}
+			{autocomplete}
+			{rows}
 			aria-invalid={error ? true : undefined}
 			aria-describedby={describedBy}
 		></textarea>
@@ -52,6 +65,9 @@
 			bind:value
 			{required}
 			{placeholder}
+			{maxlength}
+			{minlength}
+			{autocomplete}
 			aria-invalid={error ? true : undefined}
 			aria-describedby={describedBy}
 		/>

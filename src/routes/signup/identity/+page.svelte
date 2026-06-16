@@ -98,6 +98,8 @@
 						bind:value={displayName}
 						placeholder={$_('identity.display_name_placeholder')}
 						help={$_('identity.display_name_hint')}
+						maxlength={80}
+						autocomplete="nickname"
 					/>
 
 					<div class="field">

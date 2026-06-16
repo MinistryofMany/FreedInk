@@ -296,6 +296,8 @@
 						bind:value={displayName}
 						placeholder={$_('settings.display_name_placeholder')}
 						help={$_('settings.display_name_hint')}
+						maxlength={80}
+						autocomplete="nickname"
 						class="grow"
 					/>
 					<Button type="submit" disabled={profileBusy}>
@@ -456,6 +458,7 @@
 						confirmLabel={$_('settings.deletion_button')}
 						cancelLabel={$_('settings.cancel')}
 						tone="danger"
+						confirmDisabled={deleteConfirm !== data.user.username}
 						onConfirm={deleteAccount}
 					>
 						{#snippet trigger(props)}
@@ -481,6 +484,7 @@
 								label={$_('settings.deletion_aria_label')}
 								bind:value={deleteConfirm}
 								placeholder={data.user.username}
+								autocomplete="off"
 							/>
 						</div>
 					</AlertDialog>

@@ -70,7 +70,7 @@
 	.latest {
 		margin-top: var(--space-2);
 		padding-top: var(--space-3);
-		border-top: 1px solid var(--color-border);
+		border-top: var(--border-1) solid var(--color-border);
 		font-family: var(--font-ui);
 		font-size: var(--text-xs);
 		color: var(--color-text-muted);

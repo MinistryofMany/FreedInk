@@ -11,6 +11,8 @@
 		cancelLabel?: string;
 		onConfirm: () => void;
 		tone?: 'danger';
+		// Disables the confirm action (e.g. until a confirmation input matches).
+		confirmDisabled?: boolean;
 		// Receives Bits' trigger props to spread onto a single focusable element.
 		trigger?: Snippet<[Record<string, unknown>]>;
 		// Optional extra content (e.g. a confirmation input) rendered inside the
@@ -26,6 +28,7 @@
 		cancelLabel = 'Cancel',
 		onConfirm,
 		tone,
+		confirmDisabled = false,
 		trigger,
 		children
 	}: Props = $props();
@@ -61,6 +64,7 @@
 						<Button
 							variant={tone === 'danger' ? 'danger' : 'primary'}
 							{...props}
+							disabled={confirmDisabled}
 							onclick={() => {
 								onConfirm();
 								open = false;

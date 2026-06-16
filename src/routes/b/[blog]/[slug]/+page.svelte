@@ -318,6 +318,7 @@
 					type="password"
 					bind:value={password}
 					required
+					autocomplete="current-password"
 				/>
 				<div class="form-actions">
 					<Button type="submit">{$_('comments.unlock_button')}</Button>
@@ -331,6 +332,8 @@
 				bind:value={body}
 				required
 				placeholder={$_('comments.placeholder')}
+				maxlength={4000}
+				rows={4}
 			/>
 			<div class="form-actions">
 				<Button type="submit" disabled={busy || !body}>{$_('comments.post_button')}</Button>
@@ -372,6 +375,8 @@
 			multiline
 			bind:value={reportDetails}
 			placeholder={$_('report.details_placeholder')}
+			maxlength={2000}
+			rows={4}
 		/>
 		{#if reportError}<p class="report-err" role="alert">{reportError}</p>{/if}
 		{#if reportOk}<p class="report-ok">{$_('report.submitted_thanks')}</p>{/if}
