@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import type { StatusLevel } from '$lib/db/status';
+	import { Badge, Card, Kicker } from '$lib/components/ui';
 	export let data: PageData;
 
 	$: ({ overall, activeIncidents, recentResolved, grid, generatedAt } = data);
@@ -10,6 +11,13 @@
 		degraded: 'Degraded performance',
 		partial_outage: 'Partial outage',
 		major_outage: 'Major outage'
+	};
+
+	const BADGE_TONE: Record<StatusLevel, 'success' | 'warning' | 'danger'> = {
+		operational: 'success',
+		degraded: 'warning',
+		partial_outage: 'danger',
+		major_outage: 'danger'
 	};
 
 	function levelLabel(level: StatusLevel | null): string {
@@ -27,14 +35,22 @@
 	<meta name="description" content="Current platform status and recent incidents." />
 </svelte:head>
 
-<section class="status-page">
-	<header class="overall level-{overall}">
-		<div class="dot" aria-hidden="true"></div>
-		<h1>{LABELS[overall]}</h1>
+<div class="status-page">
+	<header class="status-header">
+		<Kicker>Status</Kicker>
+		<Card>
+			<div class="overall-inner">
+				<span class="overall-dot level-{overall}" aria-hidden="true"></span>
+				<div class="overall-text">
+					<Badge tone={BADGE_TONE[overall]}>{overall.replace('_', ' ')}</Badge>
+					<h1 class="overall-heading">{LABELS[overall]}</h1>
+				</div>
+			</div>
+		</Card>
 	</header>
 
 	<section class="uptime" aria-label="90-day uptime history">
-		<h2>Last 90 days</h2>
+		<h2 class="section-heading">Last 90 days</h2>
 		<div class="grid" role="img" aria-label="Daily uptime grid">
 			{#each grid as cell (cell.date)}
 				<span
@@ -44,32 +60,41 @@
 			{/each}
 		</div>
 		<div class="legend">
-			<span class="swatch level-operational"></span> Operational
-			<span class="swatch level-degraded"></span> Degraded
-			<span class="swatch level-partial_outage"></span> Partial outage
-			<span class="swatch level-major_outage"></span> Major outage
-			<span class="swatch level-unknown"></span> No data
+			<span class="swatch level-operational" aria-hidden="true"></span>
+			<span>Operational</span>
+			<span class="swatch level-degraded" aria-hidden="true"></span>
+			<span>Degraded</span>
+			<span class="swatch level-partial_outage" aria-hidden="true"></span>
+			<span>Partial outage</span>
+			<span class="swatch level-major_outage" aria-hidden="true"></span>
+			<span>Major outage</span>
+			<span class="swatch level-unknown" aria-hidden="true"></span>
+			<span>No data</span>
 		</div>
 	</section>
 
 	<section aria-label="Active incidents">
-		<h2>Active incidents</h2>
+		<h2 class="section-heading">Active incidents</h2>
 		{#if activeIncidents.length === 0}
 			<p class="ok">No active incidents.</p>
 		{:else}
-			<ul class="incidents">
+			<ul class="incidents" role="list">
 				{#each activeIncidents as inc (inc.id)}
-					<li class="incident level-{inc.level}">
-						<header>
-							<span class="badge level-{inc.level}">{LABELS[inc.level]}</span>
-							<strong>{inc.title}</strong>
-						</header>
-						<p class="meta">
-							Status: <code>{inc.status}</code> · Started {fmt(inc.startedAt)}
-						</p>
-						{#if inc.latestUpdateBody}
-							<p class="update">{inc.latestUpdateBody}</p>
-						{/if}
+					<li>
+						<Card>
+							<div class="incident-inner">
+								<div class="incident-header">
+									<Badge tone={BADGE_TONE[inc.level]}>{LABELS[inc.level]}</Badge>
+									<strong class="incident-title">{inc.title}</strong>
+								</div>
+								<p class="meta">
+									Status: <code>{inc.status}</code> · Started {fmt(inc.startedAt)}
+								</p>
+								{#if inc.latestUpdateBody}
+									<p class="update">{inc.latestUpdateBody}</p>
+								{/if}
+							</div>
+						</Card>
 					</li>
 				{/each}
 			</ul>
@@ -77,23 +102,29 @@
 	</section>
 
 	<section aria-label="Recent incidents">
-		<h2>Recent incidents (last 30 days)</h2>
+		<h2 class="section-heading">Recent incidents (last 30 days)</h2>
 		{#if recentResolved.length === 0}
 			<p class="ok">No incidents reported in the last 30 days.</p>
 		{:else}
-			<ul class="incidents">
+			<ul class="incidents" role="list">
 				{#each recentResolved as inc (inc.id)}
-					<li class="incident resolved">
-						<header>
-							<span class="badge level-{inc.level}">{LABELS[inc.level]}</span>
-							<strong>{inc.title}</strong>
-						</header>
-						<p class="meta">
-							Resolved {inc.resolvedAt ? fmt(inc.resolvedAt) : '—'} · Started {fmt(inc.startedAt)}
-						</p>
-						{#if inc.latestUpdateBody}
-							<p class="update">{inc.latestUpdateBody}</p>
-						{/if}
+					<li>
+						<Card>
+							<div class="incident-inner">
+								<div class="incident-header">
+									<Badge tone="neutral">{LABELS[inc.level]}</Badge>
+									<strong class="incident-title">{inc.title}</strong>
+								</div>
+								<p class="meta">
+									Resolved {inc.resolvedAt ? fmt(inc.resolvedAt) : '—'} · Started {fmt(
+										inc.startedAt
+									)}
+								</p>
+								{#if inc.latestUpdateBody}
+									<p class="update">{inc.latestUpdateBody}</p>
+								{/if}
+							</div>
+						</Card>
 					</li>
 				{/each}
 			</ul>
@@ -103,183 +134,210 @@
 	<footer class="generated">
 		Updated {fmt(generatedAt)}
 	</footer>
-</section>
+</div>
 
 <style>
 	.status-page {
 		max-width: 60rem;
 		margin: 0 auto;
-		padding: 1rem;
+		padding: var(--space-5) var(--space-4);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-8);
 	}
-	.overall {
+
+	.status-header {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.overall-inner {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 1.25rem 1rem;
-		border-radius: 0.5rem;
-		margin-bottom: 1.5rem;
-		border: 1px solid var(--color-border, #ddd);
+		gap: var(--space-4);
 	}
-	.overall .dot {
+
+	.overall-dot {
+		flex: 0 0 1rem;
 		width: 1rem;
 		height: 1rem;
 		border-radius: 50%;
-		flex: 0 0 1rem;
 	}
-	.overall h1 {
+
+	.overall-dot.level-operational {
+		background: var(--color-accent);
+	}
+
+	.overall-dot.level-degraded {
+		background: var(--color-border-strong);
+	}
+
+	.overall-dot.level-partial_outage {
+		background: var(--color-danger);
+	}
+
+	.overall-dot.level-major_outage {
+		background: var(--color-danger);
+	}
+
+	.overall-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.overall-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		color: var(--color-text);
 		margin: 0;
-		font-size: 1.4rem;
+		line-height: 1.2;
 	}
-	.overall.level-operational {
-		background: #e6f7e8;
-		border-color: #2e7d32;
+
+	.section-heading {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--color-text-muted);
+		margin: 0 0 var(--space-4);
 	}
-	.overall.level-operational .dot {
-		background: #2e7d32;
-	}
-	.overall.level-degraded {
-		background: #fff8e1;
-		border-color: #b08900;
-	}
-	.overall.level-degraded .dot {
-		background: #b08900;
-	}
-	.overall.level-partial_outage {
-		background: #ffe9d6;
-		border-color: #d65a00;
-	}
-	.overall.level-partial_outage .dot {
-		background: #d65a00;
-	}
-	.overall.level-major_outage {
-		background: #fde2e2;
-		border-color: #c62828;
-	}
-	.overall.level-major_outage .dot {
-		background: #c62828;
-	}
+
 	.uptime {
-		margin-bottom: 2rem;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
 	}
-	.uptime h2 {
-		font-size: 1.05rem;
-		margin: 0 0 0.5rem;
-	}
+
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(90, 1fr);
 		gap: 2px;
 		min-height: 2.5rem;
 	}
+
 	.cell {
 		height: 2.5rem;
 		border-radius: 2px;
-		background: #ccc;
 	}
+
 	.cell.level-operational {
-		background: #2e7d32;
+		background: var(--color-accent);
 	}
+
 	.cell.level-degraded {
-		background: #b08900;
+		background: var(--color-border-strong);
 	}
+
 	.cell.level-partial_outage {
-		background: #d65a00;
+		background: var(--color-danger);
+		opacity: 0.7;
 	}
+
 	.cell.level-major_outage {
-		background: #c62828;
+		background: var(--color-danger);
 	}
+
 	.cell.level-unknown {
-		background: #e6e6e6;
+		background: var(--color-border);
 	}
+
 	.legend {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem 1rem;
 		align-items: center;
-		font-size: 0.8rem;
-		margin-top: 0.75rem;
-		color: var(--color-text, #333);
+		gap: var(--space-2) var(--space-4);
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
 	}
+
 	.swatch {
 		display: inline-block;
-		width: 0.8rem;
-		height: 0.8rem;
-		margin-right: 0.25rem;
-		vertical-align: -1px;
+		width: 0.75rem;
+		height: 0.75rem;
 		border-radius: 2px;
+		vertical-align: -1px;
 	}
+
 	.swatch.level-operational {
-		background: #2e7d32;
+		background: var(--color-accent);
 	}
+
 	.swatch.level-degraded {
-		background: #b08900;
+		background: var(--color-border-strong);
 	}
+
 	.swatch.level-partial_outage {
-		background: #d65a00;
+		background: var(--color-danger);
+		opacity: 0.7;
 	}
+
 	.swatch.level-major_outage {
-		background: #c62828;
+		background: var(--color-danger);
 	}
+
 	.swatch.level-unknown {
-		background: #e6e6e6;
+		background: var(--color-border);
 	}
-	h2 {
-		font-size: 1.05rem;
-		margin: 1.5rem 0 0.5rem;
-	}
-	.ok {
-		color: #2e7d32;
-	}
+
 	.incidents {
 		list-style: none;
 		padding: 0;
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-4);
 	}
-	.incident {
-		border: 1px solid var(--color-border, #ddd);
-		border-radius: 0.4rem;
-		padding: 0.75rem 1rem;
-	}
-	.incident header {
+
+	.incident-inner {
 		display: flex;
-		gap: 0.5rem;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.incident-header {
+		display: flex;
 		align-items: center;
-		margin-bottom: 0.25rem;
+		gap: var(--space-3);
+		flex-wrap: wrap;
 	}
-	.badge {
-		font-size: 0.75rem;
-		padding: 0.1rem 0.5rem;
-		border-radius: 999px;
-		color: #fff;
+
+	.incident-title {
+		font-family: var(--font-ui);
+		font-size: var(--text-base);
+		color: var(--color-text);
+		font-weight: 600;
 	}
-	.badge.level-operational {
-		background: #2e7d32;
-	}
-	.badge.level-degraded {
-		background: #b08900;
-	}
-	.badge.level-partial_outage {
-		background: #d65a00;
-	}
-	.badge.level-major_outage {
-		background: #c62828;
-	}
+
 	.meta {
-		font-size: 0.85rem;
-		color: #555;
-		margin: 0.1rem 0 0.25rem;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+		margin: 0;
 	}
+
 	.update {
-		margin: 0.25rem 0 0;
+		font-family: var(--font-standfirst);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		margin: 0;
 		white-space: pre-wrap;
 	}
+
+	.ok {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-accent);
+		margin: 0;
+	}
+
 	.generated {
-		margin-top: 2rem;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
 		text-align: right;
-		font-size: 0.8rem;
-		color: #777;
 	}
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { Kicker } from '$lib/components/ui';
 	const links = [
 		{ href: '/legal/privacy', label: 'Privacy' },
 		{ href: '/legal/terms', label: 'Terms' },
@@ -11,12 +12,12 @@
 
 <div class="legal-wrap">
 	<aside>
-		<h3>Legal</h3>
-		<nav>
+		<Kicker>Legal</Kicker>
+		<nav aria-label="Legal pages">
 			<ul>
 				{#each links as l}
 					<li>
-						<a href={l.href} class:active={current === l.href}>{l.label}</a>
+						<a href={l.href} aria-current={current === l.href ? 'page' : undefined}>{l.label}</a>
 					</li>
 				{/each}
 			</ul>
@@ -31,77 +32,147 @@
 	.legal-wrap {
 		display: grid;
 		grid-template-columns: 16rem 1fr;
-		gap: 2rem;
+		gap: var(--space-8);
 		max-width: 90ch;
-		margin: 1rem auto;
-		padding: 0 1rem;
+		margin: var(--space-5) auto;
+		padding: 0 var(--space-5);
 	}
+
 	aside {
-		border-right: 1px solid var(--color-green-light);
-		padding-right: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		border-right: var(--border-1) solid var(--color-border);
+		padding-right: var(--space-5);
 	}
-	aside h3 {
-		margin-top: 0;
-	}
+
 	aside ul {
 		list-style: none;
 		padding: 0;
 		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
-	aside li {
-		margin: 0.25rem 0;
+
+	aside a {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		text-decoration: none;
+		display: block;
+		padding: var(--space-1) 0;
+		transition: color var(--transition-fast) var(--ease);
 	}
-	aside a.active {
-		font-weight: 700;
+
+	aside a:hover {
+		color: var(--color-accent);
 	}
+
+	aside a[aria-current='page'] {
+		color: var(--color-accent);
+		font-weight: 600;
+	}
+
 	article {
 		max-width: 70ch;
-		line-height: 1.55;
+		line-height: 1.6;
+		font-family: var(--font-standfirst);
+		font-size: var(--text-base);
+		color: var(--color-text);
 	}
+
 	article :global(h1) {
-		margin-top: 0;
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		color: var(--color-text);
+		margin: 0 0 var(--space-5);
+		line-height: 1.2;
 	}
+
 	article :global(h2) {
-		margin-top: 2rem;
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		color: var(--color-text);
+		margin: var(--space-6) 0 var(--space-3);
 	}
+
+	article :global(h3) {
+		font-family: var(--font-display);
+		font-size: var(--text-lg);
+		color: var(--color-text);
+		margin: var(--space-5) 0 var(--space-2);
+	}
+
+	article :global(p) {
+		margin: 0 0 var(--space-4);
+	}
+
 	article :global(blockquote) {
-		border-left: 3px solid var(--color-green-light);
-		padding-left: 0.75rem;
-		color: var(--color-green-dark);
-		background: var(--color-green-white);
+		border-left: var(--border-2) solid var(--color-border-strong);
+		padding-left: var(--space-4);
+		color: var(--color-text-muted);
+		background: var(--color-surface-alt);
+		margin: var(--space-4) 0;
+		padding-top: var(--space-3);
+		padding-bottom: var(--space-3);
+		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 	}
+
 	article :global(pre) {
-		background: var(--color-green-white);
-		padding: 0.75rem;
+		background: var(--color-surface-alt);
+		padding: var(--space-4);
 		overflow-x: auto;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-sm);
+		margin: var(--space-4) 0;
 	}
+
 	article :global(table) {
 		border-collapse: collapse;
-		margin: 0.75rem 0;
+		margin: var(--space-4) 0;
+		width: 100%;
 	}
+
 	article :global(th),
 	article :global(td) {
-		border: 1px solid var(--color-green-light);
-		padding: 0.35rem 0.5rem;
+		border: var(--border-1) solid var(--color-border);
+		padding: var(--space-2) var(--space-3);
 		text-align: left;
+		font-size: var(--text-sm);
 	}
+
+	article :global(th) {
+		background: var(--color-surface-alt);
+		font-family: var(--font-ui);
+		font-weight: 600;
+	}
+
+	article :global(a) {
+		color: var(--color-link);
+	}
+
+	article :global(a:hover) {
+		color: var(--color-link-hover);
+	}
+
 	@media (max-width: 720px) {
 		.legal-wrap {
 			grid-template-columns: 1fr;
+			gap: var(--space-5);
 		}
+
 		aside {
-			border-right: 0;
-			border-bottom: 1px solid var(--color-green-light);
-			padding: 0 0 0.5rem;
+			border-right: none;
+			border-bottom: var(--border-1) solid var(--color-border);
+			padding-right: 0;
+			padding-bottom: var(--space-4);
 		}
+
 		aside ul {
-			display: flex;
+			flex-direction: row;
 			flex-wrap: wrap;
-			gap: 0.75rem;
-		}
-		aside li {
-			margin: 0;
+			gap: var(--space-3);
 		}
 	}
 </style>

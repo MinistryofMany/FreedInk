@@ -16,6 +16,16 @@
 	} from '$lib/client/push';
 	import { _ } from '$lib/i18n';
 	import { get } from 'svelte/store';
+	import {
+		Card,
+		Field,
+		Button,
+		Kicker,
+		SegmentedControl,
+		AlertDialog,
+		Badge,
+		Tag
+	} from '$lib/components/ui';
 
 	export let data;
 	let busy = false;
@@ -125,6 +135,16 @@
 			document.cookie = `freedink_theme=${pref}; Path=/; Max-Age=31536000; SameSite=Lax`;
 		}
 	}
+
+	// Bridge the SegmentedControl's bound value to the existing applyTheme().
+	// `themeSel` is the control's bound value (a plain string, its value type)
+	// constrained at runtime to the three options. When the control changes it,
+	// the reactive guard below fires applyTheme — but only while the two differ.
+	// applyTheme writes `themePref = themeSel`, so after one run they match again
+	// and the statement never re-fires: no loop.
+	let themeSel: string = themePref;
+	$: if (themeSel !== themePref) applyTheme(themeSel as ThemePref);
+
 	let rotatePassword = '';
 	let rotateConfirm = '';
 	let identities = data.identities;
@@ -242,363 +262,409 @@
 			busy = false;
 		}
 	}
+
+	const themeOptions = [
+		{ value: 'system', label: 'System' },
+		{ value: 'light', label: 'Light' },
+		{ value: 'dark', label: 'Dark' }
+	];
+
+	function badgeTone(status: string): 'success' | 'danger' | 'neutral' {
+		if (status === 'active') return 'success';
+		if (status === 'revoked') return 'danger';
+		return 'neutral';
+	}
 </script>
 
-<h2>{$_('settings.heading')}</h2>
+<div class="page-wrap">
+	<h1 class="page-heading">{$_('settings.heading')}</h1>
 
-<section>
-	<h3>{$_('settings.account_heading')}</h3>
-	<dl>
-		<dt>{$_('settings.username_label')}</dt>
-		<dd>{data.user.username}</dd>
-		<dt>{$_('settings.email_label')}</dt>
-		<dd>{data.user.email ?? '—'}</dd>
-	</dl>
-	<form on:submit|preventDefault={saveProfile} class="profile-form">
-		<label>
-			{$_('settings.display_name_label')}
-			<input
-				type="text"
-				bind:value={displayName}
-				maxlength="80"
-				placeholder={$_('settings.display_name_placeholder')}
-				autocomplete="nickname"
-			/>
-		</label>
-		<button type="submit" disabled={profileBusy}>
-			{profileBusy ? $_('settings.saving') : $_('settings.save_button')}
-		</button>
-	</form>
-	<p class="muted">{$_('settings.display_name_hint')}</p>
-	{#if profileMsg}<p class="profile-msg">{profileMsg}</p>{/if}
-</section>
+	<div class="sections">
+		<!-- Account -->
+		<Card padding="lg">
+			<div class="stack">
+				<Kicker>{$_('settings.account_heading')}</Kicker>
+				<dl class="kv">
+					<dt>{$_('settings.username_label')}</dt>
+					<dd>{data.user.username}</dd>
+					<dt>{$_('settings.email_label')}</dt>
+					<dd>{data.user.email ?? '—'}</dd>
+				</dl>
+				<form on:submit|preventDefault={saveProfile} class="row-form">
+					<Field
+						label={$_('settings.display_name_label')}
+						bind:value={displayName}
+						placeholder={$_('settings.display_name_placeholder')}
+						help={$_('settings.display_name_hint')}
+						maxlength={80}
+						autocomplete="nickname"
+						class="grow"
+					/>
+					<Button type="submit" disabled={profileBusy}>
+						{profileBusy ? $_('settings.saving') : $_('settings.save_button')}
+					</Button>
+				</form>
+				{#if profileMsg}<p class="status">{profileMsg}</p>{/if}
+			</div>
+		</Card>
 
-<section>
-	<h3>{$_('settings.identity_heading')}</h3>
-	<ul>
-		{#each identities as id}
-			<li>
-				<code>{id.idc.slice(0, 12)}…</code> · {id.status}
-				{#if id.status === 'revoked' && id.revokedAt}
-					· revoked {new Date(id.revokedAt).toLocaleString()}
-				{/if}
-			</li>
-		{/each}
-	</ul>
-	<details>
-		<summary>{$_('settings.rotate_identity_summary')}</summary>
-		<p>{$_('settings.rotate_identity_blurb')}</p>
-		<form on:submit|preventDefault={rotateIdentity}>
-			<label>
-				{$_('settings.new_password_label')}
-				<input
-					type="password"
-					bind:value={rotatePassword}
-					required
-					minlength="12"
-					autocomplete="new-password"
-				/>
-			</label>
-			<label>
-				{$_('settings.confirm_label')}
-				<input
-					type="password"
-					bind:value={rotateConfirm}
-					required
-					minlength="12"
-					autocomplete="new-password"
-				/>
-			</label>
-			<button type="submit" disabled={busy}>{$_('settings.rotate_button')}</button>
-		</form>
-	</details>
-</section>
-
-<section>
-	<h3>{$_('settings.sessions_heading')}</h3>
-	{#if sessions.length === 0}
-		<p>{$_('settings.no_sessions')}</p>
-	{:else}
-		<ul class="sessions">
-			{#each sessions as s}
-				<li>
-					<div class="meta">
-						<div>
-							<code title={s.userAgent ?? ''}
-								>{(s.userAgent ?? $_('settings.unknown_agent')).slice(0, 80)}</code
-							>
-							{#if s.current}<span class="tag">{$_('settings.this_device')}</span>{/if}
-						</div>
-						<small>
-							{$_('settings.session_meta', {
-								values: {
-									ip: s.ip ?? '—',
-									lastSeen: new Date(s.lastSeenAt).toLocaleString(),
-									started: new Date(s.createdAt).toLocaleDateString()
-								}
-							})}
-						</small>
+		<!-- Identity -->
+		<Card padding="lg">
+			<div class="stack">
+				<Kicker>{$_('settings.identity_heading')}</Kicker>
+				<ul class="id-list">
+					{#each identities as id}
+						<li>
+							<code>{id.idc.slice(0, 12)}…</code>
+							<Badge tone={badgeTone(id.status)}>{id.status}</Badge>
+							{#if id.status === 'revoked' && id.revokedAt}
+								<span class="muted-inline">· revoked {new Date(id.revokedAt).toLocaleString()}</span
+								>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				<details class="disclosure">
+					<summary>{$_('settings.rotate_identity_summary')}</summary>
+					<div class="stack disclosure-body">
+						<p class="muted">{$_('settings.rotate_identity_blurb')}</p>
+						<form on:submit|preventDefault={rotateIdentity} class="stack-form">
+							<Field
+								label={$_('settings.new_password_label')}
+								type="password"
+								bind:value={rotatePassword}
+								required
+							/>
+							<Field
+								label={$_('settings.confirm_label')}
+								type="password"
+								bind:value={rotateConfirm}
+								required
+							/>
+							<div>
+								<Button type="submit" disabled={busy}>{$_('settings.rotate_button')}</Button>
+							</div>
+						</form>
 					</div>
-					{#if !s.current}
-						<button type="button" disabled={busy} on:click={() => revokeSession(s.id)}>
-							{$_('settings.revoke_button')}
-						</button>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	{/if}
-</section>
+				</details>
+			</div>
+		</Card>
 
-<section>
-	<h3>Notifications</h3>
-	<p class="muted">
-		Get a desktop / mobile notification when a post needs review on a blog you moderate, or when a
-		new post is published on a blog you belong to. The permission is per-browser; enable on each
-		device separately.
-	</p>
-	{#if pushStatus === 'unsupported'}
-		<button type="button" disabled>Push not supported in this browser</button>
-	{:else if pushStatus === 'denied'}
-		<button type="button" disabled>Notifications blocked — re-enable in browser settings</button>
-	{:else if pushStatus === 'subscribed'}
-		<button type="button" disabled={pushBusy} on:click={togglePush}>
-			Disable push notifications
-		</button>
-	{:else}
-		<button type="button" disabled={pushBusy} on:click={togglePush}>
-			Enable push notifications
-		</button>
-	{/if}
-	{#if pushMsg}<p>{pushMsg}</p>{/if}
-</section>
+		<!-- Sessions -->
+		<Card padding="lg">
+			<div class="stack">
+				<Kicker>{$_('settings.sessions_heading')}</Kicker>
+				{#if sessions.length === 0}
+					<p class="muted">{$_('settings.no_sessions')}</p>
+				{:else}
+					<ul class="sessions">
+						{#each sessions as s}
+							<li>
+								<div class="meta">
+									<div class="meta-head">
+										<code title={s.userAgent ?? ''}
+											>{(s.userAgent ?? $_('settings.unknown_agent')).slice(0, 80)}</code
+										>
+										{#if s.current}<Tag variant="solid">{$_('settings.this_device')}</Tag>{/if}
+									</div>
+									<small class="muted">
+										{$_('settings.session_meta', {
+											values: {
+												ip: s.ip ?? '—',
+												lastSeen: new Date(s.lastSeenAt).toLocaleString(),
+												started: new Date(s.createdAt).toLocaleDateString()
+											}
+										})}
+									</small>
+								</div>
+								{#if !s.current}
+									<Button
+										variant="ghost"
+										size="sm"
+										disabled={busy}
+										onclick={() => revokeSession(s.id)}
+									>
+										{$_('settings.revoke_button')}
+									</Button>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</Card>
 
-<section class="theme">
-	<h3>Appearance</h3>
-	<p class="muted">
-		Choose a theme. "System" follows your operating system's light/dark setting; the other two pin
-		the site to that palette across devices that share this browser.
-	</p>
-	<fieldset class="theme-options">
-		<legend class="sr-only">Theme</legend>
-		<label class="theme-option">
-			<input
-				type="radio"
-				name="theme"
-				value="system"
-				checked={themePref === 'system'}
-				on:change={() => applyTheme('system')}
-			/>
-			<span>System</span>
-		</label>
-		<label class="theme-option">
-			<input
-				type="radio"
-				name="theme"
-				value="light"
-				checked={themePref === 'light'}
-				on:change={() => applyTheme('light')}
-			/>
-			<span>Light</span>
-		</label>
-		<label class="theme-option">
-			<input
-				type="radio"
-				name="theme"
-				value="dark"
-				checked={themePref === 'dark'}
-				on:change={() => applyTheme('dark')}
-			/>
-			<span>Dark</span>
-		</label>
-	</fieldset>
-</section>
+		<!-- Notifications -->
+		<Card padding="lg">
+			<div class="stack">
+				<Kicker>Notifications</Kicker>
+				<p class="muted">
+					Get a desktop / mobile notification when a post needs review on a blog you moderate, or
+					when a new post is published on a blog you belong to. The permission is per-browser;
+					enable on each device separately.
+				</p>
+				{#if pushStatus === 'unsupported'}
+					<div><Button variant="ghost" disabled>Push not supported in this browser</Button></div>
+				{:else if pushStatus === 'denied'}
+					<div>
+						<Button variant="ghost" disabled
+							>Notifications blocked — re-enable in browser settings</Button
+						>
+					</div>
+				{:else if pushStatus === 'subscribed'}
+					<div>
+						<Button variant="ghost" disabled={pushBusy} onclick={togglePush}>
+							Disable push notifications
+						</Button>
+					</div>
+				{:else}
+					<div>
+						<Button disabled={pushBusy} onclick={togglePush}>Enable push notifications</Button>
+					</div>
+				{/if}
+				{#if pushMsg}<p class="status">{pushMsg}</p>{/if}
+			</div>
+		</Card>
 
-<section class="data-rights">
-	<h3>{$_('settings.data_rights_heading')}</h3>
-	<p>
-		{$_('settings.data_rights_blurb_prefix')}
-		<a href="/legal/data-rights">{$_('settings.data_rights_link')}</a>
-		{$_('settings.data_rights_blurb_suffix')}
-	</p>
-	<div class="dr-actions">
-		<button type="button" disabled={dataBusy} on:click={downloadExport}>
-			{$_('settings.download_data')}
-		</button>
-		{#if !deleteOpen}
-			<button
-				type="button"
-				class="danger"
-				disabled={dataBusy}
-				on:click={() => {
-					deleteOpen = true;
-					deleteConfirm = '';
-					dataMsg = '';
-				}}
-			>
-				{$_('settings.delete_account')}
-			</button>
-		{/if}
+		<!-- Appearance -->
+		<Card padding="lg">
+			<div class="stack">
+				<Kicker>Appearance</Kicker>
+				<p class="muted">
+					Choose a theme. "System" follows your operating system's light/dark setting; the other two
+					pin the site to that palette across devices that share this browser.
+				</p>
+				<SegmentedControl ariaLabel="Theme" options={themeOptions} bind:value={themeSel} />
+			</div>
+		</Card>
+
+		<!-- Data rights -->
+		<Card padding="lg">
+			<div class="stack">
+				<Kicker>{$_('settings.data_rights_heading')}</Kicker>
+				<p class="muted">
+					{$_('settings.data_rights_blurb_prefix')}
+					<a href="/legal/data-rights">{$_('settings.data_rights_link')}</a>
+					{$_('settings.data_rights_blurb_suffix')}
+				</p>
+				<div class="dr-actions">
+					<Button disabled={dataBusy} onclick={downloadExport}>
+						{$_('settings.download_data')}
+					</Button>
+					<AlertDialog
+						bind:open={deleteOpen}
+						title={$_('settings.confirm_deletion_heading')}
+						description={$_('settings.deletion_explanation')}
+						confirmLabel={$_('settings.deletion_button')}
+						cancelLabel={$_('settings.cancel')}
+						tone="danger"
+						confirmDisabled={deleteConfirm !== data.user.username}
+						onConfirm={deleteAccount}
+					>
+						{#snippet trigger(props)}
+							<Button
+								variant="danger"
+								disabled={dataBusy}
+								{...props}
+								onclick={() => {
+									deleteConfirm = '';
+									dataMsg = '';
+								}}
+							>
+								{$_('settings.delete_account')}
+							</Button>
+						{/snippet}
+						<div class="del-confirm stack">
+							<p class="muted">
+								{$_('settings.deletion_confirm_prompt_prefix')}
+								<code>{data.user.username}</code>
+								{$_('settings.deletion_confirm_prompt_suffix')}
+							</p>
+							<Field
+								label={$_('settings.deletion_aria_label')}
+								bind:value={deleteConfirm}
+								placeholder={data.user.username}
+								autocomplete="off"
+							/>
+						</div>
+					</AlertDialog>
+				</div>
+				{#if dataMsg}<p class="status">{dataMsg}</p>{/if}
+			</div>
+		</Card>
 	</div>
-	{#if deleteOpen}
-		<div class="dr-modal" role="dialog" aria-modal="true" aria-labelledby="del-h">
-			<h4 id="del-h">{$_('settings.confirm_deletion_heading')}</h4>
-			<p>{$_('settings.deletion_explanation')}</p>
-			<p>
-				{$_('settings.deletion_confirm_prompt_prefix')}
-				<code>{data.user.username}</code>
-				{$_('settings.deletion_confirm_prompt_suffix')}
-			</p>
-			<form on:submit|preventDefault={deleteAccount} class="del-form">
-				<input
-					type="text"
-					bind:value={deleteConfirm}
-					placeholder={data.user.username}
-					autocomplete="off"
-					aria-label={$_('settings.deletion_aria_label')}
-				/>
-				<button
-					type="submit"
-					class="danger"
-					disabled={dataBusy || deleteConfirm !== data.user.username}
-				>
-					{$_('settings.deletion_button')}
-				</button>
-				<button
-					type="button"
-					on:click={() => {
-						deleteOpen = false;
-						deleteConfirm = '';
-					}}
-					disabled={dataBusy}
-				>
-					{$_('settings.cancel')}
-				</button>
-			</form>
-		</div>
-	{/if}
-	{#if dataMsg}<p>{dataMsg}</p>{/if}
-</section>
 
-{#if msg}<p>{msg}</p>{/if}
+	{#if msg}<p class="status">{msg}</p>{/if}
+</div>
 
 <style>
-	section {
-		margin: 1rem 0;
+	.page-wrap {
+		max-width: 44rem;
+		margin: var(--space-8) auto;
+		padding: 0 var(--space-4);
 	}
-	form {
-		display: flex;
-		gap: 0.5rem;
-		align-items: end;
-		flex-wrap: wrap;
+
+	.page-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		font-weight: 700;
+		color: var(--color-text);
+		margin: 0 0 var(--space-6);
+		line-height: 1.2;
 	}
-	label {
+
+	.sections {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: var(--space-5);
 	}
-	dl {
+
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.kv {
 		display: grid;
 		grid-template-columns: max-content 1fr;
-		gap: 0.25rem 1rem;
+		gap: var(--space-1) var(--space-4);
+		margin: 0;
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
 	}
-	dt {
+
+	.kv dt {
 		font-weight: 600;
+		color: var(--color-text-muted);
 	}
+
+	.kv dd {
+		margin: 0;
+		color: var(--color-text);
+	}
+
+	.row-form {
+		display: flex;
+		gap: var(--space-3);
+		align-items: flex-end;
+		flex-wrap: wrap;
+	}
+
+	.row-form :global(.grow) {
+		flex: 1;
+		min-width: 14rem;
+	}
+
+	.stack-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		max-width: 22rem;
+	}
+
+	.id-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+	}
+
+	.id-list li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+
+	.muted-inline {
+		color: var(--color-text-muted);
+		font-size: var(--text-xs);
+	}
+
+	.disclosure {
+		font-family: var(--font-ui);
+	}
+
+	.disclosure summary {
+		cursor: pointer;
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-accent);
+	}
+
+	.disclosure-body {
+		margin-top: var(--space-3);
+	}
+
 	.sessions {
 		list-style: none;
 		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
 	}
+
 	.sessions li {
 		display: flex;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.5rem 0;
-		border-bottom: 1px solid var(--color-border, #e5e7eb);
+		gap: var(--space-4);
+		padding: var(--space-3) 0;
+		border-bottom: var(--border-1) solid var(--color-border);
 		align-items: center;
 	}
+
+	.sessions li:last-child {
+		border-bottom: none;
+	}
+
 	.meta {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: var(--space-1);
+		min-width: 0;
 	}
-	.tag {
-		display: inline-block;
-		background: #eef;
-		color: #224;
-		padding: 0.05rem 0.4rem;
-		border-radius: 0.25rem;
-		font-size: 0.75rem;
-		margin-left: 0.5rem;
+
+	.meta-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
 	}
-	.data-rights {
-		border-top: 1px solid var(--color-green-light);
-		padding-top: 1rem;
-	}
+
 	.dr-actions {
 		display: flex;
-		gap: 0.75rem;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 		align-items: center;
 	}
-	button.danger,
-	:global(button.danger) {
-		background-color: var(--color-red) !important;
-		color: white !important;
-		border-color: var(--color-red-dark);
+
+	.del-confirm {
+		border-left: var(--border-2) solid var(--color-danger);
+		padding-left: var(--space-4);
 	}
-	button.danger:hover,
-	:global(button.danger:hover) {
-		background-color: var(--color-red-dark) !important;
-		color: white !important;
-	}
-	.dr-modal {
-		border: 1px solid var(--color-red);
-		background: var(--color-green-white);
-		padding: 1rem;
-		border-radius: 0.4rem;
-		margin-top: 0.75rem;
-	}
-	.dr-modal h4 {
-		margin-top: 0;
-	}
-	.del-form {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		align-items: center;
-	}
-	.del-form input {
-		padding: 0.35rem 0.5rem;
-	}
+
 	.muted {
 		color: var(--color-text-muted);
 		max-width: 60ch;
 		font-size: var(--text-sm);
-	}
-	.theme-options {
-		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-		border: 0;
-		padding: 0;
+		font-family: var(--font-ui);
 		margin: 0;
 	}
-	.theme-option {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.65rem 0.9rem;
-		border: 1px solid var(--color-border);
-		border-radius: 0.4rem;
-		cursor: pointer;
-		min-height: var(--touch-target);
-		background: var(--color-surface);
-	}
-	.theme-option input {
-		min-height: 0;
-		width: 18px;
-		height: 18px;
+
+	.status {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
 		margin: 0;
+	}
+
+	code {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-sm);
 	}
 </style>

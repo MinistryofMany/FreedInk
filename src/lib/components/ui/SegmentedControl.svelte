@@ -9,9 +9,24 @@
 		value?: string;
 		ariaLabel: string;
 		class?: string;
+		// Called whenever the user selects an option. Use this (with a plain
+		// `value=` prop, not `bind:`) for a controlled segmented control whose
+		// source of truth lives elsewhere.
+		onValueChange?: (value: string) => void;
 	}
 
-	let { options, value = $bindable<string>(), ariaLabel, class: klass = '' }: Props = $props();
+	let {
+		options,
+		value = $bindable<string>(),
+		ariaLabel,
+		class: klass = '',
+		onValueChange
+	}: Props = $props();
+
+	function choose(v: string) {
+		value = v;
+		onValueChange?.(v);
+	}
 
 	// Roving tabindex: only the selected radio is tabbable, and arrow keys move
 	// both selection and DOM focus (focus follows selection within the group).
@@ -24,7 +39,7 @@
 		else if (e.key === 'End') next = last;
 		if (next === null) return;
 		e.preventDefault();
-		value = options[next].value;
+		choose(options[next].value);
 		const group = (e.currentTarget as HTMLElement).parentElement;
 		group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
 	}
@@ -39,7 +54,7 @@
 			tabindex={value === opt.value || (value === undefined && idx === 0) ? 0 : -1}
 			class="segment"
 			class:selected={value === opt.value}
-			onclick={() => (value = opt.value)}
+			onclick={() => choose(opt.value)}
 			onkeydown={(e) => handleKeydown(e, idx)}>{opt.label}</button
 		>
 	{/each}

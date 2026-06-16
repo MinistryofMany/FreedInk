@@ -10,6 +10,9 @@
 	// module load. Importing `_` and `locale` here gives us the translator
 	// store + a way to flip languages at runtime.
 	import { _, locale, SUPPORTED_LOCALES } from '$lib/i18n';
+	import Wordmark from '$lib/components/ui/Wordmark.svelte';
+	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	export let data;
 	$: signedIn = !!data.user;
@@ -159,45 +162,53 @@
 <header>
 	<nav aria-label={$_('a11y.nav_primary')}>
 		<div class="brand">
-			<a href="/" class="nav-title" aria-current={isCurrent('/')}>{$_('nav.brand')}</a>
-			<a href="/b" aria-current={isCurrent('/b')}>{$_('nav.blogs')}</a>
-			<a href="/search" aria-current={isCurrent('/search')}>{$_('nav.search')}</a>
+			<Wordmark />
+			<div class="nav-links">
+				<a href="/b" aria-current={isCurrent('/b')}>{$_('nav.blogs')}</a>
+				<a href="/search" aria-current={isCurrent('/search')}>{$_('nav.search')}</a>
+			</div>
 		</div>
 
 		<!-- Desktop right nav. Hidden below 768px in favor of the hamburger. -->
 		<div class="nav-right desktop-only">
+			<ThemeToggle initial={data.theme} />
 			{#if signedIn}
-				<a href="/admin" aria-current={isCurrent('/admin')}>{$_('nav.dashboard')}</a>
-				<a href="/settings" aria-current={isCurrent('/settings')}
+				<a href="/admin" class="nav-link" aria-current={isCurrent('/admin')}
+					>{$_('nav.dashboard')}</a
+				>
+				<a href="/settings" class="nav-link" aria-current={isCurrent('/settings')}
 					>{data.user?.displayName?.trim() || data.user?.username}</a
 				>
-				<button type="button" on:click={signOut}>{$_('nav.sign_out')}</button>
+				<Button variant="ghost" onclick={signOut}>{$_('nav.sign_out')}</Button>
 			{:else}
-				<a href="/signup" class="btn" aria-current={isCurrent('/signup')}>{$_('nav.sign_in_up')}</a>
+				<Button href="/signup">{$_('nav.sign_in_up')}</Button>
 			{/if}
 		</div>
 
-		<!-- Hamburger toggle, only visible on narrow viewports. -->
-		<button
-			type="button"
-			class="hamburger mobile-only"
-			aria-label={$_('a11y.open_menu')}
-			aria-expanded={drawerOpen}
-			aria-controls="mobile-drawer"
-			bind:this={hamburgerBtn}
-			on:click={openDrawer}
-		>
-			<span aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="24" height="24" focusable="false">
-					<path
-						d="M3 6h18M3 12h18M3 18h18"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-					/>
-				</svg>
-			</span>
-		</button>
+		<div class="mobile-actions mobile-only">
+			<ThemeToggle initial={data.theme} />
+			<!-- Hamburger toggle, only visible on narrow viewports. -->
+			<button
+				type="button"
+				class="hamburger"
+				aria-label={$_('a11y.open_menu')}
+				aria-expanded={drawerOpen}
+				aria-controls="mobile-drawer"
+				bind:this={hamburgerBtn}
+				on:click={openDrawer}
+			>
+				<span aria-hidden="true">
+					<svg viewBox="0 0 24 24" width="24" height="24" focusable="false">
+						<path
+							d="M3 6h18M3 12h18M3 18h18"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</span>
+			</button>
+		</div>
 	</nav>
 </header>
 
@@ -237,9 +248,9 @@
 		{#if signedIn}
 			<a href="/admin" aria-current={isCurrent('/admin')}>{$_('nav.dashboard')}</a>
 			<a href="/settings" aria-current={isCurrent('/settings')}>{data.user?.username}</a>
-			<button type="button" on:click={signOut}>{$_('nav.sign_out')}</button>
+			<Button variant="ghost" class="drawer-action" onclick={signOut}>{$_('nav.sign_out')}</Button>
 		{:else}
-			<a href="/signup" class="btn" aria-current={isCurrent('/signup')}>{$_('nav.sign_in_up')}</a>
+			<Button href="/signup" class="drawer-action">{$_('nav.sign_in_up')}</Button>
 		{/if}
 	</nav>
 </div>
@@ -252,17 +263,20 @@
      link is universally useful); the locale picker is only shown when more
      than one locale is shipped to avoid noise from a single-option select. -->
 <footer class="site-footer">
-	<a href="/status" class="footer-link">Status</a>
-	{#if SUPPORTED_LOCALES.length > 1}
-		<label class="locale-picker">
-			<span>{$_('footer.language')}:</span>
-			<select value={$locale ?? 'en'} on:change={onLocaleChange}>
-				{#each SUPPORTED_LOCALES as code}
-					<option value={code}>{$_(`locales.${code}`)}</option>
-				{/each}
-			</select>
-		</label>
-	{/if}
+	<Wordmark as="span" class="footer-wordmark" />
+	<div class="footer-right">
+		<a href="/status" class="footer-link">Status</a>
+		{#if SUPPORTED_LOCALES.length > 1}
+			<label class="locale-picker">
+				<span>{$_('footer.language')}:</span>
+				<select value={$locale ?? 'en'} on:change={onLocaleChange}>
+					{#each SUPPORTED_LOCALES as code}
+						<option value={code}>{$_(`locales.${code}`)}</option>
+					{/each}
+				</select>
+			</label>
+		{/if}
+	</div>
 </footer>
 
 <style global>
@@ -306,13 +320,8 @@
 		font-size: var(--text-base);
 	}
 
-	:global(nav > a, button) {
-		font-family: var(--heading-font);
-		text-decoration: none;
-	}
-
 	main {
-		margin: 1rem;
+		margin: var(--space-4);
 		display: flex;
 		flex-direction: column;
 		min-height: 60vh;
@@ -321,48 +330,64 @@
 		outline: none;
 	}
 
-	.nav-title {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		margin-right: 1.5rem;
+	header {
+		border-bottom: var(--border-1) solid var(--color-border);
+		background-color: var(--nav-bg);
 	}
 
 	nav {
 		background-color: var(--nav-bg);
 		color: var(--nav-fg);
-		padding: 0.5rem 1rem;
+		padding: var(--space-3) var(--space-4);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.5rem;
+		gap: var(--space-3);
 		flex-wrap: wrap;
-	}
-
-	nav a {
-		color: var(--nav-fg);
-		margin-right: 1rem;
-		text-shadow: none;
-		padding: 0.6rem 0.4rem;
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--touch-target);
-	}
-	nav a:hover {
-		color: var(--nav-fg);
-		text-decoration: underline;
-	}
-	nav a[aria-current='page'] {
-		text-decoration: underline;
-		text-underline-offset: 4px;
-		font-weight: 700;
 	}
 
 	nav .brand,
-	nav .nav-right {
+	nav .nav-right,
+	nav .nav-links,
+	nav .mobile-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-3);
 		flex-wrap: wrap;
+	}
+
+	nav .brand {
+		gap: var(--space-5);
+	}
+
+	/* In-nav text links (Blogs, Search, Dashboard, displayName). Token-styled,
+	   editorial: ink text on paper, Forest on hover, underlined when current. */
+	nav .nav-links a,
+	nav .nav-right .nav-link {
+		color: var(--color-text);
+		font-family: var(--font-ui);
+		font-weight: 500;
+		font-size: var(--text-sm);
+		text-decoration: none;
+		text-shadow: none;
+		padding: var(--space-2) var(--space-1);
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--touch-target);
+		border-radius: var(--radius-sm);
+		transition: color var(--transition-fast) var(--ease);
+	}
+	nav .nav-links a:hover,
+	nav .nav-right .nav-link:hover {
+		color: var(--color-accent);
+		text-decoration: none;
+	}
+	nav .nav-links a[aria-current='page'],
+	nav .nav-right .nav-link[aria-current='page'] {
+		color: var(--color-accent);
+		text-decoration: underline;
+		text-underline-offset: 4px;
+		font-weight: 700;
 	}
 
 	/* Legacy global button styling for not-yet-redesigned pages. NOT !important
@@ -392,21 +417,24 @@
 	}
 
 	/* Hamburger button styles — only rendered on narrow viewports via the
-	   mobile-only class. Uses inherited nav fg color for the icon. */
+	   mobile-actions wrapper. Token-styled, transparent against the paper nav. */
 	.hamburger {
-		background: transparent !important;
-		color: var(--nav-fg) !important;
-		border: 1px solid transparent !important;
-		padding: 0.5rem !important;
+		background: transparent;
+		color: var(--color-text);
+		border: var(--border-1) solid transparent;
+		border-radius: var(--radius-sm);
+		padding: var(--space-2);
 		min-width: var(--touch-target);
 		min-height: var(--touch-target);
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		cursor: pointer;
+		transition: background var(--transition-fast) var(--ease);
 	}
 	.hamburger:hover {
-		background: hsla(0, 0%, 100%, 0.08) !important;
-		color: var(--nav-fg) !important;
+		background: var(--color-surface-alt);
+		color: var(--color-text);
 	}
 
 	/* Drawer — slides in from the right. role=dialog with aria-modal. */
@@ -419,12 +447,13 @@
 		background: var(--color-surface);
 		color: var(--color-text);
 		box-shadow: var(--shadow-elev-2);
+		border-left: var(--border-1) solid var(--color-border);
 		transform: translateX(100%);
 		transition: transform 180ms ease-out;
 		z-index: 100;
 		display: flex;
 		flex-direction: column;
-		padding: 0.75rem;
+		padding: var(--space-3);
 		visibility: hidden;
 	}
 	.drawer.open {
@@ -441,78 +470,89 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.25rem 0.5rem 0.75rem;
-		border-bottom: 1px solid var(--color-border);
-		margin-bottom: 0.75rem;
+		padding: var(--space-1) var(--space-2) var(--space-3);
+		border-bottom: var(--border-1) solid var(--color-border);
+		margin-bottom: var(--space-3);
 	}
 	.drawer-title {
-		font-family: var(--heading-font);
-		font-weight: 600;
+		font-family: var(--font-ui);
+		font-weight: 700;
 		font-size: var(--text-lg);
+		color: var(--color-text);
 	}
 	.drawer-close {
-		background: transparent !important;
-		color: var(--color-text) !important;
-		border: 1px solid transparent !important;
-		font-size: var(--text-2xl) !important;
-		line-height: 1 !important;
-		padding: 0.25rem 0.75rem !important;
+		background: transparent;
+		color: var(--color-text);
+		border: var(--border-1) solid transparent;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-2xl);
+		line-height: 1;
+		padding: var(--space-1) var(--space-3);
 		min-width: var(--touch-target);
 		min-height: var(--touch-target);
+		cursor: pointer;
+		transition: background var(--transition-fast) var(--ease);
+	}
+	.drawer-close:hover {
+		background: var(--color-surface-alt);
+		color: var(--color-text);
 	}
 	.drawer-nav {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
-	.drawer-nav :global(a),
-	.drawer-nav :global(button) {
+	.drawer-nav a {
 		display: flex;
 		align-items: center;
 		min-height: var(--touch-target);
-		padding: 0.75rem 0.6rem;
+		padding: var(--space-3) var(--space-2);
 		color: var(--color-text);
+		font-family: var(--font-ui);
 		font-size: var(--text-base);
 		text-decoration: none;
-		border-radius: 0.4rem;
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast) var(--ease);
 	}
-	.drawer-nav :global(a:hover),
-	.drawer-nav :global(button:hover) {
+	.drawer-nav a:hover {
 		background: var(--color-surface-alt);
 		text-decoration: none;
 	}
-	.drawer-nav :global(a[aria-current='page']) {
+	.drawer-nav a[aria-current='page'] {
 		font-weight: 700;
 		background: var(--color-surface-alt);
+	}
+	/* The drawer's Sign in / Sign out Button should stretch full width and sit
+	   slightly apart from the link list. */
+	.drawer-nav :global(.drawer-action) {
+		width: 100%;
+		margin-top: var(--space-2);
 	}
 
 	/* Visibility helpers. Default to desktop layout; flip at 768px so the
 	   hamburger only shows on phones / narrow tablets. */
-	.mobile-only {
+	nav .mobile-only {
 		display: none;
 	}
-	.desktop-only {
+	nav .desktop-only {
 		display: flex;
 	}
 
 	@media (max-width: 767px) {
-		.mobile-only {
+		nav .mobile-only {
 			display: inline-flex;
 		}
-		.desktop-only {
+		nav .desktop-only {
 			display: none;
 		}
 		nav {
-			padding: 0.5rem 0.75rem;
+			padding: var(--space-3);
 		}
-		.nav-title {
-			margin-right: 0.75rem;
-		}
-		nav a {
-			margin-right: 0.5rem;
+		nav .brand {
+			gap: var(--space-4);
 		}
 		main {
-			margin: 0.75rem;
+			margin: var(--space-3);
 		}
 	}
 
@@ -525,36 +565,53 @@
 		}
 	}
 
-	/* Site footer — currently only hosts the locale picker. Plain & quiet so
-	   it doesn't compete with content above. */
+	/* Site footer — quiet editorial strip: wordmark on the left, status link and
+	   locale picker on the right. Thin top rule, muted type. */
 	.site-footer {
-		padding: 1rem;
-		border-top: 1px solid var(--color-border);
+		padding: var(--space-4);
+		border-top: var(--border-1) solid var(--color-border);
 		display: flex;
-		justify-content: flex-end;
+		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
-		font-size: var(--text-sm, 0.85rem);
+		gap: var(--space-4);
+		flex-wrap: wrap;
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+	}
+	.site-footer :global(.footer-wordmark) {
+		font-size: var(--text-base);
+		opacity: 0.85;
+	}
+	.footer-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		flex-wrap: wrap;
 	}
 	.footer-link {
 		color: var(--color-link);
 		text-decoration: none;
 	}
 	.footer-link:hover {
+		color: var(--color-link-hover);
 		text-decoration: underline;
 	}
 	.locale-picker {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
+		color: var(--color-text-muted);
 	}
 	.locale-picker select {
-		padding: 0.25rem 0.5rem;
-		font-family: inherit;
-		font-size: inherit;
-		background: var(--color-surface, transparent);
+		padding: var(--space-1) var(--space-2);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		background: var(--color-surface);
 		color: var(--color-text);
-		border: 1px solid var(--color-border);
-		border-radius: 0.25rem;
+		border: var(--border-1) solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		min-height: var(--touch-target);
+		cursor: pointer;
 	}
 </style>

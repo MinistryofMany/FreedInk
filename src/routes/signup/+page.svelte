@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { _ } from '$lib/i18n';
+	import { Card, Button, Kicker } from '$lib/components/ui';
 
 	export let data;
 
@@ -43,86 +44,124 @@
 		: '/api/auth/oidc/start';
 </script>
 
-<section class="stack">
-	<h2>{$_('auth.signup_heading')}</h2>
+<div class="page-wrap">
+	<Card padding="lg" elevated>
+		<div class="stack">
+			<Kicker>FreedInk</Kicker>
+			<h1 class="heading">{$_('auth.signup_heading')}</h1>
 
-	{#if inviteToken}
-		<p class="invite-banner">
-			{$_('auth.invite_banner_accepting')}
-			{#if data.signedIn}
-				{$_('auth.invite_banner_signed_in')}
-			{:else}
-				{$_('auth.invite_banner_signed_out')}
+			{#if inviteToken}
+				<div class="banner banner--accent">
+					<p>
+						{$_('auth.invite_banner_accepting')}
+						{#if data.signedIn}
+							{$_('auth.invite_banner_signed_in')}
+						{:else}
+							{$_('auth.invite_banner_signed_out')}
+						{/if}
+					</p>
+				</div>
 			{/if}
-		</p>
-	{/if}
 
-	{#if data.signedIn && !inviteToken}
-		<p>
-			{$_('auth.signed_in_prefix')}
-			<strong>{data.username}</strong>.
-			<a href="/admin">{$_('auth.signed_in_dashboard_link')}</a>
-			{$_('auth.signed_in_suffix')}
-		</p>
-	{:else if data.signedIn && inviteToken}
-		<!-- onMount fires the accept; just show a holding message + retry link. -->
-		<p>
-			<a href="/admin">{$_('auth.skip_to_dashboard')}</a>
-		</p>
-	{:else if data.ministerEnabled}
-		<p>Minister is your identity for Freed.Ink. Sign in to create or access your account.</p>
-		<a class="minister-btn" href={ministerHref} data-sveltekit-reload>Sign in with Minister</a>
-		<p class="hint">
-			New here? Signing in with Minister for the first time creates your account automatically.
-		</p>
-	{:else}
-		<p class="unavailable">
-			Sign-in is currently unavailable: this instance hasn't been configured with a Minister
-			provider. Set the Minister OIDC environment variables and reload.
-		</p>
-	{/if}
+			{#if data.signedIn && !inviteToken}
+				<div class="banner banner--accent">
+					<p>
+						{$_('auth.signed_in_prefix')}
+						<strong>{data.username}</strong>.
+						<a href="/admin">{$_('auth.signed_in_dashboard_link')}</a>
+						{$_('auth.signed_in_suffix')}
+					</p>
+				</div>
+			{:else if data.signedIn && inviteToken}
+				<!-- onMount fires the accept; just show a holding message + retry link. -->
+				<p class="muted"><a href="/admin">{$_('auth.skip_to_dashboard')}</a></p>
+			{:else if data.ministerEnabled}
+				<p class="body-text">
+					Minister is your identity for Freed.Ink. Sign in to create or access your account.
+				</p>
+				<Button href={ministerHref} variant="primary" data-sveltekit-reload>
+					Sign in with Minister
+				</Button>
+				<p class="hint">
+					New here? Signing in with Minister for the first time creates your account automatically.
+				</p>
+			{:else}
+				<div class="banner banner--danger">
+					<p>
+						Sign-in is currently unavailable: this instance hasn't been configured with a Minister
+						provider. Set the Minister OIDC environment variables and reload.
+					</p>
+				</div>
+			{/if}
 
-	{#if error}
-		<p style="color: var(--color-red)">{error}</p>
-	{/if}
-</section>
+			{#if error}
+				<p class="error">{error}</p>
+			{/if}
+		</div>
+	</Card>
+</div>
 
 <style>
+	.page-wrap {
+		max-width: 36rem;
+		margin: var(--space-8) auto;
+		padding: 0 var(--space-4);
+	}
+
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
-		max-width: 36rem;
-		margin: 3rem auto;
+		gap: var(--space-4);
 	}
+
+	.heading {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		font-weight: 700;
+		color: var(--color-text);
+		margin: 0;
+		line-height: 1.2;
+	}
+
+	.body-text {
+		color: var(--color-text);
+		margin: 0;
+	}
+
 	.hint {
-		color: var(--color-green-dark);
-		font-size: 0.9rem;
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		margin: 0;
 	}
-	.invite-banner {
-		padding: 0.75rem 1rem;
-		background: var(--color-green-lightest, #eef5e7);
-		border: 1px solid var(--color-green-light, #cfe1bf);
-		border-radius: 4px;
+
+	.muted {
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
+		margin: 0;
 	}
-	.unavailable {
-		padding: 0.75rem 1rem;
-		background: color-mix(in srgb, var(--color-red) 8%, transparent);
-		border: 1px solid var(--color-red);
-		border-radius: 4px;
+
+	.banner {
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
+		background: var(--color-surface-alt);
 	}
-	.minister-btn {
-		display: inline-block;
-		text-align: center;
-		padding: 0.6rem 1rem;
-		border: 1px solid var(--color-green-light, #cfe1bf);
-		border-radius: 4px;
-		background: var(--color-green-lightest, #eef5e7);
-		color: inherit;
-		text-decoration: none;
-		font-weight: 600;
+
+	.banner p {
+		margin: 0;
 	}
-	.minister-btn:hover {
-		background: var(--color-green-light, #cfe1bf);
+
+	.banner--accent {
+		border-left: var(--border-2) solid var(--color-accent);
+	}
+
+	.banner--danger {
+		border-left: var(--border-2) solid var(--color-danger);
+		color: var(--color-danger);
+	}
+
+	.error {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-danger);
 	}
 </style>

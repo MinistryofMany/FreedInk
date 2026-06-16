@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { _ } from '$lib/i18n';
+	import { PostCard, Button, Byline, Rule } from '$lib/components/ui';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -57,75 +58,137 @@
 	/>
 </svelte:head>
 
-<h1>{data.Blog.title}</h1>
-<code>{data.Blog.description}</code>
+<div class="blog-page">
+	<header class="masthead">
+		<h1 class="blog-title">{data.Blog.title}</h1>
+		{#if data.Blog.description}
+			<p class="blog-description">{data.Blog.description}</p>
+		{/if}
 
-<section id="contributors">
-	<h4>{$_('blog.contributors_heading')}</h4>
-	<div id="authors">
-		{#each data.Blog.authors as author}
-			<div>{author}</div>
-		{/each}
-	</div>
-	<p class="contributors-note">{$_('blog.contributors_note')}</p>
-</section>
-<h3>{$_('blog.posts_heading')}</h3>
-<ul>
-	{#each acc as Post (Post.id)}
-		<li>
-			<h2>
-				<a href={`/b/${data.Blog.slug}/${Post.slug}`}>{Post.title}</a>
-			</h2>
-			<div class="post_short">{Post.content}</div>
-		</li>
-	{/each}
-</ul>
-{#if nextCursor}
-	<form
-		method="get"
-		action={`/b/${data.Blog.slug}`}
-		on:submit|preventDefault={loadMore}
-		class="load-more"
-	>
-		<input type="hidden" name="cursor" value={nextCursor} />
-		<button type="submit" disabled={loading}>
-			{loading ? $_('comments.loading') : $_('actions.load_more')}
-		</button>
-	</form>
-{/if}
+		<div class="contributors">
+			<Byline author={data.Blog.title} meta={[`${data.Blog.authors.length} authors · anonymous`]} />
+			<p class="author-names">
+				{data.Blog.authors.join(', ')}
+			</p>
+			<p class="contributors-note">{$_('blog.contributors_note')}</p>
+		</div>
+	</header>
+
+	<Rule />
+
+	<section class="posts-section" aria-labelledby="posts-heading">
+		<h2 class="posts-heading" id="posts-heading">{$_('blog.posts_heading')}</h2>
+		<ul class="post-list" role="list">
+			{#each acc as Post (Post.id)}
+				<li class="post-item">
+					<PostCard
+						blogSlug={data.Blog.slug}
+						slug={Post.slug}
+						title={Post.title}
+						excerpt={Post.content}
+						publishedAt={Post.published_at ?? undefined}
+					/>
+				</li>
+			{/each}
+		</ul>
+
+		{#if nextCursor}
+			<div class="load-more">
+				<form method="get" action={`/b/${data.Blog.slug}`} on:submit|preventDefault={loadMore}>
+					<input type="hidden" name="cursor" value={nextCursor} />
+					<Button variant="ghost" type="submit" {loading} disabled={loading}>
+						{loading ? $_('comments.loading') : $_('actions.load_more')}
+					</Button>
+				</form>
+			</div>
+		{/if}
+	</section>
+</div>
 
 <style>
-	ul {
-		list-style-type: none;
-		padding: 0;
-		margin: 0;
-	}
-	div#authors {
+	.blog-page {
 		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
+		flex-direction: column;
 	}
 
-	div#authors div:not(:last-child)::after {
-		content: ',';
+	.masthead {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.blog-title {
+		font-family: var(--font-display);
+		font-size: var(--text-4xl);
+		color: var(--color-text);
+		line-height: 1.1;
+		margin: 0;
+	}
+
+	.blog-description {
+		font-family: var(--font-standfirst);
+		font-size: var(--text-lg);
+		color: var(--color-text-muted);
+		margin: 0;
+		line-height: 1.5;
+		max-width: 64ch;
+	}
+
+	.contributors {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.author-names {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		margin: 0;
 	}
 
 	.contributors-note {
-		color: var(--color-text-muted);
+		font-family: var(--font-ui);
 		font-size: var(--text-sm);
-		margin: 0.25rem 0 0;
+		color: var(--color-text-muted);
+		margin: 0;
 	}
 
-	.post_short {
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		overflow: hidden;
-		max-width: 120ch;
+	.posts-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
 	}
+
+	.posts-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		color: var(--color-text);
+		margin: 0;
+	}
+
+	.post-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+	}
+
+	.post-item {
+		padding-bottom: var(--space-6);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.post-item:last-child {
+		border-bottom: none;
+		padding-bottom: 0;
+	}
+
 	.load-more {
-		margin-top: 1rem;
-		text-align: center;
+		display: flex;
+		justify-content: center;
+		padding-top: var(--space-4);
 	}
 </style>

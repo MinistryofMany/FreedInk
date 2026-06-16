@@ -5,3 +5,5 @@ import '@fontsource-variable/inter'; // UI / chrome
 import '@fontsource-variable/source-serif-4'; // standfirst / pull quotes
 import '@fontsource/atkinson-hyperlegible/400.css'; // body reading default
 import '@fontsource/atkinson-hyperlegible/700.css';
+import '@fontsource-variable/newsreader'; // reader body option
+import '@fontsource-variable/lora'; // reader body option

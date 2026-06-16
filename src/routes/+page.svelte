@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { _ } from '$lib/i18n';
+	import { BlogCard, Button, Kicker } from '$lib/components/ui';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -54,78 +55,93 @@
 	<meta name="twitter:card" content="summary" />
 </svelte:head>
 
-<div class="jumbotron">
-	<h2>{$_('home.welcome_heading')}</h2>
-	<p>{$_('home.subhead')}</p>
-	<a href="/signup" class="btn btn-primary">{$_('home.cta')}</a>
-</div>
-<div class="featured">
-	<h2>{$_('home.featured_blogs')}</h2>
-	<ul>
+<section class="hero">
+	<Kicker>Anonymous collective blogging</Kicker>
+	<h1>Put your name on the masthead. Never on the post.</h1>
+	<p class="dek">
+		A group founds a blog together. Everyone's name is on it. No one - not even the others - can
+		prove who wrote which piece.
+	</p>
+	<div class="ctas">
+		<Button href="/signup">Start a collective</Button>
+		<Button variant="ghost" href="/b">Browse blogs</Button>
+	</div>
+</section>
+
+<section class="featured">
+	<Kicker>Featured collectives</Kicker>
+	<div class="grid">
 		{#each acc as Blog (Blog.id)}
-			<li>
-				<h2><a href={`/b/${Blog.slug}`}>{Blog.title}</a></h2>
-			</li>
+			<BlogCard title={Blog.title} slug={Blog.slug} description={Blog.description ?? undefined} />
 		{/each}
-	</ul>
+	</div>
 	{#if nextCursor}
 		<form method="get" action="/" on:submit|preventDefault={loadMore} class="load-more">
 			<input type="hidden" name="cursor" value={nextCursor} />
-			<button type="submit" disabled={loading}>
+			<Button variant="ghost" type="submit" disabled={loading}>
 				{loading ? $_('comments.loading') : $_('actions.load_more')}
-			</button>
+			</Button>
 		</form>
 	{/if}
-</div>
+</section>
 
 <style>
-	.jumbotron {
-		padding: 4rem;
-		margin-inline: auto;
-		margin-bottom: 3rem;
-		background-color: var(--color-green-lightest);
-		border-radius: 0.5rem;
+	.hero {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
 		text-align: center;
-		max-width: 120ch;
+		gap: var(--space-4);
+		padding-block: var(--space-12);
+		padding-inline: var(--space-4);
+		max-width: 60ch;
+		margin-inline: auto;
 	}
 
-	.jumbotron h2 {
-		font-size: 3rem;
-		font-weight: bold;
+	.hero h1 {
+		font-family: var(--font-display);
+		font-size: var(--text-4xl);
+		font-weight: 700;
+		line-height: 1.15;
+		color: var(--color-text);
+		margin: 0;
 	}
 
-	.jumbotron p {
-		font-size: 1.25rem;
-		font-weight: 300;
+	.dek {
+		font-family: var(--font-standfirst);
+		font-size: var(--text-lg);
+		color: var(--color-text-muted);
+		line-height: 1.6;
+		margin: 0;
 	}
 
-	.jumbotron .btn {
-		padding: 0.75rem 1.25rem;
-		margin: 1rem;
-		font-size: 1.25rem;
-		border-radius: 0.3rem;
+	.ctas {
+		display: flex;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+		justify-content: center;
+		margin-top: var(--space-2);
 	}
 
 	.featured {
-		margin-inline: auto;
-		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 		max-width: 120ch;
+		margin-inline: auto;
+		padding-inline: var(--space-4);
+		padding-bottom: var(--space-12);
 	}
 
-	p {
-		padding-inline: 2rem;
-		padding-bottom: 1.5rem;
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: var(--space-4);
 	}
 
-	li {
-		margin-bottom: 1rem;
-	}
-	ul {
-		list-style-type: none;
-		padding: 0;
-	}
 	.load-more {
-		margin-top: 1rem;
-		text-align: center;
+		display: flex;
+		justify-content: center;
+		margin-top: var(--space-4);
 	}
 </style>
