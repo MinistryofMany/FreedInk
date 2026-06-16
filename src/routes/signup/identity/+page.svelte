@@ -4,6 +4,7 @@
 	import { generateIdentity, encodeForWire, cacheUnlockedIdentity } from '$lib/client/vault';
 	import { _ } from '$lib/i18n';
 	import { get } from 'svelte/store';
+	import { Card, Field, Button, Kicker } from '$lib/components/ui';
 
 	export let data;
 
@@ -20,6 +21,11 @@
 	let displayName = data.displayName ?? '';
 	let busy = false;
 	let error = '';
+
+	function handleSubmit(e: SubmitEvent) {
+		e.preventDefault();
+		void create();
+	}
 
 	async function create() {
 		const t = get(_);
@@ -69,78 +75,147 @@
 	}
 </script>
 
-<section>
-	<h2>{$_('identity.set_password_heading')}</h2>
-	<p>
-		{$_('identity.intro', { values: { username: data.username } })}
-		<strong>{$_('identity.cannot_recover')}</strong>
-		{$_('identity.forgot_warning')}
-	</p>
-	{#if data.hasIdentity}
-		<p style="color: var(--color-red)">{$_('identity.already_have')}</p>
-		<a href="/settings" class="btn">{$_('identity.go_to_settings')}</a>
-	{:else}
-		<form on:submit|preventDefault={create}>
-			<label>
-				{$_('identity.display_name_label')}
-				<input
-					type="text"
-					bind:value={displayName}
-					maxlength="80"
-					placeholder={$_('identity.display_name_placeholder')}
-					autocomplete="nickname"
-				/>
-			</label>
-			<p class="hint">{$_('identity.display_name_hint')}</p>
-			<label>
-				{$_('identity.password_label')}
-				<input
-					type="password"
-					bind:value={password}
-					required
-					minlength="12"
-					autocomplete="new-password"
-				/>
-			</label>
-			<label>
-				{$_('identity.confirm_label')}
-				<input
-					type="password"
-					bind:value={confirm}
-					required
-					minlength="12"
-					autocomplete="new-password"
-				/>
-			</label>
-			{#if error}<p style="color: var(--color-red)">{error}</p>{/if}
-			<button type="submit" disabled={busy}>
-				{busy ? $_('identity.generating') : $_('identity.create_button')}
-			</button>
-		</form>
-	{/if}
-</section>
+<div class="page-wrap">
+	<Card padding="lg" elevated>
+		<div class="stack">
+			<Kicker>Identity setup</Kicker>
+			<h1 class="heading">{$_('identity.set_password_heading')}</h1>
+			<p class="body-text">
+				{$_('identity.intro', { values: { username: data.username } })}
+				<strong>{$_('identity.cannot_recover')}</strong>
+				{$_('identity.forgot_warning')}
+			</p>
+
+			{#if data.hasIdentity}
+				<div class="banner banner--danger">
+					<p>{$_('identity.already_have')}</p>
+				</div>
+				<Button href="/settings" variant="ghost">{$_('identity.go_to_settings')}</Button>
+			{:else}
+				<form onsubmit={handleSubmit} class="form">
+					<Field
+						label={$_('identity.display_name_label')}
+						bind:value={displayName}
+						placeholder={$_('identity.display_name_placeholder')}
+						help={$_('identity.display_name_hint')}
+					/>
+
+					<div class="field">
+						<label for="password" class="field-label"
+							>{$_('identity.password_label')}<span class="required" aria-hidden="true">
+								*</span
+							></label
+						>
+						<input
+							id="password"
+							type="password"
+							bind:value={password}
+							required
+							minlength="12"
+							autocomplete="new-password"
+							aria-required="true"
+						/>
+					</div>
+
+					<div class="field">
+						<label for="confirm" class="field-label"
+							>{$_('identity.confirm_label')}<span class="required" aria-hidden="true">
+								*</span
+							></label
+						>
+						<input
+							id="confirm"
+							type="password"
+							bind:value={confirm}
+							required
+							minlength="12"
+							autocomplete="new-password"
+							aria-required="true"
+						/>
+					</div>
+
+					{#if error}
+						<p class="error" role="alert">{error}</p>
+					{/if}
+
+					<Button type="submit" variant="primary" loading={busy}>
+						{busy ? $_('identity.generating') : $_('identity.create_button')}
+					</Button>
+				</form>
+			{/if}
+		</div>
+	</Card>
+</div>
 
 <style>
-	section {
+	.page-wrap {
 		max-width: 36rem;
-		margin: 3rem auto;
+		margin: var(--space-8) auto;
+		padding: 0 var(--space-4);
+	}
+
+	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.hint {
+
+	.heading {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		font-weight: 700;
+		color: var(--color-text);
 		margin: 0;
-		color: var(--color-text-muted);
+		line-height: 1.2;
+	}
+
+	.body-text {
+		color: var(--color-text);
+		margin: 0;
+	}
+
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	/* Native labeled inputs matching Field's visual pattern */
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.field-label {
+		font-family: var(--font-ui);
 		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.required {
+		color: var(--color-danger);
+	}
+
+	.banner {
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
+		background: var(--color-surface-alt);
+	}
+
+	.banner p {
+		margin: 0;
+	}
+
+	.banner--danger {
+		border-left: var(--border-2) solid var(--color-danger);
+		color: var(--color-danger);
+	}
+
+	.error {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-danger);
 	}
 </style>
