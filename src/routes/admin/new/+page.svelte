@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { _ } from '$lib/i18n';
+	import { Card, Field, Button } from '$lib/components/ui';
 
 	let title = '';
 	let description = '';
@@ -30,27 +31,54 @@
 	}
 </script>
 
-<h3>{$_('admin.create_blog_heading')}</h3>
+<Card>
+	<h3 class="page-heading">{$_('admin.create_blog_heading')}</h3>
 
-<form on:submit|preventDefault={createBlog}>
-	<label for="title">{$_('admin.title_label')}</label>
-	<input type="text" id="title" name="title" bind:value={title} required />
+	<form on:submit|preventDefault={createBlog}>
+		<Field label={$_('admin.title_label')} bind:value={title} required />
 
-	<label for="description">{$_('admin.description_label')}</label>
-	<textarea id="description" name="description" bind:value={description} required rows="5"
-	></textarea>
+		<Field
+			label={$_('admin.description_label')}
+			multiline
+			rows={5}
+			bind:value={description}
+			required
+		/>
 
-	{#if error}<p style="color: var(--color-red)">{error}</p>{/if}
-	<button type="submit" disabled={busy}
-		>{busy ? $_('admin.creating') : $_('admin.create_button')}</button
-	>
-</form>
+		{#if error}
+			<p class="error-msg">{error}</p>
+		{/if}
+
+		<div class="form-actions">
+			<Button type="submit" disabled={busy} loading={busy}>
+				{busy ? $_('admin.creating') : $_('admin.create_button')}
+			</Button>
+		</div>
+	</form>
+</Card>
 
 <style>
+	.page-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		color: var(--color-text);
+		margin: 0 0 var(--space-4);
+	}
+
 	form {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
 		max-width: 80ch;
+	}
+
+	.error-msg {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-danger);
+	}
+
+	.form-actions {
+		display: flex;
 	}
 </style>
