@@ -131,12 +131,21 @@
 			prewarmedFor = data.user.id;
 			prewarmForAuthedUser();
 		}
-		// Re-apply the theme attribute from cookie on mount. The cookie is the
-		// source of truth; SSR may render without an attribute (when no
-		// preference is stored), in which case the CSS media query takes over
-		// automatically — nothing for us to do.
-		applyThemeAttribute(initialTheme);
+		// Re-apply the theme attribute from the cookie on mount. The cookie is the
+		// source of truth — `data.theme` is unreliable on prerendered pages
+		// (/legal/*), where it is baked to null at build time and would otherwise
+		// clobber the palette that static/theme-init.js already applied pre-paint.
+		// Read the cookie directly so the SSR-vs-prerender distinction doesn't
+		// matter; when no preference is stored the CSS media query takes over.
+		applyThemeAttribute(readThemeCookie() ?? initialTheme);
 	});
+
+	function readThemeCookie(): 'light' | 'dark' | null {
+		if (typeof document === 'undefined') return null;
+		const m = document.cookie.match(/(?:^|;\s*)freedink_theme=([^;]*)/);
+		const v = m ? decodeURIComponent(m[1]) : null;
+		return v === 'light' || v === 'dark' ? v : null;
+	}
 
 	function applyThemeAttribute(theme: 'light' | 'dark' | null) {
 		if (typeof document === 'undefined') return;

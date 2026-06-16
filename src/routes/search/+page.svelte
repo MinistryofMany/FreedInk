@@ -42,6 +42,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Search — FreedInk</title>
+</svelte:head>
+
 <div class="search-page">
 	<header class="search-header">
 		<Kicker>Search</Kicker>
@@ -56,7 +60,7 @@
 			value={data.q}
 			placeholder={$_('search.placeholder')}
 		/>
-		<select class="search-select" name="tag">
+		<select class="search-select" name="tag" aria-label={$_('search.filter_by_tag')}>
 			<option value="">{$_('search.any_tag')}</option>
 			{#each data.tags as t}
 				<option value={t.slug} selected={t.slug === data.tag}>{t.name}</option>

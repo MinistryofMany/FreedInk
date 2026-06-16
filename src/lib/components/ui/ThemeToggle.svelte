@@ -31,13 +31,15 @@
 </script>
 
 <button type="button" class="theme-toggle" aria-label={nextLabel[mode]} onclick={advance}>
-	{#if mode === 'light'}
-		<Sun size="1.1em" />
-	{:else if mode === 'dark'}
-		<Moon size="1.1em" />
-	{:else}
-		<Monitor size="1.1em" />
-	{/if}
+	<span aria-hidden="true">
+		{#if mode === 'light'}
+			<Sun size="1.1em" />
+		{:else if mode === 'dark'}
+			<Moon size="1.1em" />
+		{:else}
+			<Monitor size="1.1em" />
+		{/if}
+	</span>
 </button>
 
 <style>

@@ -44,6 +44,10 @@
 		: '/api/auth/oidc/start';
 </script>
 
+<svelte:head>
+	<title>Sign in — FreedInk</title>
+</svelte:head>
+
 <div class="page-wrap">
 	<Card padding="lg" elevated>
 		<div class="stack">

@@ -29,6 +29,7 @@
 		"test:all": "npm run test:unit && npm run test:integration && npm run test:api && npm run test:e2e"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "^4.11.3",
 		"@playwright/test": "^1.49.0",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/kit": "^2.65.0",

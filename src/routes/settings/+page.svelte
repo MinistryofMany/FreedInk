@@ -268,6 +268,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Settings — FreedInk</title>
+</svelte:head>
+
 <div class="page-wrap">
 	<h1 class="page-heading">{$_('settings.heading')}</h1>
 
@@ -646,6 +650,14 @@
 		font-size: var(--text-sm);
 		font-family: var(--font-ui);
 		margin: 0;
+	}
+
+	/* Inline links inside running prose must be distinguishable without relying
+	   on colour alone (WCAG 1.4.1 / axe link-in-text-block). Underline them;
+	   nav/button links elsewhere intentionally stay underline-free. */
+	.muted :global(a) {
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	.status {

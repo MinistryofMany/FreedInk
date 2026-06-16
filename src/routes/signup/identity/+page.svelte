@@ -75,6 +75,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Identity setup — FreedInk</title>
+</svelte:head>
+
 <div class="page-wrap">
 	<Card padding="lg" elevated>
 		<div class="stack">

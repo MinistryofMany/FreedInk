@@ -40,6 +40,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Collectives — FreedInk</title>
+</svelte:head>
+
 <div class="directory">
 	<header class="directory-header">
 		<Kicker>Collectives</Kicker>

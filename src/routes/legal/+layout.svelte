@@ -148,8 +148,14 @@
 		font-weight: 600;
 	}
 
+	/* Inline links sit inside running legal prose, so they must be
+	   distinguishable from surrounding text without relying on colour alone
+	   (WCAG 1.4.1 / axe link-in-text-block). Underline them; nav/button links
+	   elsewhere intentionally stay underline-free. */
 	article :global(a) {
 		color: var(--color-link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	article :global(a:hover) {

@@ -63,6 +63,7 @@
 		"heading": "Search",
 		"placeholder": "search posts…",
 		"any_tag": "— any tag —",
+		"filter_by_tag": "Filter by tag",
 		"submit": "Search",
 		"no_matches": "No matches."
 	},
