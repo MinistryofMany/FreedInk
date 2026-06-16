@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { _ } from '$lib/i18n';
+	import { Button, EmptyState, Kicker, PostCard } from '$lib/components/ui';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -41,65 +42,152 @@
 	}
 </script>
 
-<h2>{$_('search.heading')}</h2>
-<form method="get">
-	<input type="search" name="q" value={data.q} placeholder={$_('search.placeholder')} />
-	<select name="tag">
-		<option value="">{$_('search.any_tag')}</option>
-		{#each data.tags as t}
-			<option value={t.slug} selected={t.slug === data.tag}>{t.name}</option>
-		{/each}
-	</select>
-	<button type="submit">{$_('search.submit')}</button>
-</form>
+<div class="search-page">
+	<header class="search-header">
+		<Kicker>Search</Kicker>
+		<h1 class="search-heading">{$_('search.heading')}</h1>
+	</header>
 
-{#if acc.length === 0}
-	<p>{$_('search.no_matches')}</p>
-{:else}
-	<ul>
-		{#each acc as r (r.postId)}
-			<li>
-				<a href={`/b/${r.blog.slug}/${r.version.slug}`}>
-					<strong>{r.version.title}</strong>
-				</a>
-				<small> · {r.blog.title}</small>
-				<p class="snippet">
-					{r.version.content.slice(0, 200)}{r.version.content.length > 200 ? '…' : ''}
-				</p>
-			</li>
-		{/each}
-	</ul>
-	{#if nextCursor}
-		<form method="get" action="/search" on:submit|preventDefault={loadMore} class="load-more">
-			{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
-			{#if data.tag}<input type="hidden" name="tag" value={data.tag} />{/if}
-			<input type="hidden" name="cursor" value={nextCursor} />
-			<button type="submit" disabled={loading}>
-				{loading ? $_('comments.loading') : $_('actions.load_more')}
-			</button>
-		</form>
+	<form method="get" class="search-form">
+		<input
+			class="search-input"
+			type="search"
+			name="q"
+			value={data.q}
+			placeholder={$_('search.placeholder')}
+		/>
+		<select class="search-select" name="tag">
+			<option value="">{$_('search.any_tag')}</option>
+			{#each data.tags as t}
+				<option value={t.slug} selected={t.slug === data.tag}>{t.name}</option>
+			{/each}
+		</select>
+		<Button type="submit">{$_('search.submit')}</Button>
+	</form>
+
+	{#if acc.length === 0}
+		<EmptyState title={$_('search.no_matches')} />
+	{:else}
+		<ul class="results" role="list">
+			{#each acc as r (r.postId)}
+				<li class="result-item">
+					<PostCard
+						blogSlug={r.blog.slug}
+						slug={r.version.slug}
+						title={r.version.title}
+						excerpt={r.version.content.slice(0, 200) + (r.version.content.length > 200 ? '…' : '')}
+						blogTitle={r.blog.title}
+					/>
+				</li>
+			{/each}
+		</ul>
+
+		{#if nextCursor}
+			<div class="load-more">
+				<form method="get" action="/search" on:submit|preventDefault={loadMore}>
+					{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
+					{#if data.tag}<input type="hidden" name="tag" value={data.tag} />{/if}
+					<input type="hidden" name="cursor" value={nextCursor} />
+					<Button variant="ghost" type="submit" {loading} disabled={loading}>
+						{loading ? $_('comments.loading') : $_('actions.load_more')}
+					</Button>
+				</form>
+			</div>
+		{/if}
 	{/if}
-{/if}
+</div>
 
 <style>
-	form {
+	.search-page {
 		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
+		flex-direction: column;
+		gap: var(--space-6);
 	}
-	ul {
+
+	.search-header {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.search-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-3xl);
+		color: var(--color-text);
+		line-height: 1.15;
+		margin: 0;
+	}
+
+	.search-form {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3);
+		align-items: center;
+	}
+
+	.search-input {
+		flex: 1 1 16rem;
+		min-width: 0;
+		height: var(--touch-target);
+		padding: 0 var(--space-3);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border-strong);
+		border-radius: var(--radius-md);
+	}
+
+	.search-input::placeholder {
+		color: var(--color-text-muted);
+	}
+
+	.search-input:focus {
+		border-color: var(--color-accent);
+		outline: var(--focus-ring-width) solid var(--focus-ring-color);
+		outline-offset: var(--focus-ring-offset);
+	}
+
+	.search-select {
+		height: var(--touch-target);
+		padding: 0 var(--space-3);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border-strong);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+	}
+
+	.search-select:focus {
+		border-color: var(--color-accent);
+		outline: var(--focus-ring-width) solid var(--focus-ring-color);
+		outline-offset: var(--focus-ring-offset);
+	}
+
+	.results {
 		list-style: none;
 		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
 	}
-	li {
-		margin-bottom: 1rem;
+
+	.result-item {
+		padding-bottom: var(--space-5);
+		border-bottom: var(--border-1) solid var(--color-border);
 	}
-	.snippet {
-		color: var(--color-green-dark);
-		font-size: 0.9rem;
+
+	.result-item:last-child {
+		border-bottom: none;
+		padding-bottom: 0;
 	}
+
 	.load-more {
-		margin-top: 1rem;
-		text-align: center;
+		display: flex;
+		justify-content: center;
+		padding-top: var(--space-4);
 	}
 </style>
