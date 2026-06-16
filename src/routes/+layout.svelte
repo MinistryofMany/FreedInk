@@ -531,18 +531,18 @@
 
 	/* Visibility helpers. Default to desktop layout; flip at 768px so the
 	   hamburger only shows on phones / narrow tablets. */
-	.mobile-only {
+	nav .mobile-only {
 		display: none;
 	}
-	.desktop-only {
+	nav .desktop-only {
 		display: flex;
 	}
 
 	@media (max-width: 767px) {
-		.mobile-only {
+		nav .mobile-only {
 			display: inline-flex;
 		}
-		.desktop-only {
+		nav .desktop-only {
 			display: none;
 		}
 		nav {
