@@ -4,9 +4,22 @@
 	// snarkjs / identity primitives / vault crypto just to read text. The
 	// comment form is gated on `signedIn` and dynamic-imports its deps inside
 	// the click handlers.
+	import { onMount } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { _ } from '$lib/i18n';
+	import {
+		Badge,
+		Button,
+		Byline,
+		Dialog,
+		EmptyState,
+		Field,
+		Kicker,
+		Rule
+	} from '$lib/components/ui';
+	import ReaderControls from '$lib/components/reader/ReaderControls.svelte';
+	import { reader, loadReader } from '$lib/reader/settings.svelte';
 
 	export let data;
 
@@ -97,9 +110,9 @@
 
 	// ──────────── Report dialog state ────────────
 	// One dialog reused for both the post and any comment. The submit
-	// handler reads `reportTarget` to know what target to attach. Uses a
-	// native <dialog> element so we don't need a dialog library.
-	let reportDialog: HTMLDialogElement | null = null;
+	// handler reads `reportTarget` to know what target to attach. Driven by the
+	// UI Dialog component via a bound `reportOpen` boolean.
+	let reportOpen = false;
 	let reportTarget: { type: 'post' | 'comment'; id: string; label: string } | null = null;
 	let reportReason: 'spam' | 'harassment' | 'csam' | 'malware' | 'copyright' | 'other' = 'spam';
 	let reportDetails = '';
@@ -113,11 +126,11 @@
 		reportDetails = '';
 		reportError = '';
 		reportOk = false;
-		reportDialog?.showModal();
+		reportOpen = true;
 	}
 
 	function closeReport() {
-		reportDialog?.close();
+		reportOpen = false;
 		reportTarget = null;
 	}
 
@@ -188,6 +201,8 @@
 			busy = false;
 		}
 	}
+
+	onMount(loadReader);
 </script>
 
 <svelte:head>
@@ -206,51 +221,66 @@
 	<meta name="twitter:description" content={ogDescription} />
 </svelte:head>
 
-<article lang={data.Post.language}>
-	<h1>{data.Blog.title}</h1>
-	<h2>{data.Post.title}</h2>
-	<p class="meta">
-		{#if data.Post.publishedAt}
-			{$_('post.published_at', {
-				values: { date: new Date(data.Post.publishedAt).toLocaleString() }
-			})}
-		{:else}
-			{$_('post.status', { values: { status: data.Post.status } })}
-		{/if}
-		<span class="lang-badge" title={data.Post.language}>
-			{data.Post.language.toUpperCase()}
-		</span>
-	</p>
+<article
+	lang={data.Post.language}
+	style="--rf:{reader.font}; --rs:{reader.size}px; --rw:{reader.width}px; --rl:{reader.line}"
+>
+	<header class="post-header">
+		<div class="post-head-row">
+			<Kicker>Essay · {data.Blog.title}</Kicker>
+			<div class="reader-controls-slot">
+				<ReaderControls />
+			</div>
+		</div>
+		<h1 class="post-title">{data.Post.title}</h1>
+		<Byline
+			author={data.Blog.title}
+			meta={[
+				'anonymous',
+				data.Post.publishedAt
+					? new Date(data.Post.publishedAt).toLocaleDateString(undefined, {
+							year: 'numeric',
+							month: 'long',
+							day: 'numeric'
+						})
+					: $_('post.status', { values: { status: data.Post.status } })
+			]}
+		/>
+		<div class="lang-row">
+			<Badge tone="neutral">{data.Post.language.toUpperCase()}</Badge>
+		</div>
+	</header>
+	<Rule />
 	<!-- bodyHtml is rendered server-side by renderMarkdown (marked + DOMPurify
 	     allowlist sanitize, src/lib/server/markdown.ts), so the static-analysis
 	     XSS warning does not apply here. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	<div class="content">{@html data.Post.bodyHtml}</div>
-	<p class="report-row">
-		<button
-			type="button"
-			class="report-link"
-			on:click={() => openReport({ type: 'post', id: data.Post.id, label: data.Post.title })}
+	<div class="report-row">
+		<Button
+			variant="ghost"
+			size="sm"
+			onclick={() => openReport({ type: 'post', id: data.Post.id, label: data.Post.title })}
 		>
 			{$_('actions.report')}
-		</button>
-	</p>
+		</Button>
+	</div>
 </article>
 
 <section class="comments">
-	<h3>{$_('comments.heading')}</h3>
+	<h2 class="comments-heading">{$_('comments.heading')}</h2>
 	{#if comments.length === 0}
-		<p>{$_('comments.empty')}</p>
+		<EmptyState title={$_('comments.empty')} />
 	{:else}
-		<ul>
+		<ul class="comment-list">
 			{#each comments as c (c.id)}
-				<li>
-					<small
-						>{new Date(c.createdAt).toLocaleString()}
-						<button
-							type="button"
-							class="report-link inline"
-							on:click={() =>
+				<li class="comment">
+					<div class="comment-top">
+						<time class="comment-time">{new Date(c.createdAt).toLocaleString()}</time>
+						<Button
+							variant="ghost"
+							size="sm"
+							onclick={() =>
 								openReport({
 									type: 'comment',
 									id: c.id,
@@ -258,9 +288,9 @@
 								})}
 						>
 							{$_('actions.report')}
-						</button></small
-					>
-					<p>{c.body}</p>
+						</Button>
+					</div>
+					<p class="comment-body">{c.body}</p>
 				</li>
 			{/each}
 		</ul>
@@ -272,56 +302,63 @@
 				class="load-more"
 			>
 				<input type="hidden" name="commentsCursor" value={commentsNextCursor} />
-				<button type="submit" disabled={loadingMoreComments}>
+				<Button type="submit" variant="ghost" disabled={loadingMoreComments}>
 					{loadingMoreComments ? $_('comments.loading') : $_('comments.load_more')}
-				</button>
+				</Button>
 			</form>
 		{/if}
 	{/if}
 
 	{#if signedIn}
-		<h4>{$_('comments.leave_heading')}</h4>
+		<h3 class="leave-heading">{$_('comments.leave_heading')}</h3>
 		{#if needsPassword}
-			<form on:submit|preventDefault={unlockFromForm}>
-				<label>
-					{$_('comments.identity_password_label')}
-					<input type="password" bind:value={password} required autocomplete="current-password" />
-				</label>
-				<button type="submit">{$_('comments.unlock_button')}</button>
+			<form class="comment-form" on:submit|preventDefault={unlockFromForm}>
+				<Field
+					label={$_('comments.identity_password_label')}
+					type="password"
+					bind:value={password}
+					required
+				/>
+				<div class="form-actions">
+					<Button type="submit">{$_('comments.unlock_button')}</Button>
+				</div>
 			</form>
 		{/if}
-		<form on:submit|preventDefault={postComment}>
-			<textarea
+		<form class="comment-form" on:submit|preventDefault={postComment}>
+			<Field
+				label={$_('comments.leave_heading')}
+				multiline
 				bind:value={body}
-				rows="3"
 				required
-				maxlength="4000"
 				placeholder={$_('comments.placeholder')}
-			></textarea>
-			<button type="submit" disabled={busy || !body}>{$_('comments.post_button')}</button>
+			/>
+			<div class="form-actions">
+				<Button type="submit" disabled={busy || !body}>{$_('comments.post_button')}</Button>
+			</div>
 		</form>
-		{#if error}<p style="color: var(--color-red)">{error}</p>{/if}
+		{#if error}<p class="form-error" role="alert">{error}</p>{/if}
 		<p class="hint">{$_('comments.anonymous_hint')}</p>
 	{:else}
-		<p>
+		<p class="signin-prompt">
 			<a href="/signup">{$_('comments.sign_in_to_comment_prefix')}</a>
 			{$_('comments.sign_in_to_comment_suffix')}
 		</p>
 	{/if}
 </section>
 
-<!-- Native <dialog> for the report modal. No deps; closeable via Esc. -->
-<dialog bind:this={reportDialog} class="report-dialog">
-	<form on:submit|preventDefault={submitReport}>
-		<h3>{$_('report.heading', { values: { type: reportTarget?.type ?? '' } })}</h3>
+<Dialog
+	bind:open={reportOpen}
+	title={$_('report.heading', { values: { type: reportTarget?.type ?? '' } })}
+>
+	<form class="report-form" on:submit|preventDefault={submitReport}>
 		{#if reportTarget}
-			<p class="dim">
-				<small>{$_('report.target', { values: { label: reportTarget.label } })}</small>
+			<p class="report-target">
+				{$_('report.target', { values: { label: reportTarget.label } })}
 			</p>
 		{/if}
-		<label>
+		<label class="report-label">
 			{$_('report.reason_label')}
-			<select bind:value={reportReason}>
+			<select bind:value={reportReason} class="report-select">
 				<option value="spam">{$_('report.reason.spam')}</option>
 				<option value="harassment">{$_('report.reason.harassment')}</option>
 				<option value="csam">{$_('report.reason.csam')}</option>
@@ -330,125 +367,217 @@
 				<option value="other">{$_('report.reason.other')}</option>
 			</select>
 		</label>
-		<label>
-			{$_('report.details_label')}
-			<textarea
-				bind:value={reportDetails}
-				rows="3"
-				maxlength="2000"
-				placeholder={$_('report.details_placeholder')}
-			></textarea>
-		</label>
-		{#if reportError}<p class="err">{reportError}</p>{/if}
-		{#if reportOk}<p class="ok">{$_('report.submitted_thanks')}</p>{/if}
+		<Field
+			label={$_('report.details_label')}
+			multiline
+			bind:value={reportDetails}
+			placeholder={$_('report.details_placeholder')}
+		/>
+		{#if reportError}<p class="report-err" role="alert">{reportError}</p>{/if}
+		{#if reportOk}<p class="report-ok">{$_('report.submitted_thanks')}</p>{/if}
 		<div class="dialog-btns">
-			<button type="button" on:click={closeReport}>{$_('actions.close')}</button>
-			<button type="submit" disabled={reportBusy || reportOk}>
+			<Button variant="ghost" onclick={closeReport}>{$_('actions.close')}</Button>
+			<Button type="submit" disabled={reportBusy || reportOk}>
 				{reportBusy ? $_('report.sending') : $_('report.submit')}
-			</button>
+			</Button>
 		</div>
 	</form>
-</dialog>
+</Dialog>
 
 <style>
 	article {
-		max-width: 70ch;
+		max-width: var(--rw, var(--reading-width));
 		margin: 0 auto;
+		padding: var(--space-5) var(--space-4);
+	}
+	.post-header {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.post-head-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+	.reader-controls-slot {
+		flex-shrink: 0;
+	}
+	.post-title {
+		font-family: var(--font-display);
+		font-weight: 600;
+		line-height: 1.15;
+		color: var(--color-text);
+		margin: 0;
+	}
+	.lang-row {
+		display: flex;
+	}
+	.content {
+		font-family: var(--rf, var(--font-reading));
+		font-size: var(--rs, var(--reading-size));
+		line-height: var(--rl, var(--reading-line));
+		color: var(--color-text);
+		margin-top: var(--space-5);
 	}
 	.content :global(pre) {
 		white-space: pre-wrap;
 		overflow-x: auto;
+		background: var(--color-surface-alt);
+		color: var(--color-text);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-3);
+	}
+	.content :global(code) {
+		font-family: var(--font-mono, ui-monospace, monospace);
 	}
 	.content :global(img) {
 		max-width: 100%;
 		height: auto;
+		border-radius: var(--radius-md);
 	}
-	.meta {
-		color: var(--color-green-dark);
-		font-size: 0.85rem;
+	.content :global(a) {
+		color: var(--color-link);
 	}
-	.lang-badge {
-		display: inline-block;
-		margin-left: 0.5rem;
-		padding: 0.1rem 0.4rem;
-		font-size: 0.7rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		border-radius: 3px;
-		background: var(--color-green-lightest, #d6f0e7);
-		color: var(--color-green-dark, #134e2f);
-	}
-	.comments {
-		max-width: 70ch;
-		margin: 2rem auto;
-		border-top: 1px solid var(--color-green-light);
-		padding-top: 1rem;
-	}
-	.comments li {
-		border-left: 3px solid var(--color-green-light);
-		padding-left: 0.75rem;
-		margin: 0.75rem 0;
-	}
-	textarea {
-		width: 100%;
-	}
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		margin-top: 0.5rem;
-	}
-	.hint {
-		color: var(--color-green-dark);
-		font-size: 0.85rem;
-	}
-	.load-more {
-		margin-top: 1rem;
-		text-align: center;
+	.content :global(blockquote) {
+		border-left: var(--border-2, 2px) solid var(--color-border-strong);
+		padding-left: var(--space-4);
+		color: var(--color-text-muted);
+		margin-left: 0;
 	}
 	.report-row {
-		text-align: right;
-		margin-top: 1rem;
+		display: flex;
+		justify-content: flex-end;
+		margin-top: var(--space-5);
 	}
-	.report-link {
-		background: none;
-		border: none;
-		color: var(--color-green-dark);
-		font-size: 0.85rem;
-		text-decoration: underline;
-		cursor: pointer;
+
+	.comments {
+		max-width: var(--reading-width);
+		margin: var(--space-6, 2rem) auto;
+		border-top: var(--border-1) solid var(--color-border);
+		padding: var(--space-5) var(--space-4) 0;
+	}
+	.comments-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-lg);
+		color: var(--color-text);
+		margin: 0 0 var(--space-4);
+	}
+	.comment-list {
+		list-style: none;
+		margin: 0;
 		padding: 0;
-	}
-	.report-link.inline {
-		margin-left: 0.5rem;
-		font-size: 0.75rem;
-	}
-	.report-dialog {
-		border: 1px solid #ccc;
-		border-radius: 0.5rem;
-		padding: 1rem 1.25rem;
-		min-width: min(28rem, 90vw);
-	}
-	.report-dialog form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-3);
 	}
-	.report-dialog .dim {
-		color: #777;
-		font-size: 0.85rem;
+	.comment {
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-3);
+	}
+	.comment-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+	}
+	.comment-time {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+	.comment-body {
+		margin: var(--space-2) 0 0;
+		font-family: var(--font-ui);
+		font-size: var(--text-base);
+		color: var(--color-text);
+		white-space: pre-wrap;
+	}
+	.load-more {
+		margin-top: var(--space-4);
+		display: flex;
+		justify-content: center;
+	}
+	.leave-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-base);
+		color: var(--color-text);
+		margin: var(--space-5) 0 var(--space-3);
+	}
+	.comment-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
+	}
+	.form-actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+	.form-error {
+		color: var(--color-danger);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: var(--space-2) 0 0;
+	}
+	.hint {
+		color: var(--color-text-muted);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin-top: var(--space-3);
+	}
+	.signin-prompt {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+	}
+
+	.report-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.report-target {
+		margin: 0;
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+	}
+	.report-label {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.report-select {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		padding: var(--space-2);
+	}
+	.report-err {
+		color: var(--color-danger);
+		font-size: var(--text-sm);
 		margin: 0;
 	}
-	.report-dialog .err {
-		color: #b00;
-	}
-	.report-dialog .ok {
-		color: #060;
+	.report-ok {
+		color: var(--color-accent);
+		font-size: var(--text-sm);
+		margin: 0;
 	}
 	.dialog-btns {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 0.5rem;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
 	}
 </style>
