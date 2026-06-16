@@ -390,32 +390,6 @@
 		font-weight: 700;
 	}
 
-	/* Legacy global button styling for not-yet-redesigned pages. NOT !important
-	   so the new src/lib/components/ui/Button (and other scoped components) win
-	   on specificity. Removed entirely when the layout is redesigned (Plan 3). */
-	:global(button, .btn) {
-		background-color: var(--color-green);
-		color: var(--color-green-white);
-		border: 1px solid var(--color-green-light);
-		border-radius: 0.3rem;
-		padding: 0.55rem 0.9rem;
-		cursor: pointer;
-		font-weight: 500;
-		font-size: var(--text-base);
-		min-height: var(--touch-target);
-		line-height: 1.2;
-	}
-
-	:global(button:hover, .btn:hover) {
-		background-color: var(--color-green-light);
-		color: var(--color-green);
-	}
-
-	:global(button:disabled, .btn:disabled) {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
 	/* Hamburger button styles — only rendered on narrow viewports via the
 	   mobile-actions wrapper. Token-styled, transparent against the paper nav. */
 	.hamburger {
