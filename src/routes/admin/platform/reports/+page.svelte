@@ -1,5 +1,14 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import {
+		Table,
+		Button,
+		Badge,
+		AlertDialog,
+		EmptyState,
+		Kicker,
+		Pagination
+	} from '$lib/components/ui';
 	import type { ReportStatus } from '$lib/db/reports';
 	export let data;
 	$: ({ reports, status, page, totalPages, total, counts } = data);
@@ -36,187 +45,301 @@
 		return `${Math.floor(seconds / 86400)}d`;
 	}
 
-	// Single-source-of-truth per-row notes binding. A map keyed by report
-	// id keeps each row's textarea state independent across re-renders.
+	// Per-row notes state, keyed by report id.
 	let notesByRow: Record<string, string> = {};
+
+	// Per-row dialog state.
+	let resolveDialogOpen: Record<string, boolean> = {};
+	let dismissDialogOpen: Record<string, boolean> = {};
+
+	const columns = [
+		{ key: 'age', label: 'Age' },
+		{ key: 'target', label: 'Target' },
+		{ key: 'reason', label: 'Reason' },
+		{ key: 'reporter', label: 'Reporter' },
+		{ key: 'details', label: 'Details' },
+		{ key: 'action', label: 'Action' }
+	];
 </script>
 
 <svelte:head>
 	<title>Reports — Platform admin</title>
 </svelte:head>
 
-<header>
-	<p><a href="/admin/platform">&larr; Overview</a></p>
-	<h2>Abuse reports</h2>
+<div class="page-header">
+	<p class="back-link"><a href="/admin/platform">&larr; Overview</a></p>
+	<Kicker>Platform admin</Kicker>
+	<h2 class="page-title">Abuse reports</h2>
 	<p class="meta">{total} {status} report(s) &middot; page {page} of {totalPages}</p>
-	<nav class="tabs">
-		{#each STATUSES as s}
-			<a href="?status={s}" class:active={status === s}>
-				{s} ({counts[s]})
-			</a>
-		{/each}
-	</nav>
-</header>
+</div>
+
+<nav class="tab-nav" aria-label="Report status filter">
+	{#each STATUSES as s}
+		<a href="?status={s}" class="tab-link" class:tab-active={status === s}>
+			{s}
+			<Badge tone={status === s ? 'success' : 'neutral'}>{counts[s]}</Badge>
+		</a>
+	{/each}
+</nav>
 
 {#if actionError}
-	<p class="err">{actionError}</p>
+	<p class="feedback feedback--err" role="alert">{actionError}</p>
 {/if}
 
-{#if reports.length === 0}
-	<p>No reports in this view.</p>
-{:else}
-	<table>
-		<thead>
-			<tr>
-				<th>Age</th>
-				<th>Target</th>
-				<th>Reason</th>
-				<th>Reporter</th>
-				<th>Details</th>
-				<th>Action</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each reports as r (r.id)}
-				<tr>
-					<td>{ageOf(r.createdAt)}</td>
-					<td>
-						<code>{r.targetType}</code><br />
-						{#if r.targetLink}
-							<a href={r.targetLink}><small>{r.targetId.slice(0, 8)}…</small></a>
-						{:else}
-							<small>{r.targetId.slice(0, 8)}…</small>
-						{/if}
-					</td>
-					<td><code>{r.reason}</code></td>
-					<td>
-						{#if r.reporterUserId}
-							{r.reporterUsername ?? r.reporterUserId.slice(0, 8) + '…'}
-						{:else}
-							<em>anonymous</em>{#if r.reporterIp}<br /><small>{r.reporterIp}</small>{/if}
-						{/if}
-					</td>
-					<td>
-						{#if r.details}
-							<p class="details">{r.details}</p>
-						{:else}
-							<em class="muted">—</em>
-						{/if}
-						{#if r.resolutionNotes}
-							<p class="notes">
-								<strong>Notes:</strong>
-								{r.resolutionNotes}
-							</p>
-						{/if}
-					</td>
-					<td>
-						{#if status === 'open' || status === 'reviewing'}
-							<textarea rows="2" placeholder="Notes (optional)" bind:value={notesByRow[r.id]}
-							></textarea>
-							<div class="btns">
-								<button
-									type="button"
-									disabled={busyId === r.id}
-									on:click={() => act(r.id, 'resolve', notesByRow[r.id] ?? '')}
-								>
+<Table {columns} rows={reports} caption="Abuse reports" getKey={(r) => r.id}>
+	{#snippet cell(row, col)}
+		{#if col.key === 'age'}
+			<span class="timestamp">{ageOf(row.createdAt)}</span>
+		{:else if col.key === 'target'}
+			<code class="target-type">{row.targetType}</code>
+			{#if row.targetLink}
+				<a href={row.targetLink} class="target-link">{row.targetId.slice(0, 8)}&hellip;</a>
+			{:else}
+				<span class="target-id">{row.targetId.slice(0, 8)}&hellip;</span>
+			{/if}
+		{:else if col.key === 'reason'}
+			<code class="reason-code">{row.reason}</code>
+		{:else if col.key === 'reporter'}
+			{#if row.reporterUserId}
+				{row.reporterUsername ?? row.reporterUserId.slice(0, 8) + '…'}
+			{:else}
+				<em class="muted">anonymous</em>
+				{#if row.reporterIp}
+					<span class="ip-hint">{row.reporterIp}</span>
+				{/if}
+			{/if}
+		{:else if col.key === 'details'}
+			{#if row.details}
+				<p class="details">{row.details}</p>
+			{:else}
+				<em class="muted">—</em>
+			{/if}
+			{#if row.resolutionNotes}
+				<p class="notes"><strong>Notes:</strong> {row.resolutionNotes}</p>
+			{/if}
+		{:else if col.key === 'action'}
+			{#if status === 'open' || status === 'reviewing'}
+				<div class="action-cell">
+					<textarea
+						rows="2"
+						placeholder="Notes (optional)"
+						bind:value={notesByRow[row.id]}
+						class="notes-input"
+					></textarea>
+					<div class="action-btns">
+						<AlertDialog
+							bind:open={resolveDialogOpen[row.id]}
+							title="Resolve this report?"
+							description="Mark the report as resolved. Notes will be saved."
+							confirmLabel="Resolve"
+							cancelLabel="Cancel"
+							onConfirm={() => act(row.id, 'resolve', notesByRow[row.id] ?? '')}
+						>
+							{#snippet trigger(props)}
+								<Button variant="primary" size="sm" disabled={busyId === row.id} {...props}>
 									Resolve
-								</button>
-								<button
-									type="button"
-									disabled={busyId === r.id}
-									on:click={() => act(r.id, 'dismiss', notesByRow[r.id] ?? '')}
-								>
+								</Button>
+							{/snippet}
+						</AlertDialog>
+						<AlertDialog
+							bind:open={dismissDialogOpen[row.id]}
+							title="Dismiss this report?"
+							description="Mark the report as dismissed. Notes will be saved."
+							confirmLabel="Dismiss"
+							cancelLabel="Cancel"
+							onConfirm={() => act(row.id, 'dismiss', notesByRow[row.id] ?? '')}
+						>
+							{#snippet trigger(props)}
+								<Button variant="ghost" size="sm" disabled={busyId === row.id} {...props}>
 									Dismiss
-								</button>
-							</div>
-						{:else}
-							<small
-								>{r.status} by {r.resolvedByUserId
-									? r.resolvedByUserId.slice(0, 8) + '…'
-									: '—'}</small
-							>
-						{/if}
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+								</Button>
+							{/snippet}
+						</AlertDialog>
+					</div>
+				</div>
+			{:else}
+				<span class="resolved-by"
+					>{row.status} by {row.resolvedByUserId
+						? row.resolvedByUserId.slice(0, 8) + '…'
+						: '—'}</span
+				>
+			{/if}
+		{/if}
+	{/snippet}
+	{#snippet empty()}
+		<EmptyState title="No reports in this view." />
+	{/snippet}
+</Table>
 
-	<nav class="pager">
-		{#if page > 1}
-			<a href="?status={status}&page={page - 1}">&larr; Prev</a>
-		{/if}
-		{#if page < totalPages}
-			<a href="?status={status}&page={page + 1}">Next &rarr;</a>
-		{/if}
-	</nav>
+{#if totalPages > 1}
+	<div class="pager">
+		<Pagination {page} pageCount={totalPages} makeHref={(p) => `?status=${status}&page=${p}`} />
+	</div>
 {/if}
 
 <style>
-	header {
-		margin-bottom: 1rem;
+	.page-header {
+		margin-bottom: var(--space-4);
 	}
-	.meta {
-		color: #666;
-		font-size: 0.85rem;
+
+	.back-link {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0 0 var(--space-2);
 	}
-	.err {
-		color: #b00;
-	}
-	.tabs {
-		display: flex;
-		gap: 1rem;
-		margin-top: 0.5rem;
-	}
-	.tabs a {
-		padding: 0.25rem 0.5rem;
-		border: 1px solid #ddd;
-		border-radius: 0.25rem;
+
+	.back-link a {
+		color: var(--color-accent);
 		text-decoration: none;
-		font-size: 0.85rem;
 	}
-	.tabs a.active {
-		background: #f0f0f0;
-		font-weight: 600;
+
+	.back-link a:hover {
+		text-decoration: underline;
 	}
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 0.85rem;
+
+	.page-title {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		color: var(--color-text);
+		margin: var(--space-1) 0 0;
 	}
-	th,
-	td {
-		border-bottom: 1px solid #eee;
-		padding: 0.4rem;
-		vertical-align: top;
-		text-align: left;
+
+	.meta {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		margin: var(--space-1) 0 0;
 	}
+
+	.tab-nav {
+		display: flex;
+		border-bottom: var(--border-1) solid var(--color-border);
+		gap: 0;
+		margin-bottom: var(--space-4);
+	}
+
+	.tab-link {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-4);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		color: var(--color-text-muted);
+		text-decoration: none;
+		border-bottom: var(--border-2) solid transparent;
+		margin-bottom: calc(-1 * var(--border-1));
+		transition: color var(--transition-fast) var(--ease);
+	}
+
+	.tab-link:hover {
+		color: var(--color-text);
+	}
+
+	.tab-active {
+		color: var(--color-accent);
+		border-bottom-color: var(--color-accent);
+	}
+
+	.feedback {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0 0 var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
+	}
+
+	.feedback--err {
+		color: var(--color-danger);
+		background: var(--color-surface-alt);
+		border-left: var(--border-2) solid var(--color-danger);
+	}
+
+	.timestamp {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
+	.target-type {
+		display: block;
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
+	.target-link {
+		font-size: var(--text-xs);
+		color: var(--color-accent);
+	}
+
+	.target-id {
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
+	.reason-code {
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
+	.muted {
+		color: var(--color-text-muted);
+	}
+
+	.ip-hint {
+		display: block;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
 	.details {
 		margin: 0;
-		max-width: 30rem;
+		max-width: 24rem;
 		white-space: pre-wrap;
+		font-size: var(--text-sm);
+		color: var(--color-text);
 	}
+
 	.notes {
-		margin: 0.25rem 0 0;
-		font-size: 0.8rem;
-		color: #555;
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
 	}
-	.muted {
-		color: #999;
+
+	.action-cell {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		min-width: 10rem;
 	}
-	textarea {
+
+	.notes-input {
 		width: 100%;
-		min-width: 12rem;
-		font-size: 0.8rem;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
+		resize: vertical;
 	}
-	.btns {
+
+	.action-btns {
 		display: flex;
-		gap: 0.5rem;
-		margin-top: 0.25rem;
+		gap: var(--space-2);
+		flex-wrap: wrap;
 	}
+
+	.resolved-by {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
 	.pager {
-		display: flex;
-		gap: 1rem;
-		margin-top: 1rem;
+		margin-top: var(--space-5);
 	}
 </style>

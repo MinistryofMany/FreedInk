@@ -1,234 +1,367 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { Table, Card, Button, Badge, EmptyState, Kicker } from '$lib/components/ui';
 	export let data;
 	export let form;
 	$: ({ flags, myOverrides, recentUsers } = data);
+
+	// Per-row range slider reactive display.
+	let rolloutDisplay: Record<string, number> = {};
+	$: {
+		for (const f of flags) {
+			if (!(f.key in rolloutDisplay)) rolloutDisplay[f.key] = f.rolloutPercentage;
+		}
+	}
+
+	const flagColumns = [
+		{ key: 'key', label: 'Key' },
+		{ key: 'description', label: 'Description' },
+		{ key: 'enabled', label: 'Enabled' },
+		{ key: 'rollout', label: 'Rollout %' },
+		{ key: 'updated', label: 'Updated' },
+		{ key: 'actions', label: 'Actions' }
+	];
+
+	const overrideColumns = [
+		{ key: 'flag', label: 'Flag' },
+		{ key: 'enabled', label: 'Enabled' },
+		{ key: 'created', label: 'Created' },
+		{ key: 'remove', label: 'Remove' }
+	];
 </script>
 
 <svelte:head>
 	<title>Feature flags — Platform admin</title>
 </svelte:head>
 
-<header>
-	<p><a href="/admin/platform">&larr; Overview</a></p>
-	<h2>Feature flags</h2>
+<div class="page-header">
+	<p class="back-link"><a href="/admin/platform">&larr; Overview</a></p>
+	<Kicker>Platform admin</Kicker>
+	<h2 class="page-title">Feature flags</h2>
 	<p class="note">
 		Toggle enable/disable and the rollout percentage per flag. Per-user overrides below win over the
 		global flag and rollout decision. Every change is recorded in the audit log as <code
 			>feature_flag.changed</code
 		>.
 	</p>
-</header>
+</div>
 
 {#if form?.error}
-	<p class="err">{form.error}</p>
+	<p class="feedback feedback--err" role="alert">{form.error}</p>
 {/if}
 {#if form?.ok}
-	<p class="ok">Saved.</p>
+	<p class="feedback feedback--ok">Saved.</p>
 {/if}
 
-<section>
-	<h3>Flags</h3>
-	{#if flags.length === 0}
-		<p>No flags yet — create one below.</p>
-	{:else}
-		<table>
-			<thead>
-				<tr>
-					<th>Key</th>
-					<th>Description</th>
-					<th>Enabled</th>
-					<th>Rollout %</th>
-					<th>Updated</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each flags as f (f.key)}
-					<tr>
-						<td><code>{f.key}</code></td>
-						<td>
-							<input
-								type="text"
-								name="description"
-								form="flag-{f.key}"
-								value={f.description ?? ''}
-								placeholder="(no description)"
-							/>
-						</td>
-						<td>
-							<select name="enabled" form="flag-{f.key}">
-								<option value="true" selected={f.enabled}>on</option>
-								<option value="false" selected={!f.enabled}>off</option>
-							</select>
-						</td>
-						<td>
-							<input
-								type="range"
-								name="rollout_percentage"
-								form="flag-{f.key}"
-								min="0"
-								max="100"
-								value={f.rolloutPercentage}
-							/>
-							<span class="pct">{f.rolloutPercentage}%</span>
-						</td>
-						<td><small>{new Date(f.updatedAt).toLocaleString()}</small></td>
-						<td>
-							<!-- Form lives in this cell (valid HTML); the inputs above
-							     associate to it via their `form` attribute. -->
-							<form id="flag-{f.key}" method="POST" action="?/saveFlag" use:enhance>
-								<input type="hidden" name="key" value={f.key} />
-								<button type="submit">Save</button>
-							</form>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
+<section class="section">
+	<h3 class="section-title">Flags</h3>
+	<Table columns={flagColumns} rows={flags} caption="Feature flags" getKey={(r) => r.key}>
+		{#snippet cell(row, col)}
+			{#if col.key === 'key'}
+				<code>{row.key}</code>
+			{:else if col.key === 'description'}
+				<input
+					type="text"
+					name="description"
+					form="flag-{row.key}"
+					value={row.description ?? ''}
+					placeholder="(no description)"
+					class="inline-input"
+				/>
+			{:else if col.key === 'enabled'}
+				<select name="enabled" form="flag-{row.key}" class="inline-select">
+					<option value="true" selected={row.enabled}>on</option>
+					<option value="false" selected={!row.enabled}>off</option>
+				</select>
+			{:else if col.key === 'rollout'}
+				<div class="rollout-cell">
+					<input
+						type="range"
+						name="rollout_percentage"
+						form="flag-{row.key}"
+						min="0"
+						max="100"
+						value={rolloutDisplay[row.key] ?? row.rolloutPercentage}
+						class="range-slider"
+						oninput={(e) => {
+							rolloutDisplay[row.key] = Number((e.target as HTMLInputElement).value);
+							rolloutDisplay = { ...rolloutDisplay };
+						}}
+					/>
+					<span class="pct">{rolloutDisplay[row.key] ?? row.rolloutPercentage}%</span>
+				</div>
+			{:else if col.key === 'updated'}
+				<span class="timestamp">{new Date(row.updatedAt).toLocaleString()}</span>
+			{:else if col.key === 'actions'}
+				<!-- Form lives here; inputs above associate via their form attribute -->
+				<form id="flag-{row.key}" method="POST" action="?/saveFlag" use:enhance>
+					<input type="hidden" name="key" value={row.key} />
+					<Button type="submit" size="sm">Save</Button>
+				</form>
+			{/if}
+		{/snippet}
+		{#snippet empty()}
+			<EmptyState title="No flags yet" description="Create one below." />
+		{/snippet}
+	</Table>
 </section>
 
-<section>
-	<h3>Add flag</h3>
-	<form method="POST" action="?/createFlag" use:enhance class="row-form">
-		<label>
-			Key
-			<input
-				type="text"
-				name="key"
-				required
-				pattern="[a-z][a-z0-9_.\-]{'{1,63}'}"
-				placeholder="my.feature"
-			/>
-		</label>
-		<label>
-			Description
-			<input type="text" name="description" placeholder="optional" />
-		</label>
-		<button type="submit">Create</button>
-	</form>
-	<p class="hint">
-		Keys must start with a lowercase letter; allowed: <code>a-z 0-9 _ . -</code>.
-	</p>
+<section class="section">
+	<h3 class="section-title">Add flag</h3>
+	<Card>
+		<form method="POST" action="?/createFlag" use:enhance class="form-row">
+			<div class="field-group">
+				<label class="field-label" for="new-key">Key</label>
+				<input
+					id="new-key"
+					type="text"
+					name="key"
+					required
+					pattern="[a-z][a-z0-9_.\-]{'{1,63}'}"
+					placeholder="my.feature"
+					class="inline-input"
+				/>
+			</div>
+			<div class="field-group">
+				<label class="field-label" for="new-description">Description</label>
+				<input
+					id="new-description"
+					type="text"
+					name="description"
+					placeholder="optional"
+					class="inline-input"
+				/>
+			</div>
+			<div class="form-action">
+				<Button type="submit">Create</Button>
+			</div>
+		</form>
+		<p class="hint">
+			Keys must start with a lowercase letter; allowed: <code>a-z 0-9 _ . -</code>.
+		</p>
+	</Card>
 </section>
 
-<section>
-	<h3>Per-user overrides</h3>
-	<form method="POST" action="?/setOverride" use:enhance class="row-form">
-		<label>
-			Flag
-			<select name="flag_key" required>
-				{#each flags as f (f.key)}
-					<option value={f.key}>{f.key}</option>
-				{/each}
-			</select>
-		</label>
-		<label>
-			User (username or uuid)
-			<input type="text" name="user_query" required list="recent-users" placeholder="search…" />
-			<datalist id="recent-users">
-				{#each recentUsers as u (u.id)}
-					<option value={u.username}>{u.username}</option>
-				{/each}
-			</datalist>
-		</label>
-		<label>
-			Enabled
-			<select name="enabled">
-				<option value="true">on</option>
-				<option value="false">off</option>
-			</select>
-		</label>
-		<button type="submit">Set override</button>
-	</form>
+<section class="section">
+	<h3 class="section-title">Per-user overrides</h3>
+	<Card>
+		<form method="POST" action="?/setOverride" use:enhance class="form-row">
+			<div class="field-group">
+				<label class="field-label" for="override-flag">Flag</label>
+				<select id="override-flag" name="flag_key" required class="inline-select">
+					{#each flags as f (f.key)}
+						<option value={f.key}>{f.key}</option>
+					{/each}
+				</select>
+			</div>
+			<div class="field-group">
+				<label class="field-label" for="override-user">User (username or uuid)</label>
+				<input
+					id="override-user"
+					type="text"
+					name="user_query"
+					required
+					list="recent-users"
+					placeholder="search…"
+					class="inline-input"
+				/>
+				<datalist id="recent-users">
+					{#each recentUsers as u (u.id)}
+						<option value={u.username}>{u.username}</option>
+					{/each}
+				</datalist>
+			</div>
+			<div class="field-group">
+				<label class="field-label" for="override-enabled">Enabled</label>
+				<select id="override-enabled" name="enabled" class="inline-select">
+					<option value="true">on</option>
+					<option value="false">off</option>
+				</select>
+			</div>
+			<div class="form-action">
+				<Button type="submit">Set override</Button>
+			</div>
+		</form>
+	</Card>
 
-	<h4>Your overrides</h4>
-	{#if myOverrides.length === 0}
-		<p>No overrides set for you.</p>
-	{:else}
-		<table>
-			<thead>
-				<tr>
-					<th>Flag</th>
-					<th>Enabled</th>
-					<th>Created</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each myOverrides as o (o.flagKey + ':' + o.userId)}
-					<tr>
-						<td><code>{o.flagKey}</code></td>
-						<td>{o.enabled ? 'on' : 'off'}</td>
-						<td><small>{new Date(o.createdAt).toLocaleString()}</small></td>
-						<td>
-							<form method="POST" action="?/removeOverride" use:enhance>
-								<input type="hidden" name="flag_key" value={o.flagKey} />
-								<input type="hidden" name="user_id" value={o.userId} />
-								<button type="submit">Remove</button>
-							</form>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
+	<h4 class="subsection-title">Your overrides</h4>
+	<Table
+		columns={overrideColumns}
+		rows={myOverrides}
+		caption="Your flag overrides"
+		getKey={(r) => r.flagKey + ':' + r.userId}
+	>
+		{#snippet cell(row, col)}
+			{#if col.key === 'flag'}
+				<code>{row.flagKey}</code>
+			{:else if col.key === 'enabled'}
+				<Badge tone={row.enabled ? 'success' : 'neutral'}>{row.enabled ? 'on' : 'off'}</Badge>
+			{:else if col.key === 'created'}
+				<span class="timestamp">{new Date(row.createdAt).toLocaleString()}</span>
+			{:else if col.key === 'remove'}
+				<form method="POST" action="?/removeOverride" use:enhance>
+					<input type="hidden" name="flag_key" value={row.flagKey} />
+					<input type="hidden" name="user_id" value={row.userId} />
+					<Button type="submit" variant="danger" size="sm">Remove</Button>
+				</form>
+			{/if}
+		{/snippet}
+		{#snippet empty()}
+			<EmptyState title="No overrides set for you." />
+		{/snippet}
+	</Table>
 </section>
 
 <style>
-	header {
-		margin-bottom: 1.5rem;
+	.page-header {
+		margin-bottom: var(--space-5);
 	}
+
+	.back-link {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0 0 var(--space-2);
+	}
+
+	.back-link a {
+		color: var(--color-accent);
+		text-decoration: none;
+	}
+
+	.back-link a:hover {
+		text-decoration: underline;
+	}
+
+	.page-title {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		color: var(--color-text);
+		margin: var(--space-1) 0 0;
+	}
+
 	.note {
-		font-size: 0.85rem;
-		color: #666;
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
 		max-width: 70ch;
+		margin: var(--space-2) 0 0;
 	}
-	.err {
-		color: #b00;
+
+	.feedback {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0 0 var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
 	}
-	.ok {
-		color: #060;
+
+	.feedback--err {
+		color: var(--color-danger);
+		background: var(--color-surface-alt);
+		border-left: var(--border-2) solid var(--color-danger);
 	}
-	section {
-		margin-top: 2rem;
+
+	.feedback--ok {
+		color: var(--color-accent);
+		background: var(--color-surface-alt);
+		border-left: var(--border-2) solid var(--color-accent);
 	}
-	table {
+
+	.section {
+		margin-top: var(--space-7);
+	}
+
+	.section-title {
+		font-family: var(--font-ui);
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--color-text);
+		margin: 0 0 var(--space-4);
+	}
+
+	.subsection-title {
+		font-family: var(--font-ui);
+		font-size: var(--text-base);
+		font-weight: 600;
+		color: var(--color-text);
+		margin: var(--space-5) 0 var(--space-3);
+	}
+
+	.inline-input {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
 		width: 100%;
-		border-collapse: collapse;
-		font-size: 0.9rem;
+		max-width: 20rem;
 	}
-	th,
-	td {
-		border-bottom: 1px solid #eee;
-		padding: 0.4rem;
-		vertical-align: middle;
-		text-align: left;
+
+	.inline-select {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
 	}
-	input[type='text'] {
-		width: 100%;
-		max-width: 28rem;
+
+	.rollout-cell {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
+
+	.range-slider {
+		flex: 1;
+		min-width: 6rem;
+	}
+
 	.pct {
-		display: inline-block;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
 		min-width: 2.5rem;
 		text-align: right;
 	}
-	.row-form {
+
+	.timestamp {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+	}
+
+	.form-row {
 		display: flex;
-		gap: 0.75rem;
+		gap: var(--space-4);
 		align-items: flex-end;
 		flex-wrap: wrap;
-		margin-bottom: 0.5rem;
 	}
-	.row-form label {
+
+	.form-action {
+		align-self: flex-end;
+	}
+
+	.field-group {
 		display: flex;
 		flex-direction: column;
-		font-size: 0.85rem;
+		gap: var(--space-1);
 	}
+
+	.field-label {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
 	.hint {
-		font-size: 0.8rem;
-		color: #666;
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+		margin: var(--space-3) 0 0;
 	}
 </style>
