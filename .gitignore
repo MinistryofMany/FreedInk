@@ -42,3 +42,7 @@ data/vapid.json
 # DB dumps and per-env test secrets (added during Minister OIDC integration)
 backups/
 .env.test
+
+# Internal tooling artifacts (not source-controlled)
+.claude/
+docs/superpowers/

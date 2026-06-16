@@ -1,10 +1,3 @@
-// Author: Cipher
-// Created: 2026-05-18
-// Purpose: Verify the responsive navigation drawer appears below the 768px
-// breakpoint and that the dashboard link is reachable from inside the drawer
-// when signed in. For unauthenticated runs we just confirm the hamburger
-// opens and a primary item (Sign in / up) appears in the drawer.
-
 import { test, expect } from '@playwright/test';
 
 const MOBILE = { width: 375, height: 812 };

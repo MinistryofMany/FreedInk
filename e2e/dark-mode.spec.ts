@@ -1,9 +1,3 @@
-// Author: Cipher
-// Created: 2026-05-18
-// Purpose: Verify the dark palette engages when the user's OS prefers dark,
-// and that the manual override cookie (freedink_theme=light) wins over the
-// media query.
-
 import { test, expect } from '@playwright/test';
 
 // Hue-agnostic brightness check: take the computed background, parse the RGB
