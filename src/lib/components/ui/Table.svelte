@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { browser } from '$app/environment';
 
 	interface Column {
 		key: string;
@@ -24,6 +25,21 @@
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const keyOf = (row: any, i: number) => (getKey ? getKey(row, i) : i);
+
+	// Render ONLY the active viewport's rows so cell snippets (which may contain
+	// forms, element ids, and bindings) appear exactly once in the live DOM.
+	// SSR + first paint render the desktop table; a post-mount media query
+	// switches to the card layout on narrow viewports (no hydration mismatch -
+	// the switch is a normal reactive update after hydration).
+	let isMobile = $state(false);
+	$effect(() => {
+		if (!browser) return;
+		const mq = window.matchMedia('(max-width: 767px)');
+		const update = () => (isMobile = mq.matches);
+		update();
+		mq.addEventListener('change', update);
+		return () => mq.removeEventListener('change', update);
+	});
 </script>
 
 <div class={['fi-table', klass].filter(Boolean).join(' ')}>
@@ -33,6 +49,21 @@
 		{:else}
 			<p class="t-empty">No items.</p>
 		{/if}
+	{:else if isMobile}
+		<ul class="t-mobile" aria-label={caption}>
+			{#each rows as row, i (keyOf(row, i))}
+				<li class="t-card">
+					<dl>
+						{#each columns as col (col.key)}
+							<div class="t-field">
+								<dt>{col.label}</dt>
+								<dd>{@render cell(row, col)}</dd>
+							</div>
+						{/each}
+					</dl>
+				</li>
+			{/each}
+		</ul>
 	{:else}
 		<table class="t-desktop">
 			{#if caption}
@@ -61,21 +92,6 @@
 				{/each}
 			</tbody>
 		</table>
-
-		<ul class="t-mobile" aria-label={caption}>
-			{#each rows as row, i (keyOf(row, i))}
-				<li class="t-card">
-					<dl>
-						{#each columns as col (col.key)}
-							<div class="t-field">
-								<dt>{col.label}</dt>
-								<dd>{@render cell(row, col)}</dd>
-							</div>
-						{/each}
-					</dl>
-				</li>
-			{/each}
-		</ul>
 	{/if}
 </div>
 
@@ -119,7 +135,7 @@
 		list-style: none;
 		padding: 0;
 		margin: 0;
-		display: none;
+		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
 	}
@@ -167,23 +183,5 @@
 		color: var(--color-text-muted);
 		margin: 0;
 		padding: var(--space-3) 0;
-	}
-
-	.fi-table .t-desktop {
-		display: table;
-	}
-
-	.fi-table .t-mobile {
-		display: none;
-	}
-
-	@media (max-width: 767px) {
-		.fi-table .t-desktop {
-			display: none;
-		}
-
-		.fi-table .t-mobile {
-			display: flex;
-		}
 	}
 </style>
