@@ -471,22 +471,20 @@
 								{$_('settings.delete_account')}
 							</Button>
 						{/snippet}
+						<div class="del-confirm stack">
+							<p class="muted">
+								{$_('settings.deletion_confirm_prompt_prefix')}
+								<code>{data.user.username}</code>
+								{$_('settings.deletion_confirm_prompt_suffix')}
+							</p>
+							<Field
+								label={$_('settings.deletion_aria_label')}
+								bind:value={deleteConfirm}
+								placeholder={data.user.username}
+							/>
+						</div>
 					</AlertDialog>
 				</div>
-				{#if deleteOpen}
-					<div class="del-confirm stack">
-						<p class="muted">
-							{$_('settings.deletion_confirm_prompt_prefix')}
-							<code>{data.user.username}</code>
-							{$_('settings.deletion_confirm_prompt_suffix')}
-						</p>
-						<Field
-							label={$_('settings.deletion_aria_label')}
-							bind:value={deleteConfirm}
-							placeholder={data.user.username}
-						/>
-					</div>
-				{/if}
 				{#if dataMsg}<p class="status">{dataMsg}</p>{/if}
 			</div>
 		</Card>

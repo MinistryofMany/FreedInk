@@ -13,6 +13,9 @@
 		tone?: 'danger';
 		// Receives Bits' trigger props to spread onto a single focusable element.
 		trigger?: Snippet<[Record<string, unknown>]>;
+		// Optional extra content (e.g. a confirmation input) rendered inside the
+		// dialog, between the description and the action footer.
+		children?: Snippet;
 	}
 
 	let {
@@ -23,7 +26,8 @@
 		cancelLabel = 'Cancel',
 		onConfirm,
 		tone,
-		trigger
+		trigger,
+		children
 	}: Props = $props();
 </script>
 
@@ -41,6 +45,9 @@
 		<AlertDialog.Content class="fi-adlg-content">
 			<AlertDialog.Title class="fi-adlg-title">{title}</AlertDialog.Title>
 			<AlertDialog.Description class="fi-adlg-desc">{description}</AlertDialog.Description>
+			{#if children}
+				<div class="fi-adlg-body">{@render children()}</div>
+			{/if}
 			<div class="fi-adlg-footer">
 				<AlertDialog.Cancel>
 					{#snippet child({ props })}
@@ -102,6 +109,10 @@
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
 		color: var(--color-text-muted);
+		margin: 0 0 var(--space-5);
+	}
+
+	:global(.fi-adlg-body) {
 		margin: 0 0 var(--space-5);
 	}
 
