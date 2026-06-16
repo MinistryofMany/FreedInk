@@ -39,7 +39,7 @@ the endpoints return 503):
 
 ```
 OIDC_MINISTER_ISSUER=http://localhost:3000
-OIDC_MINISTER_CLIENT_ID=tc_freedink_dev
+OIDC_MINISTER_CLIENT_ID=freedink_dev
 OIDC_MINISTER_CLIENT_SECRET=dev-only-freedink-secret-change-me
 OIDC_MINISTER_REDIRECT_URI=http://localhost:5173/api/auth/oidc/callback
 ```
@@ -86,7 +86,7 @@ pnpm --filter @minister/app oidc:seed-client \
   --name "FreedInk" \
   --redirect-uri http://localhost:5173/api/auth/oidc/callback \
   --scope openid --scope profile \
-  --client-id tc_freedink_dev \
+  --client-id freedink_dev \
   --client-secret dev-only-freedink-secret-change-me
 ```
 
