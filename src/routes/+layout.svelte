@@ -3,7 +3,9 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { prewarmForAuthedUser } from '$lib/client/semaphore';
-	import '$lib/styles/theme.css';
+	import '$lib/styles/tokens.css';
+	import '$lib/styles/base.css';
+	import '$lib/styles/fonts.ts';
 	// Side-effect import: registers locales and initializes svelte-i18n on
 	// module load. Importing `_` and `locale` here gives us the translator
 	// store + a way to flip languages at runtime.
@@ -264,11 +266,11 @@
 </footer>
 
 <style global>
-	/* Layout-scoped global styles. The bulk of the design tokens (colors,
-	   typography scale, focus ring) lives in src/lib/styles/theme.css, which
-	   is imported at the top of this component. Keep this block focused on
-	   the navigation, drawer, and a few global element styles that need to
-	   reference layout-specific selectors. */
+	/* Layout-scoped global styles. The design tokens (colors, typography scale,
+	   focus ring) live in src/lib/styles/tokens.css and the element/a11y base in
+	   src/lib/styles/base.css, both imported at the top of this component. Keep
+	   this block focused on the navigation, drawer, and a few global element
+	   styles that need to reference layout-specific selectors. */
 
 	:global(a, a:visited) {
 		color: var(--color-link);

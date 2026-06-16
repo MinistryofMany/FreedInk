@@ -11,3 +11,6 @@ static/fonts/
 
 # Generated audit report (unicode-heavy tables; prettier oscillates)
 AUDIT.md
+
+# Superpowers brainstorming visual-companion scratch
+.superpowers/
