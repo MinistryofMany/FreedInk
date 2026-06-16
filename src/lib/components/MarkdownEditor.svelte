@@ -394,9 +394,10 @@
 	.md-editor {
 		display: flex;
 		flex-direction: column;
-		border: 1px solid var(--color-green-light, #c7d6c7);
-		border-radius: 4px;
-		background: var(--color-bg, #fff);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
 		min-height: 16rem;
 	}
 	.toolbar {
@@ -404,34 +405,37 @@
 		flex-wrap: wrap;
 		gap: 0.25rem;
 		padding: 0.4rem;
-		border-bottom: 1px solid var(--color-green-light, #c7d6c7);
-		background: var(--color-green-lightest, #f5faf5);
+		border-bottom: var(--border-1) solid var(--color-border);
+		background: var(--color-surface-alt);
 		align-items: center;
+		font-family: var(--font-ui);
 	}
 	.toolbar button {
 		min-width: 2rem;
 		padding: 0.25rem 0.5rem;
-		font: inherit;
+		font-family: var(--font-ui);
 		font-size: 0.9rem;
+		color: var(--color-text);
 		background: transparent;
-		border: 1px solid transparent;
-		border-radius: 3px;
+		border: var(--border-1) solid transparent;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		line-height: 1.2;
 	}
 	.toolbar button:hover:not(:disabled) {
-		background: rgba(0, 0, 0, 0.06);
+		background: var(--color-border);
 	}
 	.toolbar button.active {
-		background: rgba(0, 0, 0, 0.12);
-		border-color: rgba(0, 0, 0, 0.2);
+		background: var(--color-border);
+		border-color: var(--color-border-strong);
+		color: var(--color-accent);
 	}
 	.toolbar button:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
 	}
 	.toolbar .sep {
-		color: rgba(0, 0, 0, 0.2);
+		color: var(--color-border-strong);
 		padding: 0 0.25rem;
 	}
 	.toolbar .grow {
@@ -442,6 +446,8 @@
 		min-height: 14rem;
 		padding: 0.75rem 1rem;
 		overflow: auto;
+		color: var(--color-text);
+		background: var(--color-surface);
 	}
 	.surface :global(.tiptap-content) {
 		outline: none;
@@ -450,31 +456,31 @@
 	.surface :global(.tiptap-content p.is-editor-empty:first-child::before) {
 		content: attr(data-placeholder);
 		float: left;
-		color: rgba(0, 0, 0, 0.35);
+		color: var(--color-text-muted);
 		pointer-events: none;
 		height: 0;
 	}
 	.surface :global(img) {
 		max-width: 100%;
 		height: auto;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 	.surface :global(blockquote) {
-		border-left: 3px solid var(--color-green-light, #c7d6c7);
+		border-left: var(--border-2) solid var(--color-accent);
 		padding-left: 0.75rem;
-		color: rgba(0, 0, 0, 0.7);
+		color: var(--color-text-muted);
 		margin: 0.5rem 0;
 	}
 	.surface :global(pre) {
-		background: rgba(0, 0, 0, 0.05);
+		background: var(--color-surface-alt);
 		padding: 0.5rem 0.75rem;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		overflow-x: auto;
 	}
 	.surface :global(code) {
-		background: rgba(0, 0, 0, 0.06);
+		background: var(--color-surface-alt);
 		padding: 0.1rem 0.3rem;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font-size: 0.92em;
 	}
 	.surface :global(pre code) {
@@ -482,7 +488,7 @@
 		padding: 0;
 	}
 	.upload-error {
-		color: var(--color-red, #c00);
+		color: var(--color-danger);
 		padding: 0 0.75rem 0.5rem;
 		margin: 0;
 		font-size: 0.9rem;
