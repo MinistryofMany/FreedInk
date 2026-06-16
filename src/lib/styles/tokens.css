@@ -84,9 +84,9 @@
 	--color-green-lightest: var(--color-surface-alt); /* soft background tint */
 	--color-green-white: var(--color-surface); /* light surface */
 	--color-red: var(--color-danger);
+	/* legacy danger-hover; intentionally flattened onto danger until the admin/
+	   settings pages that use it are redesigned (Plan 4). */
 	--color-red-dark: var(--color-danger);
-	--color-link-hover-legacy: var(--color-link-hover);
-	--text-color-green-darkest: var(--color-text);
 }
 
 /* OS dark, only when the user has not explicitly forced light. */

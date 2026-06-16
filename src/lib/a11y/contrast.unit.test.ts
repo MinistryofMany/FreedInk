@@ -14,6 +14,9 @@ describe('contrastRatio', () => {
 	it('accepts 3-digit hex', () => {
 		expect(contrastRatio('#fff', '#000')).toBeCloseTo(21, 0);
 	});
+	it('rejects malformed hex lengths (e.g. 4-digit)', () => {
+		expect(() => contrastRatio('#1234', '#fff')).toThrow();
+	});
 });
 
 describe('meetsAA', () => {

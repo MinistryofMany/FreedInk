@@ -7,6 +7,7 @@ function expand(hex: string): string {
 			.split('')
 			.map((c) => c + c)
 			.join('');
+	if (h.length !== 6) throw new Error(`unsupported hex color: ${hex}`);
 	return h;
 }
 

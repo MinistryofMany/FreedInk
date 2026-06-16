@@ -1,8 +1,7 @@
 /*
   Element resets + cross-cutting a11y utilities. Consumes tokens.css.
-  Migrated from the old theme.css base block; focus ring is now a neutral,
-  theme-aware high-contrast outline (the old yellow failed 3:1 on paper), and
-  inputs use the stronger control border.
+  Focus ring is a neutral, theme-aware high-contrast outline (replacing the old
+  yellow, which failed 3:1 on paper); inputs use the stronger control border.
 */
 
 html,
@@ -51,7 +50,10 @@ a:hover {
 .skip-link:focus,
 .skip-link:focus-visible {
 	transform: translateY(0);
-	outline: var(--focus-ring-width) solid var(--focus-ring-color);
+	/* The skip-link sits on the accent fill, so its ring uses the link's own
+	   foreground (--color-bg), which contrasts with accent at >=7:1 (AA). The
+	   neutral page-bg ring would be low-contrast on the accent surface. */
+	outline: var(--focus-ring-width) solid var(--color-bg);
 	outline-offset: 0;
 }
 
