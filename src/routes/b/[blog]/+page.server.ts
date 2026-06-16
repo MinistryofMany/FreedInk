@@ -19,10 +19,17 @@ export const load: PageServerLoad = async ({ params, url }) => {
 			title: blog.title,
 			slug: blog.slug,
 			description: blog.description,
+			// The blog's full contributor set (everyone who could have written any
+			// post): owners, editors, reviewers, and authors — everyone except
+			// pure commenters. Shown by display name (falling back to the
+			// auto-generated username) at the top of the public blog. Posts are
+			// never attributed to an individual contributor: any of these names
+			// could have written any post. See the anonymity invariant in
+			// llms.txt.
 			authors: members
 				.filter((m) => m.role !== 'commenter')
-				.map((m) => m.user.username)
-				.sort()
+				.map((m) => m.user.displayName?.trim() || m.user.username)
+				.sort((a, b) => a.localeCompare(b))
 		},
 		Posts: posts.items.map((p) => ({
 			id: p.id,

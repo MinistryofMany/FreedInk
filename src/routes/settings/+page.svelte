@@ -21,6 +21,44 @@
 	let busy = false;
 	let msg = '';
 
+	// Profile (display name) editing. Seeded from the loaded user; the
+	// auto-generated `minister-…` / `0x…` username is the fallback when blank.
+	let displayName = data.user.displayName ?? '';
+	let profileBusy = false;
+	let profileMsg = '';
+
+	async function saveProfile() {
+		const t = get(_);
+		const trimmed = displayName.trim();
+		if (trimmed.length > 80) {
+			profileMsg = t('settings.display_name_too_long');
+			return;
+		}
+		profileBusy = true;
+		profileMsg = '';
+		try {
+			const res = await fetch('/api/user', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				// Empty string clears the display name (null) so the username
+				// fallback takes over again.
+				body: JSON.stringify({ displayName: trimmed === '' ? null : trimmed })
+			});
+			if (!res.ok) {
+				profileMsg = await res.text();
+				return;
+			}
+			const json = await res.json();
+			displayName = json.user.displayName ?? '';
+			data.user.displayName = json.user.displayName ?? null;
+			profileMsg = t('settings.display_name_saved');
+		} catch (e) {
+			profileMsg = (e as Error).message;
+		} finally {
+			profileBusy = false;
+		}
+	}
+
 	// Push notifications state. Stays in 'unsupported' on SSR so the button
 	// label is stable until onMount can probe the actual browser support.
 	let pushStatus: PushStatus = 'unsupported';
@@ -216,6 +254,23 @@
 		<dt>{$_('settings.email_label')}</dt>
 		<dd>{data.user.email ?? '—'}</dd>
 	</dl>
+	<form on:submit|preventDefault={saveProfile} class="profile-form">
+		<label>
+			{$_('settings.display_name_label')}
+			<input
+				type="text"
+				bind:value={displayName}
+				maxlength="80"
+				placeholder={$_('settings.display_name_placeholder')}
+				autocomplete="nickname"
+			/>
+		</label>
+		<button type="submit" disabled={profileBusy}>
+			{profileBusy ? $_('settings.saving') : $_('settings.save_button')}
+		</button>
+	</form>
+	<p class="muted">{$_('settings.display_name_hint')}</p>
+	{#if profileMsg}<p class="profile-msg">{profileMsg}</p>{/if}
 </section>
 
 <section>

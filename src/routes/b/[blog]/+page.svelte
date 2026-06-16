@@ -60,12 +60,15 @@
 <h1>{data.Blog.title}</h1>
 <code>{data.Blog.description}</code>
 
-<div id="authors">
-	<h4>{$_('blog.authors')}</h4>
-	{#each data.Blog.authors as author}
-		<div>{author}</div>
-	{/each}
-</div>
+<section id="contributors">
+	<h4>{$_('blog.contributors_heading')}</h4>
+	<div id="authors">
+		{#each data.Blog.authors as author}
+			<div>{author}</div>
+		{/each}
+	</div>
+	<p class="contributors-note">{$_('blog.contributors_note')}</p>
+</section>
 <h3>{$_('blog.posts_heading')}</h3>
 <ul>
 	{#each acc as Post (Post.id)}
@@ -105,8 +108,14 @@
 		margin-bottom: 1rem;
 	}
 
-	div#authors div::after {
+	div#authors div:not(:last-child)::after {
 		content: ',';
+	}
+
+	.contributors-note {
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
+		margin: 0.25rem 0 0;
 	}
 
 	.post_short {

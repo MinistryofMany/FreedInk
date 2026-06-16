@@ -166,7 +166,9 @@
 		<div class="nav-right desktop-only">
 			{#if signedIn}
 				<a href="/admin" aria-current={isCurrent('/admin')}>{$_('nav.dashboard')}</a>
-				<a href="/settings" aria-current={isCurrent('/settings')}>{data.user?.username}</a>
+				<a href="/settings" aria-current={isCurrent('/settings')}
+					>{data.user?.displayName?.trim() || data.user?.username}</a
+				>
 				<button type="button" on:click={signOut}>{$_('nav.sign_out')}</button>
 			{:else}
 				<a href="/signup" class="btn" aria-current={isCurrent('/signup')}>{$_('nav.sign_in_up')}</a>

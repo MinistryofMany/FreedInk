@@ -15,5 +15,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			)
 		)
 		.limit(1);
-	return { username: locals.user.username, hasIdentity: rows.length > 0 };
+	return {
+		username: locals.user.username,
+		displayName: locals.user.displayName,
+		hasIdentity: rows.length > 0
+	};
 };

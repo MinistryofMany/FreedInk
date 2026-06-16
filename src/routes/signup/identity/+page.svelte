@@ -15,6 +15,9 @@
 	}
 	let password = '';
 	let confirm = '';
+	// Pre-filled from anything Minister disclosed at sign-in; otherwise blank.
+	// Optional — left empty, the auto-generated username is used everywhere.
+	let displayName = data.displayName ?? '';
 	let busy = false;
 	let error = '';
 
@@ -41,6 +44,21 @@
 				error = await res.text();
 				return;
 			}
+			// Persist the chosen display name (best effort — the account is already
+			// usable without one, so a failure here shouldn't block the flow). Only
+			// send it when it differs from what's already stored.
+			const trimmed = displayName.trim();
+			if (trimmed !== (data.displayName ?? '')) {
+				const profileRes = await fetch('/api/user', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ displayName: trimmed === '' ? null : trimmed })
+				});
+				if (!profileRes.ok) {
+					error = await profileRes.text();
+					return;
+				}
+			}
 			cacheUnlockedIdentity(identity);
 			goto(safeNext($page.url.searchParams.get('next')));
 		} catch (e) {
@@ -63,6 +81,17 @@
 		<a href="/settings" class="btn">{$_('identity.go_to_settings')}</a>
 	{:else}
 		<form on:submit|preventDefault={create}>
+			<label>
+				{$_('identity.display_name_label')}
+				<input
+					type="text"
+					bind:value={displayName}
+					maxlength="80"
+					placeholder={$_('identity.display_name_placeholder')}
+					autocomplete="nickname"
+				/>
+			</label>
+			<p class="hint">{$_('identity.display_name_hint')}</p>
 			<label>
 				{$_('identity.password_label')}
 				<input
@@ -108,5 +137,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+	}
+	.hint {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
 	}
 </style>
