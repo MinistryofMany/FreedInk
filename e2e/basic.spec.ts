@@ -3,8 +3,10 @@ import { test, expect } from '@playwright/test';
 test.describe('public pages render', () => {
 	test('home page', async ({ page }) => {
 		await page.goto('/');
-		await expect(page.getByRole('heading', { name: /welcome to freed ink/i })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Free Your Ink' })).toBeVisible();
+		await expect(
+			page.getByRole('heading', { name: /put your name on the masthead/i })
+		).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Start a collective' })).toBeVisible();
 	});
 
 	test('blogs index', async ({ page }) => {
@@ -32,7 +34,9 @@ test.describe('public pages render', () => {
 
 	test('navigation links present in header', async ({ page }) => {
 		await page.goto('/');
-		await expect(page.getByRole('link', { name: 'Blogs' })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Search' })).toBeVisible();
+		// exact:true so the header nav links don't also match the landing CTAs
+		// ("Browse blogs" contains "Blogs" under the default substring match).
+		await expect(page.getByRole('link', { name: 'Blogs', exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Search', exact: true })).toBeVisible();
 	});
 });

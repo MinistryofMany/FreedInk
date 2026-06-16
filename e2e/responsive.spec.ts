@@ -12,9 +12,11 @@ test.describe('responsive nav', () => {
 		await expect(hamburger).toBeVisible();
 
 		// Brand + Blogs + Search remain in the header even on small screens.
-		await expect(page.getByRole('link', { name: 'Freed.Ink' })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Blogs' })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Search' })).toBeVisible();
+		// The Wordmark renders "Freed"+"Ink" as two spans → accessible name "Freed Ink".
+		// exact:true keeps Blogs/Search from also matching the landing "Browse blogs" CTA.
+		await expect(page.getByRole('link', { name: 'Freed Ink' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Blogs', exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Search', exact: true })).toBeVisible();
 
 		// Open the drawer. After opening, the dashboard link (if signed in)
 		// or the Sign in / up link (if anonymous) becomes visible inside it.

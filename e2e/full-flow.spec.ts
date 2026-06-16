@@ -21,8 +21,10 @@ test('signup → identity → blog → manage', async ({ page }) => {
 	await page.goto('/signup/identity');
 
 	// 2) Real Argon2id + AES-GCM in the browser.
-	await page.getByLabel('Password', { exact: true }).fill(STRONG_PASSWORD);
-	await page.getByLabel('Confirm', { exact: true }).fill(STRONG_PASSWORD);
+	// Labels carry a required-asterisk span, so getByLabel's text match is
+	// "Password *" / "Confirm *" — substring (non-exact) keeps these stable.
+	await page.getByLabel('Password').fill(STRONG_PASSWORD);
+	await page.getByLabel('Confirm').fill(STRONG_PASSWORD);
 	await page.getByRole('button', { name: /create identity/i }).click();
 	await page.waitForURL('**/admin', { timeout: 30_000 });
 	await expect(page.getByText(/you don't own any blogs yet/i)).toBeVisible();
@@ -63,8 +65,10 @@ test('browser-side post creation: real Semaphore proof, post lands in review que
 	const stamp = Date.now();
 	await signInAsNewUser(page, { username: `post${stamp}`.slice(0, 32) });
 	await page.goto('/signup/identity');
-	await page.getByLabel('Password', { exact: true }).fill(STRONG_PASSWORD);
-	await page.getByLabel('Confirm', { exact: true }).fill(STRONG_PASSWORD);
+	// Labels carry a required-asterisk span, so getByLabel's text match is
+	// "Password *" / "Confirm *" — substring (non-exact) keeps these stable.
+	await page.getByLabel('Password').fill(STRONG_PASSWORD);
+	await page.getByLabel('Confirm').fill(STRONG_PASSWORD);
 	await page.getByRole('button', { name: /create identity/i }).click();
 	await page.waitForURL('**/admin', { timeout: 30_000 });
 
@@ -113,8 +117,10 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 	const stamp = Date.now();
 	await signInAsNewUser(page, { username: `vote${stamp}`.slice(0, 32) });
 	await page.goto('/signup/identity');
-	await page.getByLabel('Password', { exact: true }).fill(STRONG_PASSWORD);
-	await page.getByLabel('Confirm', { exact: true }).fill(STRONG_PASSWORD);
+	// Labels carry a required-asterisk span, so getByLabel's text match is
+	// "Password *" / "Confirm *" — substring (non-exact) keeps these stable.
+	await page.getByLabel('Password').fill(STRONG_PASSWORD);
+	await page.getByLabel('Confirm').fill(STRONG_PASSWORD);
 	await page.getByRole('button', { name: /create identity/i }).click();
 	await page.waitForURL('**/admin', { timeout: 30_000 });
 
