@@ -151,7 +151,7 @@
 				title="Invite a member"
 				description="Send a one-time invite link."
 			>
-				{#snippet trigger()}<Button variant="ghost">Open dialog</Button>{/snippet}
+				{#snippet trigger(props)}<Button variant="ghost" {...props}>Open dialog</Button>{/snippet}
 				<p style="margin-top: var(--space-3)">Dialog body content goes here.</p>
 			</Dialog>
 
@@ -163,7 +163,7 @@
 				tone="danger"
 				onConfirm={() => {}}
 			>
-				{#snippet trigger()}<Button variant="danger">Delete…</Button>{/snippet}
+				{#snippet trigger(props)}<Button variant="danger" {...props}>Delete…</Button>{/snippet}
 			</AlertDialog>
 
 			<DropdownMenu
@@ -174,7 +174,7 @@
 			/>
 
 			<Tooltip text="Helpful hint">
-				<Button variant="ghost">Hover me</Button>
+				{#snippet children(props)}<Button variant="ghost" {...props}>Hover me</Button>{/snippet}
 			</Tooltip>
 		</div>
 	</section>

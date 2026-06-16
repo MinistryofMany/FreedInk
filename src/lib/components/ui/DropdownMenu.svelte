@@ -30,7 +30,7 @@
 
 	<DropdownMenu.Portal>
 		<DropdownMenu.Content class="fi-ddm-content {klass}">
-			{#each items as item (item.label)}
+			{#each items as item, i (i)}
 				<DropdownMenu.Item
 					class="fi-ddm-item {item.danger ? 'fi-ddm-item--danger' : ''}"
 					onSelect={item.onSelect}

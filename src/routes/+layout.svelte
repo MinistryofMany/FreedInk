@@ -308,7 +308,7 @@
 
 	:global(nav > a, button) {
 		font-family: var(--heading-font);
-		text-decoration: none !important;
+		text-decoration: none;
 	}
 
 	main {

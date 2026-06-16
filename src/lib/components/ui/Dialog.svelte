@@ -7,7 +7,8 @@
 		open?: boolean;
 		title: string;
 		description?: string;
-		trigger?: Snippet;
+		// Receives Bits' trigger props to spread onto a single focusable element.
+		trigger?: Snippet<[Record<string, unknown>]>;
 		children: Snippet;
 		class?: string;
 	}
@@ -26,7 +27,7 @@
 	{#if trigger}
 		<Dialog.Trigger>
 			{#snippet child({ props })}
-				<span {...props} style="display: inline-flex">{@render trigger()}</span>
+				{@render trigger(props)}
 			{/snippet}
 		</Dialog.Trigger>
 	{/if}

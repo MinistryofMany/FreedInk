@@ -4,18 +4,20 @@
 
 	interface Props {
 		text: string;
-		children: Snippet;
+		// Receives Bits' trigger props to spread onto a single focusable element
+		// (so the tooltip shows on that element's hover AND keyboard focus).
+		children: Snippet<[Record<string, unknown>]>;
 		class?: string;
 	}
 
-	let { text, children, class: klass = '' }: Props = $props();
+	let { text, children }: Props = $props();
 </script>
 
 <Tooltip.Provider>
 	<Tooltip.Root>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
-				<span {...props} class="fi-tooltip-trigger {klass}">{@render children()}</span>
+				{@render children(props)}
 			{/snippet}
 		</Tooltip.Trigger>
 		<Tooltip.Portal>
@@ -27,15 +29,6 @@
 </Tooltip.Provider>
 
 <style>
-	:global(.fi-tooltip-trigger) {
-		display: inline-flex;
-		align-items: center;
-		background: none;
-		border: none;
-		padding: 0;
-		cursor: inherit;
-	}
-
 	:global(.fi-tooltip-content) {
 		z-index: 70;
 		max-width: 240px;

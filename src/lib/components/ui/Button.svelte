@@ -10,6 +10,10 @@
 		class?: string;
 		onclick?: (e: MouseEvent) => void;
 		children: Snippet;
+		// Pass-through for attributes/handlers supplied by a parent (e.g. Bits UI
+		// trigger props: aria-haspopup/expanded/controls, onkeydown). Spread onto
+		// the rendered element so this Button can BE an overlay trigger.
+		[key: string]: unknown;
 	}
 	let {
 		variant = 'primary',
@@ -20,15 +24,17 @@
 		loading = false,
 		class: klass = '',
 		onclick,
-		children
+		children,
+		...rest
 	}: Props = $props();
 	const cls = $derived(`btn ${variant} ${size} ${klass}`.trim());
 </script>
 
 {#if href && !disabled}
-	<a {href} class={cls} {onclick}>{@render children()}</a>
+	<a {...rest} {href} class={cls} {onclick}>{@render children()}</a>
 {:else}
 	<button
+		{...rest}
 		{type}
 		class={cls}
 		disabled={disabled || loading}

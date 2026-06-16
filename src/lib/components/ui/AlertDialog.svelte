@@ -11,7 +11,8 @@
 		cancelLabel?: string;
 		onConfirm: () => void;
 		tone?: 'danger';
-		trigger?: Snippet;
+		// Receives Bits' trigger props to spread onto a single focusable element.
+		trigger?: Snippet<[Record<string, unknown>]>;
 	}
 
 	let {
@@ -30,7 +31,7 @@
 	{#if trigger}
 		<AlertDialog.Trigger>
 			{#snippet child({ props })}
-				<span {...props} style="display: inline-flex">{@render trigger()}</span>
+				{@render trigger(props)}
 			{/snippet}
 		</AlertDialog.Trigger>
 	{/if}
@@ -43,7 +44,7 @@
 			<div class="fi-adlg-footer">
 				<AlertDialog.Cancel>
 					{#snippet child({ props })}
-						<Button variant="ghost" onclick={() => (open = false)} {...props}>
+						<Button variant="ghost" {...props} onclick={() => (open = false)}>
 							{cancelLabel}
 						</Button>
 					{/snippet}
@@ -52,11 +53,11 @@
 					{#snippet child({ props })}
 						<Button
 							variant={tone === 'danger' ? 'danger' : 'primary'}
+							{...props}
 							onclick={() => {
 								onConfirm();
 								open = false;
 							}}
-							{...props}
 						>
 							{confirmLabel}
 						</Button>
