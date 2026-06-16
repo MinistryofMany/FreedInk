@@ -1,5 +1,6 @@
 export { default as AlertDialog } from './AlertDialog.svelte';
 export { default as Badge } from './Badge.svelte';
+export { default as BlogCard } from './BlogCard.svelte';
 export { default as Button } from './Button.svelte';
 export { default as Byline } from './Byline.svelte';
 export { default as Card } from './Card.svelte';
@@ -9,6 +10,7 @@ export { default as EmptyState } from './EmptyState.svelte';
 export { default as Field } from './Field.svelte';
 export { default as Kicker } from './Kicker.svelte';
 export { default as Pagination } from './Pagination.svelte';
+export { default as PostCard } from './PostCard.svelte';
 export { default as PullQuote } from './PullQuote.svelte';
 export { default as Rule } from './Rule.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';
