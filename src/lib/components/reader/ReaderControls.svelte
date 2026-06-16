@@ -15,8 +15,6 @@
 		setLine
 	} from '$lib/reader/settings.svelte';
 
-	type Theme = 'light' | 'dark' | 'auto';
-
 	// ── Typeface roving-radiogroup focus (mirrors SegmentedControl's pattern) ──
 	function handleFontKeydown(e: KeyboardEvent, idx: number) {
 		const last = READER_FONTS.length - 1;
@@ -32,42 +30,34 @@
 		group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
 	}
 
-	// ── SegmentedControl ⇄ module-setter bridge ──────────────────────────────
-	// SegmentedControl only exposes `bind:value` (string). We mirror the module
-	// value into a local $state, bind it, and on change push it back through the
-	// setter. The $effect is GUARDED: it only calls the setter when the parsed
-	// local value actually differs from the live module value, so it cannot loop
-	// (setter → reader.* → derived re-read are all the same number).
-	let widthSel = $state(String(reader.width));
-	let lineSel = $state(String(reader.line));
-
-	$effect(() => {
-		const n = Number(widthSel);
-		if (n !== reader.width) setWidth(n);
-	});
-	$effect(() => {
-		const n = Number(lineSel);
-		if (n !== reader.line) setLine(n);
-	});
+	// ── Width & line: CONTROLLED by the reader module (single source of truth) ──
+	// The SegmentedControls take a plain `value=` derived from `reader.*` and push
+	// changes back through the setter via `onValueChange`. No local mirror, so a
+	// later `loadReader()` (which sets reader.width/line from localStorage) can't
+	// be clobbered by a stale mirror value.
+	function selectWidth(v: string) {
+		setWidth(Number(v));
+	}
+	function selectLine(v: string) {
+		setLine(Number(v));
+	}
 
 	// ── Theme (mirrors ThemeToggle.svelte's DOM + cookie logic) ───────────────
+	// Theme lives in the document attribute + cookie, not the reader module.
 	let themeSel = $state<string>(
 		browser ? (document.documentElement.getAttribute('data-theme') ?? 'auto') : 'auto'
 	);
-
-	$effect(() => {
+	function selectTheme(v: string) {
+		themeSel = v;
 		if (!browser) return;
-		const t = themeSel as Theme;
-		const current = document.documentElement.getAttribute('data-theme') ?? 'auto';
-		if (t === current) return;
-		if (t === 'light' || t === 'dark') {
-			document.documentElement.setAttribute('data-theme', t);
-			document.cookie = `freedink_theme=${t}; path=/; max-age=31536000; SameSite=Lax`;
+		if (v === 'light' || v === 'dark') {
+			document.documentElement.setAttribute('data-theme', v);
+			document.cookie = `freedink_theme=${v}; path=/; max-age=31536000; SameSite=Lax`;
 		} else {
 			document.documentElement.removeAttribute('data-theme');
 			document.cookie = `freedink_theme=; path=/; max-age=0`;
 		}
-	});
+	}
 
 	const widthOptions = READER_WIDTHS.map((w) => ({ value: String(w.value), label: w.label }));
 	const lineOptions = READER_LINES.map((l) => ({ value: String(l.value), label: l.label }));
@@ -128,17 +118,32 @@
 
 			<div class="group">
 				<span class="group-label">Width</span>
-				<SegmentedControl options={widthOptions} bind:value={widthSel} ariaLabel="Width" />
+				<SegmentedControl
+					options={widthOptions}
+					value={String(reader.width)}
+					onValueChange={selectWidth}
+					ariaLabel="Width"
+				/>
 			</div>
 
 			<div class="group">
 				<span class="group-label">Line spacing</span>
-				<SegmentedControl options={lineOptions} bind:value={lineSel} ariaLabel="Line spacing" />
+				<SegmentedControl
+					options={lineOptions}
+					value={String(reader.line)}
+					onValueChange={selectLine}
+					ariaLabel="Line spacing"
+				/>
 			</div>
 
 			<div class="group">
 				<span class="group-label">Theme</span>
-				<SegmentedControl options={themeOptions} bind:value={themeSel} ariaLabel="Theme" />
+				<SegmentedControl
+					options={themeOptions}
+					value={themeSel}
+					onValueChange={selectTheme}
+					ariaLabel="Theme"
+				/>
 			</div>
 
 			<p class="saved-note">Saved on your device.</p>
