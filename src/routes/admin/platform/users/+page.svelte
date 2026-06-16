@@ -1,175 +1,127 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { Table, Button, AlertDialog, EmptyState, Kicker } from '$lib/components/ui';
+
 	export let data;
 	$: ({ users } = data);
+
+	const columns = [
+		{ key: 'username', label: 'Username' },
+		{ key: 'email', label: 'Email' },
+		{ key: 'created', label: 'Created' },
+		{ key: 'last_seen', label: 'Last seen' },
+		{ key: 'actions', label: 'Actions' }
+	];
+
+	// Per-row state: which user's dialog is open, and a reference to their form.
+	let pendingUserId: string | null = null;
+	let dialogOpen = false;
+	// Map of user id -> form element, populated via bind:this in each cell.
+	let suspendForms: Record<string, HTMLFormElement> = {};
+
+	function openDialog(userId: string) {
+		pendingUserId = userId;
+		dialogOpen = true;
+	}
+
+	function confirmSuspend() {
+		if (pendingUserId && suspendForms[pendingUserId]) {
+			suspendForms[pendingUserId].requestSubmit();
+		}
+		pendingUserId = null;
+	}
 </script>
 
 <svelte:head>
 	<title>Users — Platform admin</title>
 </svelte:head>
 
-<header>
-	<p><a href="/admin/platform">&larr; Overview</a></p>
-	<h2>Users</h2>
+<div class="page-header">
+	<p class="back-link"><a href="/admin/platform">&larr; Overview</a></p>
+	<Kicker>Platform admin</Kicker>
+	<h2 class="page-title">Users</h2>
 	<p class="note">
-		"Suspend" revokes every active session for the user; they will be signed out from all devices. A
-		true ban requires a schema change (users.suspended) and is not implemented in this wave — repeat
-		offenders can be GDPR-deleted as a stopgap.
+		"Revoke sessions" signs the user out from all devices immediately. A permanent ban requires a
+		schema change and is not implemented — repeat offenders can be GDPR-deleted as a stopgap.
 	</p>
-</header>
+</div>
 
-{#if users.length === 0}
-	<p>No users yet.</p>
-{:else}
-	<!-- Desktop table. The same data is also rendered as a stacked card list
-	     below 768px so the page is usable on a phone screen. -->
-	<table class="hide-mobile">
-		<thead>
-			<tr>
-				<th>Username</th>
-				<th>Email</th>
-				<th>Created</th>
-				<th>Last seen</th>
-				<th>Actions</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each users as u}
-				<tr>
-					<td>{u.username}</td>
-					<td>{u.email ?? '—'}</td>
-					<td>{new Date(u.createdAt).toLocaleDateString()}</td>
-					<td>{u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}</td>
-					<td>
-						<form method="POST" action="?/suspend" use:enhance>
-							<input type="hidden" name="user_id" value={u.id} />
-							<button type="submit">Revoke sessions</button>
-						</form>
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+<Table {columns} rows={users} caption="Platform users">
+	{#snippet cell(row, col)}
+		{#if col.key === 'username'}
+			{row.username}
+		{:else if col.key === 'email'}
+			{row.email ?? '—'}
+		{:else if col.key === 'created'}
+			{new Date(row.createdAt).toLocaleDateString()}
+		{:else if col.key === 'last_seen'}
+			{row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString() : '—'}
+		{:else if col.key === 'actions'}
+			<form
+				method="POST"
+				action="?/suspend"
+				use:enhance
+				bind:this={suspendForms[row.id]}
+				class="suspend-form"
+			>
+				<input type="hidden" name="user_id" value={row.id} />
+				<Button variant="danger" size="sm" onclick={() => openDialog(row.id)}>
+					Revoke sessions
+				</Button>
+			</form>
+		{/if}
+	{/snippet}
+	{#snippet empty()}
+		<EmptyState title="No users yet" />
+	{/snippet}
+</Table>
 
-	<ul class="card-list show-mobile" aria-label="Users">
-		{#each users as u}
-			<li class="card">
-				<dl>
-					<div>
-						<dt>Username</dt>
-						<dd>{u.username}</dd>
-					</div>
-					<div>
-						<dt>Email</dt>
-						<dd>{u.email ?? '—'}</dd>
-					</div>
-					<div>
-						<dt>Created</dt>
-						<dd>{new Date(u.createdAt).toLocaleDateString()}</dd>
-					</div>
-					<div>
-						<dt>Last seen</dt>
-						<dd>{u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}</dd>
-					</div>
-				</dl>
-				<div class="card-actions">
-					<form method="POST" action="?/suspend" use:enhance>
-						<input type="hidden" name="user_id" value={u.id} />
-						<button type="submit">Revoke sessions</button>
-					</form>
-				</div>
-			</li>
-		{/each}
-	</ul>
-{/if}
+<AlertDialog
+	bind:open={dialogOpen}
+	title="Revoke all sessions?"
+	description="This will immediately sign the user out from every device. They can sign back in unless further action is taken."
+	confirmLabel="Revoke sessions"
+	cancelLabel="Cancel"
+	tone="danger"
+	onConfirm={confirmSuspend}
+/>
 
 <style>
-	header {
-		margin-bottom: 1.5rem;
+	.page-header {
+		margin-bottom: var(--space-5);
 	}
+
+	.back-link {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0 0 var(--space-2);
+	}
+
+	.back-link a {
+		color: var(--color-accent);
+		text-decoration: none;
+	}
+
+	.back-link a:hover {
+		text-decoration: underline;
+	}
+
+	.page-title {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		color: var(--color-text);
+		margin: var(--space-1) 0 0;
+	}
+
 	.note {
+		font-family: var(--font-ui);
 		font-size: var(--text-sm);
 		color: var(--color-text-muted);
 		max-width: 60ch;
-	}
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: var(--text-sm);
-	}
-	th,
-	td {
-		border-bottom: 1px solid var(--color-border);
-		padding: 0.6rem 0.5rem;
-		text-align: left;
-		color: var(--color-text);
-	}
-	th {
-		background: var(--color-surface-alt);
+		margin: var(--space-2) 0 0;
 	}
 
-	.card-list {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: 0.5rem;
-		padding: 0.85rem 1rem;
-		box-shadow: var(--shadow-elev-1);
-		display: flex;
-		flex-direction: column;
-		gap: 0.65rem;
-	}
-	.card dl {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 0.35rem 1rem;
-		margin: 0;
-	}
-	.card dl > div {
-		display: grid;
-		grid-template-columns: minmax(6rem, auto) 1fr;
-		gap: 0.25rem 0.75rem;
-		align-items: baseline;
-	}
-	.card dt {
-		font-weight: 600;
-		font-size: var(--text-sm);
-		color: var(--color-text-muted);
-	}
-	.card dd {
-		margin: 0;
-		color: var(--color-text);
-		word-break: break-word;
-	}
-	.card-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.card-actions :global(form),
-	.card-actions :global(button) {
-		width: 100%;
-	}
-
-	.show-mobile {
-		display: none;
-	}
-	.hide-mobile {
-		display: table;
-	}
-	@media (max-width: 767px) {
-		.show-mobile {
-			display: flex;
-		}
-		.hide-mobile {
-			display: none;
-		}
+	.suspend-form {
+		display: contents;
 	}
 </style>
