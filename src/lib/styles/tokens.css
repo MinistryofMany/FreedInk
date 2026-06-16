@@ -75,10 +75,16 @@
 	--shadow-elev-1: 0 1px 2px rgba(26, 20, 17, 0.06);
 	--shadow-elev-2: 0 6px 20px rgba(26, 20, 17, 0.12);
 
-	/* Legacy accent aliases kept so un-migrated pages keep working. */
+	/* Legacy accent aliases kept so un-migrated pages keep working. These map
+	   onto the new theme-aware system tokens (so they adapt in dark mode); the
+	   pages that use them get fully restyled in later redesign phases. */
 	--color-green: var(--color-accent);
 	--color-green-dark: var(--color-link-hover);
+	--color-green-light: var(--color-border); /* used as 1px dividers/borders */
+	--color-green-lightest: var(--color-surface-alt); /* soft background tint */
+	--color-green-white: var(--color-surface); /* light surface */
 	--color-red: var(--color-danger);
+	--color-red-dark: var(--color-danger);
 	--color-link-hover-legacy: var(--color-link-hover);
 	--text-color-green-darkest: var(--color-text);
 }
