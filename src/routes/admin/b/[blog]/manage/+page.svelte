@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Table, Card, Field, Button, Badge, AlertDialog, Kicker } from '$lib/components/ui';
+
 	export let data;
 	let members = data.members;
 	let blog = data.blog;
@@ -10,6 +12,7 @@
 	let addRole: Role = 'author';
 	let busy = false;
 	let msg = '';
+	let msgIsError = false;
 
 	// ── Invitations (Wave: invitations) ─────────────────────────────
 	let invitations = data.invitations;
@@ -17,6 +20,12 @@
 	let inviteRole: Role = 'author';
 	let inviteBusy = false;
 	let inviteMsg = '';
+	let inviteMsgIsError = false;
+
+	// AlertDialog state: which member's remove dialog is open
+	let removeDialogOpen: Record<string, boolean> = {};
+	// AlertDialog state: which invitation's revoke dialog is open
+	let revokeDialogOpen: Record<string, boolean> = {};
 
 	$: pendingInvitations = invitations.filter((i) => i.acceptedAt === null && i.revokedAt === null);
 	$: recentDecisions = invitations
@@ -57,6 +66,7 @@
 		if (!inviteEmail) return;
 		inviteBusy = true;
 		inviteMsg = '';
+		inviteMsgIsError = false;
 		try {
 			const res = await fetch('/api/blog/invite', {
 				method: 'POST',
@@ -69,6 +79,7 @@
 				await refreshInvitations();
 			} else {
 				inviteMsg = await res.text();
+				inviteMsgIsError = true;
 			}
 		} finally {
 			inviteBusy = false;
@@ -78,12 +89,14 @@
 	async function revokeInvite(id: string) {
 		inviteBusy = true;
 		inviteMsg = '';
+		inviteMsgIsError = false;
 		try {
 			const res = await fetch(`/api/blog/invite/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				await refreshInvitations();
 			} else {
 				inviteMsg = await res.text();
+				inviteMsgIsError = true;
 			}
 		} finally {
 			inviteBusy = false;
@@ -93,6 +106,7 @@
 	async function setRole(target: { user_id?: string; username?: string }, role: Role) {
 		busy = true;
 		msg = '';
+		msgIsError = false;
 		const res = await fetch('/api/blog/members', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -115,6 +129,7 @@
 			];
 		} else {
 			msg = await res.text();
+			msgIsError = true;
 		}
 	}
 
@@ -125,6 +140,7 @@
 
 	async function remove(user_id: string) {
 		busy = true;
+		msgIsError = false;
 		const res = await fetch('/api/blog/members', {
 			method: 'DELETE',
 			headers: { 'content-type': 'application/json' },
@@ -132,7 +148,10 @@
 		});
 		busy = false;
 		if (res.ok) members = members.filter((m) => m.user_id !== user_id);
-		else msg = await res.text();
+		else {
+			msg = await res.text();
+			msgIsError = true;
+		}
 	}
 
 	async function addUser() {
@@ -140,398 +159,320 @@
 		await setRole({ username: addUsername }, addRole);
 		addUsername = '';
 	}
+
+	const memberColumns = [
+		{ key: 'username', label: 'Username' },
+		{ key: 'role', label: 'Role' },
+		{ key: 'change', label: 'Change to' },
+		{ key: 'remove', label: '' }
+	];
+
+	const pendingColumns = [
+		{ key: 'email', label: 'Email' },
+		{ key: 'role', label: 'Role' },
+		{ key: 'expires', label: 'Expires' },
+		{ key: 'revoke', label: '' }
+	];
+
+	const decisionColumns = [
+		{ key: 'email', label: 'Email' },
+		{ key: 'role', label: 'Role' },
+		{ key: 'status', label: 'Status' },
+		{ key: 'when', label: 'When' }
+	];
 </script>
 
-<h3>Manage {blog.title}</h3>
-<p><a href="/admin/b/{blog.slug}/author" class="btn">Write a post</a></p>
+<header class="page-header">
+	<div class="header-row">
+		<h3 class="page-title">{blog.title}</h3>
+		<Button href="/admin/b/{blog.slug}/author">Write a post</Button>
+	</div>
+</header>
 
-<!-- Errors are announced to assistive tech via the polite live region. -->
-<p
-	class="status"
-	role="status"
-	aria-live="polite"
-	style:color={msg ? 'var(--color-red)' : 'inherit'}
->
-	{msg}
-</p>
+<!-- Status live region for member actions -->
+{#if msg}
+	<p class="status-msg" class:status-error={msgIsError} role="status" aria-live="polite">
+		{msg}
+	</p>
+{:else}
+	<p class="status-msg" role="status" aria-live="polite"></p>
+{/if}
 
-<!-- Members: desktop table for >=768px, stacked cards below. -->
-<div class="members">
-	<table class="hide-mobile">
-		<thead>
-			<tr>
-				<th>Username</th>
-				<th>Role</th>
-				<th>Change to</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each members as m (m.user_id)}
-				<tr>
-					<td>{m.username}</td>
-					<td>{m.role}</td>
-					<td>
-						<select
-							value={m.role}
-							on:change={(e) => onRoleChange(m.user_id, e)}
-							disabled={busy}
-							aria-label="Change role for {m.username}"
-						>
-							{#each ROLES as r}
-								<option value={r}>{r}</option>
-							{/each}
-						</select>
-					</td>
-					<td>
-						<button class="remove" disabled={busy} on:click={() => remove(m.user_id)}>
-							Remove
-						</button>
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+<!-- Members table -->
+<section class="section">
+	<Kicker>Members</Kicker>
 
-	<ul class="card-list show-mobile" aria-label="Members">
-		{#each members as m (m.user_id)}
-			<li class="card">
-				<dl>
-					<div>
-						<dt>Username</dt>
-						<dd>{m.username}</dd>
-					</div>
-					<div>
-						<dt>Role</dt>
-						<dd>{m.role}</dd>
-					</div>
-					<div>
-						<dt>
-							<label for="role-{m.user_id}">Change to</label>
-						</dt>
-						<dd>
-							<select
-								id="role-{m.user_id}"
-								value={m.role}
-								on:change={(e) => onRoleChange(m.user_id, e)}
-								disabled={busy}
-							>
-								{#each ROLES as r}
-									<option value={r}>{r}</option>
-								{/each}
-							</select>
-						</dd>
-					</div>
-				</dl>
-				<div class="card-actions">
-					<button class="remove" disabled={busy} on:click={() => remove(m.user_id)}>
-						Remove
-					</button>
+	<Table
+		columns={memberColumns}
+		rows={members}
+		caption="Blog members"
+		getKey={(row) => row.user_id}
+	>
+		{#snippet cell(row, col)}
+			{#if col.key === 'username'}
+				{row.username}
+			{:else if col.key === 'role'}
+				{row.role}
+			{:else if col.key === 'change'}
+				<select
+					value={row.role}
+					on:change={(e) => onRoleChange(row.user_id, e)}
+					disabled={busy}
+					aria-label="Change role for {row.username}"
+					class="role-select"
+				>
+					{#each ROLES as r}
+						<option value={r}>{r}</option>
+					{/each}
+				</select>
+			{:else if col.key === 'remove'}
+				<AlertDialog
+					bind:open={removeDialogOpen[row.user_id]}
+					title="Remove member"
+					description="Remove {row.username} from {blog.title}? They will lose access immediately."
+					confirmLabel="Remove"
+					tone="danger"
+					onConfirm={() => remove(row.user_id)}
+				>
+					{#snippet trigger(props)}
+						<Button variant="danger" size="sm" disabled={busy} {...props}>Remove</Button>
+					{/snippet}
+				</AlertDialog>
+			{/if}
+		{/snippet}
+	</Table>
+
+	<div class="subsection">
+		<h4 class="subsection-title">Add a member</h4>
+		<Card padding="md">
+			<form on:submit|preventDefault={addUser} class="add-form">
+				<Field label="Username" bind:value={addUsername} required minlength={3} />
+				<div class="field-col">
+					<label class="select-label" for="add-role">Role</label>
+					<select id="add-role" bind:value={addRole} class="role-select">
+						{#each ROLES as r}
+							<option value={r}>{r}</option>
+						{/each}
+					</select>
 				</div>
-			</li>
-		{/each}
-	</ul>
-</div>
+				<div class="form-action">
+					<Button type="submit" disabled={busy}>Add</Button>
+				</div>
+			</form>
+		</Card>
+	</div>
+</section>
 
-<h4>Add a member</h4>
-<form on:submit|preventDefault={addUser}>
-	<label>
-		Username
-		<input bind:value={addUsername} required minlength="3" />
-	</label>
-	<label>
-		Role
-		<select bind:value={addRole}>
-			{#each ROLES as r}
-				<option value={r}>{r}</option>
-			{/each}
-		</select>
-	</label>
-	<button type="submit" disabled={busy}>Add</button>
-</form>
-
-<section class="invitations">
-	<h4>Invitations</h4>
+<!-- Invitations section -->
+<section class="section">
+	<Kicker>Invitations</Kicker>
 
 	{#if inviteMsg}
-		<p class="invite-msg">{inviteMsg}</p>
+		<p class="status-msg" class:status-error={inviteMsgIsError} role="status" aria-live="polite">
+			{inviteMsg}
+		</p>
 	{/if}
 
-	<form on:submit|preventDefault={sendInvite}>
-		<label>
-			Email
-			<input type="email" bind:value={inviteEmail} required autocomplete="off" />
-		</label>
-		<label>
-			Role
-			<select bind:value={inviteRole}>
-				{#each ROLES as r}
-					<option value={r}>{r}</option>
-				{/each}
-			</select>
-		</label>
-		<button type="submit" disabled={inviteBusy}>Send invite</button>
-	</form>
+	<Card padding="md">
+		<h4 class="subsection-title">Send an invitation</h4>
+		<form on:submit|preventDefault={sendInvite} class="add-form">
+			<Field label="Email" type="email" bind:value={inviteEmail} required autocomplete="off" />
+			<div class="field-col">
+				<label class="select-label" for="invite-role">Role</label>
+				<select id="invite-role" bind:value={inviteRole} class="role-select">
+					{#each ROLES as r}
+						<option value={r}>{r}</option>
+					{/each}
+				</select>
+			</div>
+			<div class="form-action">
+				<Button type="submit" disabled={inviteBusy}>Send invite</Button>
+			</div>
+		</form>
+	</Card>
 
-	<h5>Pending</h5>
-	{#if pendingInvitations.length === 0}
-		<p class="empty">No pending invitations.</p>
-	{:else}
-		<table class="hide-mobile">
-			<thead>
-				<tr>
-					<th>Email</th>
-					<th>Role</th>
-					<th>Expires</th>
-					<th></th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each pendingInvitations as inv (inv.id)}
-					<tr>
-						<td>{inv.email}</td>
-						<td>{inv.role}</td>
-						<td>{new Date(inv.expiresAt).toLocaleString()}</td>
-						<td>
-							<button
-								type="button"
-								class="remove"
-								disabled={inviteBusy}
-								on:click={() => revokeInvite(inv.id)}
-							>
-								Revoke
-							</button>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-		<ul class="card-list show-mobile" aria-label="Pending invitations">
-			{#each pendingInvitations as inv (inv.id)}
-				<li class="card">
-					<dl>
-						<div>
-							<dt>Email</dt>
-							<dd>{inv.email}</dd>
-						</div>
-						<div>
-							<dt>Role</dt>
-							<dd>{inv.role}</dd>
-						</div>
-						<div>
-							<dt>Expires</dt>
-							<dd>{new Date(inv.expiresAt).toLocaleString()}</dd>
-						</div>
-					</dl>
-					<div class="card-actions">
-						<button
-							type="button"
-							class="remove"
-							disabled={inviteBusy}
-							on:click={() => revokeInvite(inv.id)}
+	<div class="subsection">
+		<h4 class="subsection-title">Pending</h4>
+		{#if pendingInvitations.length === 0}
+			<p class="empty">No pending invitations.</p>
+		{:else}
+			<Table
+				columns={pendingColumns}
+				rows={pendingInvitations}
+				caption="Pending invitations"
+				getKey={(row) => row.id}
+			>
+				{#snippet cell(row, col)}
+					{#if col.key === 'email'}
+						{row.email}
+					{:else if col.key === 'role'}
+						{row.role}
+					{:else if col.key === 'expires'}
+						{new Date(row.expiresAt).toLocaleString()}
+					{:else if col.key === 'revoke'}
+						<AlertDialog
+							bind:open={revokeDialogOpen[row.id]}
+							title="Revoke invitation"
+							description="Revoke the invitation sent to {row.email}? The link will stop working immediately."
+							confirmLabel="Revoke"
+							tone="danger"
+							onConfirm={() => revokeInvite(row.id)}
 						>
-							Revoke
-						</button>
-					</div>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+							{#snippet trigger(props)}
+								<Button variant="danger" size="sm" disabled={inviteBusy} {...props}>Revoke</Button>
+							{/snippet}
+						</AlertDialog>
+					{/if}
+				{/snippet}
+			</Table>
+		{/if}
+	</div>
 
 	{#if recentDecisions.length > 0}
-		<h5>Recent</h5>
-		<table class="hide-mobile">
-			<thead>
-				<tr>
-					<th>Email</th>
-					<th>Role</th>
-					<th>Status</th>
-					<th>When</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each recentDecisions as inv (inv.id)}
-					<tr>
-						<td>{inv.email}</td>
-						<td>{inv.role}</td>
-						<td>
-							{#if inv.acceptedAt}
-								Accepted{inv.acceptedByUsername ? ` by ${inv.acceptedByUsername}` : ''}
-							{:else if inv.revokedAt}
-								Revoked
-							{/if}
-						</td>
-						<td>
-							{new Date(inv.acceptedAt ?? inv.revokedAt ?? inv.createdAt).toLocaleString()}
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-		<ul class="card-list show-mobile" aria-label="Recent invitation decisions">
-			{#each recentDecisions as inv (inv.id)}
-				<li class="card">
-					<dl>
-						<div>
-							<dt>Email</dt>
-							<dd>{inv.email}</dd>
-						</div>
-						<div>
-							<dt>Role</dt>
-							<dd>{inv.role}</dd>
-						</div>
-						<div>
-							<dt>Status</dt>
-							<dd>
-								{#if inv.acceptedAt}
-									Accepted{inv.acceptedByUsername ? ` by ${inv.acceptedByUsername}` : ''}
-								{:else if inv.revokedAt}
-									Revoked
-								{/if}
-							</dd>
-						</div>
-						<div>
-							<dt>When</dt>
-							<dd>{new Date(inv.acceptedAt ?? inv.revokedAt ?? inv.createdAt).toLocaleString()}</dd>
-						</div>
-					</dl>
-				</li>
-			{/each}
-		</ul>
+		<div class="subsection">
+			<h4 class="subsection-title">Recent</h4>
+			<Table
+				columns={decisionColumns}
+				rows={recentDecisions}
+				caption="Recent invitation decisions"
+				getKey={(row) => row.id}
+			>
+				{#snippet cell(row, col)}
+					{#if col.key === 'email'}
+						{row.email}
+					{:else if col.key === 'role'}
+						{row.role}
+					{:else if col.key === 'status'}
+						{#if row.acceptedAt}
+							<Badge tone="success">
+								Accepted{row.acceptedByUsername ? ` by ${row.acceptedByUsername}` : ''}
+							</Badge>
+						{:else if row.revokedAt}
+							<Badge tone="neutral">Revoked</Badge>
+						{/if}
+					{:else if col.key === 'when'}
+						{new Date(row.acceptedAt ?? row.revokedAt ?? row.createdAt).toLocaleString()}
+					{/if}
+				{/snippet}
+			</Table>
+		</div>
 	{/if}
 </section>
 
 <style>
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		margin-bottom: 1rem;
+	.page-header {
+		margin-bottom: var(--space-5);
 	}
-	th,
-	td {
-		text-align: left;
-		padding: 0.6rem 0.5rem;
-		border: 1px solid var(--color-border);
-		color: var(--color-text);
-	}
-	th {
-		background: var(--color-green);
-		color: var(--color-green-white);
-	}
-	form {
+
+	.header-row {
 		display: flex;
-		flex-direction: row;
-		gap: 1rem;
-		align-items: end;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.remove {
-		background: var(--color-red) !important;
-		color: white !important;
-		border-color: var(--color-red-dark) !important;
-	}
-	.invitations {
-		margin-top: 2rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.invitations h5 {
-		margin: 1rem 0 0.25rem 0;
-	}
-	.invite-msg {
-		color: var(--color-text-muted);
-	}
-	.empty {
-		color: var(--color-text-muted);
-		font-style: italic;
-	}
-	.status {
-		min-height: 1.4em;
-		margin: 0.25rem 0 0.75rem;
-	}
 
-	/* Responsive table → card swap. We keep the data flow identical between
-	   the two layouts so the role-change / revoke behavior never has to ask
-	   what viewport it's on. */
-	.card-list {
-		list-style: none;
-		padding: 0;
-		margin: 0 0 1rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: 0.5rem;
-		padding: 0.85rem 1rem;
-		box-shadow: var(--shadow-elev-1);
-		display: flex;
-		flex-direction: column;
-		gap: 0.65rem;
-	}
-	.card dl {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 0.35rem 1rem;
+	.page-title {
+		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		font-weight: 700;
+		color: var(--color-text);
 		margin: 0;
 	}
-	.card dl > div {
-		display: grid;
-		grid-template-columns: minmax(6rem, auto) 1fr;
-		gap: 0.25rem 0.75rem;
-		align-items: center;
+
+	.status-msg {
+		min-height: 1.4em;
+		font-size: var(--text-sm);
+		color: var(--color-accent);
+		margin: 0 0 var(--space-4);
 	}
-	.card dt {
+
+	.status-msg.status-error {
+		color: var(--color-danger);
+	}
+
+	.section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-bottom: var(--space-8);
+	}
+
+	.subsection {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.subsection-title {
+		font-family: var(--font-ui);
+		font-size: var(--text-base);
 		font-weight: 600;
+		color: var(--color-text);
+		margin: 0;
+	}
+
+	.add-form {
+		display: flex;
+		flex-direction: row;
+		gap: var(--space-4);
+		align-items: flex-end;
+		flex-wrap: wrap;
+	}
+
+	.field-col {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.select-label {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.role-select {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: 0 var(--space-3);
+		min-height: var(--touch-target);
+		cursor: pointer;
+	}
+
+	.role-select:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+
+	.form-action {
+		padding-bottom: 0;
+	}
+
+	.empty {
 		font-size: var(--text-sm);
 		color: var(--color-text-muted);
-	}
-	.card dd {
+		font-style: italic;
 		margin: 0;
-		color: var(--color-text);
-		word-break: break-word;
-	}
-	.card-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		align-items: stretch;
-	}
-	.card-actions :global(button) {
-		width: 100%;
 	}
 
-	/* Visibility flips at 768px to match the layout breakpoint. */
-	.show-mobile {
-		display: none;
-	}
-	.hide-mobile {
-		display: table;
-	}
 	@media (max-width: 767px) {
-		.show-mobile {
-			display: flex;
+		.header-row {
+			flex-direction: column;
+			align-items: flex-start;
 		}
-		.hide-mobile {
-			display: none;
-		}
-		form {
+
+		.add-form {
 			flex-direction: column;
 			align-items: stretch;
-			gap: 0.5rem;
 		}
-		form :global(button) {
-			width: 100%;
-		}
-		form label {
+
+		.form-action :global(.btn) {
 			width: 100%;
 		}
 	}
