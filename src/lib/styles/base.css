@@ -1,0 +1,117 @@
+/*
+  Element resets + cross-cutting a11y utilities. Consumes tokens.css.
+  Migrated from the old theme.css base block; focus ring is now a neutral,
+  theme-aware high-contrast outline (the old yellow failed 3:1 on paper), and
+  inputs use the stronger control border.
+*/
+
+html,
+body {
+	background-color: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--text-font);
+	font-size: var(--text-base);
+	line-height: 1.55;
+	margin: 0;
+	padding: 0;
+	-webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	font-family: var(--font-display);
+	color: var(--color-text);
+}
+
+a {
+	color: var(--color-link);
+}
+a:hover {
+	color: var(--color-link-hover);
+}
+
+/* Skip-to-content link - hidden until focused. */
+.skip-link {
+	position: fixed;
+	top: 0;
+	left: 0;
+	background: var(--color-accent);
+	color: var(--color-bg);
+	padding: 0.75rem 1rem;
+	border-radius: 0 0 var(--radius-md) 0;
+	transform: translateY(-110%);
+	transition: transform var(--transition-fast) ease-out;
+	z-index: 1000;
+	font-family: var(--font-ui);
+	font-weight: 600;
+	text-decoration: none !important;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+	transform: translateY(0);
+	outline: var(--focus-ring-width) solid var(--focus-ring-color);
+	outline-offset: 0;
+}
+
+/* Global focus ring - neutral, high contrast in both themes, offset so it
+   reads against the page background even on filled controls. */
+:focus-visible {
+	outline: var(--focus-ring-width) solid var(--focus-ring-color);
+	outline-offset: var(--focus-ring-offset);
+	border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+button,
+.btn,
+input[type='button'],
+input[type='submit'],
+select,
+[role='button'] {
+	min-height: var(--touch-target);
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='url'],
+input[type='number'],
+input:not([type]),
+textarea {
+	min-height: var(--touch-target);
+	padding: 0.5rem 0.6rem;
+	font-family: var(--font-ui);
+	font-size: var(--text-base);
+	background: var(--color-surface);
+	color: var(--color-text);
+	border: var(--border-1) solid var(--color-border-strong);
+	border-radius: var(--radius-sm);
+}
+textarea {
+	min-height: calc(var(--touch-target) * 2);
+}

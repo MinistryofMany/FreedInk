@@ -3,7 +3,8 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { prewarmForAuthedUser } from '$lib/client/semaphore';
-	import '$lib/styles/theme.css';
+	import '$lib/styles/tokens.css';
+	import '$lib/styles/base.css';
 	import '$lib/styles/fonts.ts';
 	// Side-effect import: registers locales and initializes svelte-i18n on
 	// module load. Importing `_` and `locale` here gives us the translator
