@@ -21,7 +21,7 @@
 		id,
 		type = 'text',
 		multiline = false,
-		value = $bindable(''),
+		value = $bindable(),
 		required = false,
 		error,
 		help,

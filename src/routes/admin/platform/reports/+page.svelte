@@ -49,8 +49,6 @@
 	let notesByRow: Record<string, string> = {};
 
 	// Per-row dialog state.
-	let resolveDialogOpen: Record<string, boolean> = {};
-	let dismissDialogOpen: Record<string, boolean> = {};
 
 	const columns = [
 		{ key: 'age', label: 'Age' },
@@ -128,7 +126,6 @@
 					></textarea>
 					<div class="action-btns">
 						<AlertDialog
-							bind:open={resolveDialogOpen[row.id]}
 							title="Resolve this report?"
 							description="Mark the report as resolved. Notes will be saved."
 							confirmLabel="Resolve"
@@ -142,7 +139,6 @@
 							{/snippet}
 						</AlertDialog>
 						<AlertDialog
-							bind:open={dismissDialogOpen[row.id]}
 							title="Dismiss this report?"
 							description="Mark the report as dismissed. Notes will be saved."
 							confirmLabel="Dismiss"

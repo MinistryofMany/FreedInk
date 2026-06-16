@@ -23,9 +23,7 @@
 	let inviteMsgIsError = false;
 
 	// AlertDialog state: which member's remove dialog is open
-	let removeDialogOpen: Record<string, boolean> = {};
 	// AlertDialog state: which invitation's revoke dialog is open
-	let revokeDialogOpen: Record<string, boolean> = {};
 
 	$: pendingInvitations = invitations.filter((i) => i.acceptedAt === null && i.revokedAt === null);
 	$: recentDecisions = invitations
@@ -227,7 +225,6 @@
 				</select>
 			{:else if col.key === 'remove'}
 				<AlertDialog
-					bind:open={removeDialogOpen[row.user_id]}
 					title="Remove member"
 					description="Remove {row.username} from {blog.title}? They will lose access immediately."
 					confirmLabel="Remove"
@@ -311,7 +308,6 @@
 						{new Date(row.expiresAt).toLocaleString()}
 					{:else if col.key === 'revoke'}
 						<AlertDialog
-							bind:open={revokeDialogOpen[row.id]}
 							title="Revoke invitation"
 							description="Revoke the invitation sent to {row.email}? The link will stop working immediately."
 							confirmLabel="Revoke"
