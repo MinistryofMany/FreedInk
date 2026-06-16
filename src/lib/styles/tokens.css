@@ -69,7 +69,7 @@
 	--color-link: #1f5240;
 	--color-link-hover: #163c2f;
 	--color-danger: #9e2b25;
-	--color-warning: #8a5a00; /* amber, AA text on surface-alt + >=3 swatch */
+	--color-warning: #9a4500; /* burnt orange, AA text on surface-alt + >=3 swatch */
 	--nav-bg: #faf7f0;
 	--nav-fg: #1a1411;
 	--focus-ring-color: #1a1411; /* neutral, 17:1 on paper */
@@ -104,7 +104,7 @@
 		--color-link: #57b394;
 		--color-link-hover: #74c7a8;
 		--color-danger: #e8736a;
-		--color-warning: #e0b341;
+		--color-warning: #e0902f;
 		--nav-bg: #1a1411;
 		--nav-fg: #faf7f0;
 		--focus-ring-color: #faf7f0;
@@ -126,7 +126,7 @@
 	--color-link: #57b394;
 	--color-link-hover: #74c7a8;
 	--color-danger: #e8736a;
-	--color-warning: #e0b341;
+	--color-warning: #e0902f;
 	--nav-bg: #1a1411;
 	--nav-fg: #faf7f0;
 	--focus-ring-color: #faf7f0;
