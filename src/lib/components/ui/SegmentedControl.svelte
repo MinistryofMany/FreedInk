@@ -13,31 +13,33 @@
 
 	let { options, value = $bindable<string>(), ariaLabel, class: klass = '' }: Props = $props();
 
-	function select(opt: string) {
-		value = opt;
-	}
-
+	// Roving tabindex: only the selected radio is tabbable, and arrow keys move
+	// both selection and DOM focus (focus follows selection within the group).
 	function handleKeydown(e: KeyboardEvent, idx: number) {
-		if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-			e.preventDefault();
-			const prev = (idx - 1 + options.length) % options.length;
-			value = options[prev].value;
-		} else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-			e.preventDefault();
-			const next = (idx + 1) % options.length;
-			value = options[next].value;
-		}
+		const last = options.length - 1;
+		let next: number | null = null;
+		if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = idx === 0 ? last : idx - 1;
+		else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = idx === last ? 0 : idx + 1;
+		else if (e.key === 'Home') next = 0;
+		else if (e.key === 'End') next = last;
+		if (next === null) return;
+		e.preventDefault();
+		value = options[next].value;
+		const group = (e.currentTarget as HTMLElement).parentElement;
+		group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
 	}
 </script>
 
 <div class="segmented {klass}" role="radiogroup" aria-label={ariaLabel}>
-	{#each options as opt, idx}
+	{#each options as opt, idx (opt.value)}
 		<button
+			type="button"
 			role="radio"
 			aria-checked={value === opt.value}
+			tabindex={value === opt.value || (value === undefined && idx === 0) ? 0 : -1}
 			class="segment"
 			class:selected={value === opt.value}
-			onclick={() => select(opt.value)}
+			onclick={() => (value = opt.value)}
 			onkeydown={(e) => handleKeydown(e, idx)}>{opt.label}</button
 		>
 	{/each}

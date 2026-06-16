@@ -32,10 +32,14 @@
 	}
 </script>
 
-<div class="stepper {klass}" aria-label={ariaLabel}>
-	<button class="step-btn" onclick={decrement} disabled={atMin} aria-label="Decrease">A−</button>
+<div class="stepper {klass}" role="group" aria-label={ariaLabel}>
+	<button class="step-btn" onclick={decrement} disabled={atMin} aria-label={`Decrease ${ariaLabel}`}
+		>A−</button
+	>
 	<span class="value" aria-live="polite">{display}</span>
-	<button class="step-btn" onclick={increment} disabled={atMax} aria-label="Increase">A+</button>
+	<button class="step-btn" onclick={increment} disabled={atMax} aria-label={`Increase ${ariaLabel}`}
+		>A+</button
+	>
 </div>
 
 <style>

@@ -62,4 +62,38 @@ describe('SegmentedControl', () => {
 		expect(group).not.toBeNull();
 		expect(group!.getAttribute('aria-label')).toBe('Font size');
 	});
+
+	it('roving tabindex: exactly the selected option is tabbable', () => {
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		mount(SegmentedControl, { target, props: { options, value: 'b', ariaLabel: 'Test' } });
+		const buttons = target.querySelectorAll('[role="radio"]') as NodeListOf<HTMLButtonElement>;
+		expect(buttons[0].tabIndex).toBe(-1);
+		expect(buttons[1].tabIndex).toBe(0);
+		expect(buttons[2].tabIndex).toBe(-1);
+	});
+
+	it('arrow keys move both selection and focus, wrapping around', async () => {
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		mount(SegmentedControl, { target, props: { options, value: 'a', ariaLabel: 'Test' } });
+		const buttons = target.querySelectorAll('[role="radio"]') as NodeListOf<HTMLButtonElement>;
+
+		buttons[0].focus();
+		expect(document.activeElement).toBe(buttons[0]);
+
+		buttons[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await new Promise((r) => setTimeout(r, 0));
+		expect(buttons[1].getAttribute('aria-checked')).toBe('true');
+		expect(document.activeElement).toBe(buttons[1]);
+
+		// last -> first wrap
+		buttons[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await new Promise((r) => setTimeout(r, 0));
+		expect(document.activeElement).toBe(buttons[2]);
+		buttons[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await new Promise((r) => setTimeout(r, 0));
+		expect(buttons[0].getAttribute('aria-checked')).toBe('true');
+		expect(document.activeElement).toBe(buttons[0]);
+	});
 });

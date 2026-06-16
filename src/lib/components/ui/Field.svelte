@@ -1,6 +1,4 @@
 <script lang="ts">
-	let counter = 0;
-
 	interface Props {
 		label: string;
 		id?: string;
@@ -15,7 +13,7 @@
 	}
 	let {
 		label,
-		id = `field-${++counter}`,
+		id,
 		type = 'text',
 		multiline = false,
 		value = $bindable(''),
@@ -26,18 +24,21 @@
 		class: klass = ''
 	}: Props = $props();
 
-	const helpId = $derived(help ? `${id}-help` : undefined);
-	const errorId = $derived(error ? `${id}-error` : undefined);
+	// SSR-stable unique id (consistent across server render + hydration).
+	const autoId = $props.id();
+	const fieldId = $derived(id ?? autoId);
+	const helpId = $derived(help ? `${fieldId}-help` : undefined);
+	const errorId = $derived(error ? `${fieldId}-error` : undefined);
 	const describedBy = $derived([helpId, errorId].filter(Boolean).join(' ') || undefined);
 </script>
 
 <div class="field {klass}">
-	<label for={id}
+	<label for={fieldId}
 		>{label}{#if required}<span class="required" aria-hidden="true"> *</span>{/if}</label
 	>
 	{#if multiline}
 		<textarea
-			{id}
+			id={fieldId}
 			bind:value
 			{required}
 			{placeholder}
@@ -46,7 +47,7 @@
 		></textarea>
 	{:else}
 		<input
-			{id}
+			id={fieldId}
 			{type}
 			bind:value
 			{required}

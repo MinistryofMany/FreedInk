@@ -25,8 +25,8 @@
 	const cls = $derived(`btn ${variant} ${size} ${klass}`.trim());
 </script>
 
-{#if href}
-	<a {href} class={cls} aria-disabled={disabled || undefined} {onclick}>{@render children()}</a>
+{#if href && !disabled}
+	<a {href} class={cls} {onclick}>{@render children()}</a>
 {:else}
 	<button
 		{type}
@@ -83,8 +83,7 @@
 		background: var(--color-danger);
 		color: var(--color-bg);
 	}
-	.btn:disabled,
-	.btn[aria-disabled='true'] {
+	.btn:disabled {
 		opacity: 0.55;
 		cursor: not-allowed;
 	}

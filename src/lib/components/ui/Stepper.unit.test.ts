@@ -17,8 +17,8 @@ describe('Stepper', () => {
 		mount(Stepper, { target, props: { value: 16, min: 14, max: 24, ariaLabel: 'Text size' } });
 		const buttons = target.querySelectorAll('button');
 		expect(buttons.length).toBe(2);
-		expect(buttons[0].getAttribute('aria-label')).toBe('Decrease');
-		expect(buttons[1].getAttribute('aria-label')).toBe('Increase');
+		expect(buttons[0].getAttribute('aria-label')).toBe('Decrease Text size');
+		expect(buttons[1].getAttribute('aria-label')).toBe('Increase Text size');
 	});
 
 	it('increment increases value', async () => {
