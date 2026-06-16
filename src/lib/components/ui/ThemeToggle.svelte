@@ -3,6 +3,7 @@
 	import Sun from 'phosphor-svelte/lib/Sun';
 	import Moon from 'phosphor-svelte/lib/Moon';
 	import Monitor from 'phosphor-svelte/lib/Monitor';
+	import { applyTheme } from '$lib/theme';
 
 	type Theme = 'light' | 'dark' | 'auto';
 
@@ -25,14 +26,7 @@
 	function advance() {
 		const n = next[mode];
 		mode = n;
-		// DOM + cookie — only safe inside an event handler (never at render time)
-		if (n === 'light' || n === 'dark') {
-			document.documentElement.setAttribute('data-theme', n);
-			document.cookie = `freedink_theme=${n}; path=/; max-age=31536000; SameSite=Lax`;
-		} else {
-			document.documentElement.removeAttribute('data-theme');
-			document.cookie = `freedink_theme=; path=/; max-age=0`;
-		}
+		applyTheme(n);
 	}
 </script>
 

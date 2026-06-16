@@ -2,6 +2,7 @@
 	import { browser } from '$app/environment';
 	import { Popover } from 'bits-ui';
 	import { SegmentedControl } from '$lib/components/ui';
+	import { applyTheme, type ThemePref } from '$lib/theme';
 	import {
 		reader,
 		READER_FONTS,
@@ -42,21 +43,15 @@
 		setLine(Number(v));
 	}
 
-	// ── Theme (mirrors ThemeToggle.svelte's DOM + cookie logic) ───────────────
-	// Theme lives in the document attribute + cookie, not the reader module.
+	// ── Theme ─────────────────────────────────────────────────────────────────
+	// Theme lives in the document attribute + cookie (see $lib/theme), not the
+	// reader module. Seed the control from the current attribute.
 	let themeSel = $state<string>(
 		browser ? (document.documentElement.getAttribute('data-theme') ?? 'auto') : 'auto'
 	);
 	function selectTheme(v: string) {
 		themeSel = v;
-		if (!browser) return;
-		if (v === 'light' || v === 'dark') {
-			document.documentElement.setAttribute('data-theme', v);
-			document.cookie = `freedink_theme=${v}; path=/; max-age=31536000; SameSite=Lax`;
-		} else {
-			document.documentElement.removeAttribute('data-theme');
-			document.cookie = `freedink_theme=; path=/; max-age=0`;
-		}
+		applyTheme(v as ThemePref);
 	}
 
 	const widthOptions = READER_WIDTHS.map((w) => ({ value: String(w.value), label: w.label }));

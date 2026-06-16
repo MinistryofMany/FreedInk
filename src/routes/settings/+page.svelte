@@ -16,6 +16,7 @@
 	} from '$lib/client/push';
 	import { _ } from '$lib/i18n';
 	import { get } from 'svelte/store';
+	import { applyTheme as applyThemeDom } from '$lib/theme';
 	import {
 		Card,
 		Field,
@@ -124,16 +125,7 @@
 
 	function applyTheme(pref: ThemePref) {
 		themePref = pref;
-		const html = document.documentElement;
-		if (pref === 'system') {
-			html.removeAttribute('data-theme');
-			// Expire cookie immediately
-			document.cookie = 'freedink_theme=; Path=/; Max-Age=0; SameSite=Lax';
-		} else {
-			html.setAttribute('data-theme', pref);
-			// 1 year, SameSite=Lax — purely cosmetic, no secrets here
-			document.cookie = `freedink_theme=${pref}; Path=/; Max-Age=31536000; SameSite=Lax`;
-		}
+		applyThemeDom(pref);
 	}
 
 	// Bridge the SegmentedControl's bound value to the existing applyTheme().

@@ -42,9 +42,15 @@ const textPairs = [
 	['bg', 'accent'],
 	['bg', 'link'],
 	['bg', 'link-hover'],
-	['bg', 'danger']
+	['bg', 'danger'],
+	// Badge warning tone renders warning text on the surface-alt fill.
+	['surface-alt', 'warning']
 ];
-const nonTextPairs = [['bg', 'border-strong']];
+const nonTextPairs = [
+	['bg', 'border-strong'],
+	// Status page renders warning as a solid swatch/dot fill on the page bg.
+	['bg', 'warning']
+];
 
 describe.each([
 	['light', light],

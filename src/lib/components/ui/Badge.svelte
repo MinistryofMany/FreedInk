@@ -33,9 +33,7 @@
 	}
 	.warning {
 		background: var(--color-surface-alt);
-		color: var(--color-text);
-		border-left: var(--border-2) solid var(--color-border-strong);
-		padding-left: calc(var(--space-2) - var(--border-2));
+		color: var(--color-warning);
 	}
 	.danger {
 		background: var(--color-surface-alt);

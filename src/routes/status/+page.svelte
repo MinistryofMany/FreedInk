@@ -170,7 +170,7 @@
 	}
 
 	.overall-dot.level-degraded {
-		background: var(--color-border-strong);
+		background: var(--color-warning);
 	}
 
 	.overall-dot.level-partial_outage {
@@ -228,7 +228,7 @@
 	}
 
 	.cell.level-degraded {
-		background: var(--color-border-strong);
+		background: var(--color-warning);
 	}
 
 	.cell.level-partial_outage {
@@ -267,7 +267,7 @@
 	}
 
 	.swatch.level-degraded {
-		background: var(--color-border-strong);
+		background: var(--color-warning);
 	}
 
 	.swatch.level-partial_outage {
