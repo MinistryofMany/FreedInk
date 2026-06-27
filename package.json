@@ -83,7 +83,7 @@
 		"isomorphic-dompurify": "^2.20.0",
 		"jose": "^6.2.3",
 		"marked": "^15.0.4",
-		"nodemailer": "^8.0.11",
+		"nodemailer": "^9.0.1",
 		"phosphor-svelte": "^3.1.0",
 		"pino": "^9.5.0",
 		"postgres": "^3.4.5",
