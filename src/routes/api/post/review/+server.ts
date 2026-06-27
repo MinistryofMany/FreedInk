@@ -9,8 +9,8 @@ import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
 import { notifyMembersOfNewPublishedPost } from '$lib/server/notifications';
 import { isValidRejectionReason } from '$lib/rejection-reasons';
-import { getVoteTokenPublicKey } from '$lib/db/vote-tokens';
 import { verifyVoteToken } from '$lib/server/vote-token';
+import { getVoteSigner } from '$lib/server/vote-signer';
 import { isUniqueViolation } from '$lib/server/db-errors';
 
 const Body = z
@@ -69,8 +69,14 @@ export const POST: RequestHandler = async (event) => {
 	// Verify the blind-token signature over (version metadata, prepared nonce)
 	// against the blog's issuer public key. A token signed for a different version
 	// fails here (the version_id is the public metadata) — no cross-version replay.
-	const publicKeySpki = await getVoteTokenPublicKey(row.post.blogId);
-	if (!publicKeySpki) throw error(400, 'invalid vote token');
+	// The public key comes from the VoteSigner: local mode reads blog_vote_token_keys;
+	// Signet mode fetches GET /key (and caches it). Verification is otherwise
+	// IDENTICAL to before — the wire scheme is unchanged regardless of backend.
+	const pk = await getVoteSigner().getPublicKey(row.post.blogId);
+	// `pending` (Signet keygen in flight) means no key exists yet, so no valid token
+	// could have been signed — treat exactly like a missing key (invalid token).
+	if (pk.status === 'pending') throw error(400, 'invalid vote token');
+	const publicKeySpki = pk.publicKeySpki;
 	const signature = b64urlToBytes(parsed.data.signature);
 	const preparedNonce = b64urlToBytes(parsed.data.prepared_nonce);
 	const ok = await verifyVoteToken({
