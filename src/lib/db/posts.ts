@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 import { countEligibleReviewers } from './members';
+import { pregenOnEnterReview } from '$lib/server/vote-key-pregen';
 
 type DateIdCursor = { key: string; id: string };
 
@@ -433,7 +434,7 @@ export type CreatePostInput = {
 
 export async function createPost(input: CreatePostInput) {
 	const slug = sluggify(input.title);
-	return db.transaction(async (tx) => {
+	const result = await db.transaction(async (tx) => {
 		// Resolve effective language inside the transaction so we always pick
 		// up the blog's current default if the author didn't override.
 		let language = input.language;
@@ -478,10 +479,14 @@ export async function createPost(input: CreatePostInput) {
 			.where(eq(schema.blogPosts.id, post.id));
 		return { post, version };
 	});
+	// Pre-gen the vote-token key (hard guarantee) when a post is created straight
+	// into review. Fire-and-forget after commit; no-op if a key already exists.
+	if (input.status === 'under_review') pregenOnEnterReview(input.blogId);
+	return result;
 }
 
 export async function submitForReview(postVersionId: string): Promise<void> {
-	await db.transaction(async (tx) => {
+	const blogId = await db.transaction(async (tx) => {
 		// Resolve the owning blog so we can freeze the quorum denominator at the
 		// instant this version enters review.
 		const [owner] = await tx
@@ -490,7 +495,7 @@ export async function submitForReview(postVersionId: string): Promise<void> {
 			.innerJoin(schema.blogPosts, eq(schema.blogPosts.id, schema.blogPostVersions.postId))
 			.where(eq(schema.blogPostVersions.id, postVersionId))
 			.limit(1);
-		if (!owner) return;
+		if (!owner) return null;
 
 		const eligibleReviewersAtReview = await countEligibleReviewers(owner.blogId, tx);
 
@@ -502,7 +507,11 @@ export async function submitForReview(postVersionId: string): Promise<void> {
 			.update(schema.blogPosts)
 			.set({ status: 'under_review' })
 			.where(eq(schema.blogPosts.id, owner.postId));
+		return owner.blogId;
 	});
+	// Pre-gen the vote-token key (hard guarantee) once the version is under review.
+	// Fire-and-forget after commit; no-op if a key already exists.
+	if (blogId) pregenOnEnterReview(blogId);
 }
 
 export async function setPostStatus(

@@ -14,6 +14,7 @@ import type { MemberRole } from './schema';
 import { randomToken } from '$lib/server/session';
 import { refreshAllSnapshots } from './snapshots';
 import { capabilitiesForRole } from './members';
+import { pregenOnReviewerAdded } from '$lib/server/vote-key-pregen';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -168,6 +169,9 @@ export async function acceptInvitation(
 
 	if (memberAdded) {
 		await refreshAllSnapshots(ctx.blogId);
+		// Pre-gen trigger (a): a newly-joined reviewer-capable member may take the
+		// blog to >= 2 reviewers; warm the vote-token key. Fire-and-forget.
+		if (capabilitiesForRole(ctx.role).canReview) pregenOnReviewerAdded(ctx.blogId);
 	}
 	return result;
 }

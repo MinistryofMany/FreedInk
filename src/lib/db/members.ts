@@ -2,6 +2,7 @@ import { db, schema } from './client';
 import { and, eq, isNull, desc, inArray } from 'drizzle-orm';
 import type { MemberRole, Capability } from './schema';
 import { refreshSnapshot, refreshAllSnapshots } from './snapshots';
+import { pregenOnReviewerAdded } from '$lib/server/vote-key-pregen';
 
 const PROVING: MemberRole[] = ['owner', 'editor', 'reviewer', 'author'];
 
@@ -149,6 +150,11 @@ export async function setRole(
 		// row; refresh the comment tree so a newly-added commenter lands in it.
 		await refreshSnapshot(blogId, 'comment');
 	}
+
+	// Pre-gen trigger (a): if this role grants can_review, warm the vote-token key
+	// once the blog has >= 2 reviewer-capable members. Fire-and-forget; no-op below
+	// the threshold or if a key already exists.
+	if (capabilitiesForRole(newRole).canReview) pregenOnReviewerAdded(blogId);
 }
 
 // Read a single capability on a member's active row. Returns false when the
@@ -224,6 +230,10 @@ export async function setCapability(
 	if (capability === 'author' || capability === 'comment') {
 		await refreshSnapshot(blogId, capability);
 	}
+
+	// Pre-gen trigger (a): granting can_review may push the blog to >= 2
+	// reviewer-capable members; warm the vote-token key. Fire-and-forget.
+	if (capability === 'review' && value === true) pregenOnReviewerAdded(blogId);
 	return { before, after };
 }
 
