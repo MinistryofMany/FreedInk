@@ -73,6 +73,11 @@ export async function listPublicMembers(blogId: string) {
 	const rows = await db
 		.select({
 			role: schema.blogMembers.role,
+			// can_author is the authoritative "could have written a post" predicate
+			// (the role label is lossy — it cannot represent a member whose
+			// capabilities diverge from any single role word). Callers that build the
+			// public author anonymity set MUST filter on this, not on `role`.
+			canAuthor: schema.blogMembers.canAuthor,
 			joinedAt: schema.blogMembers.addedAt,
 			username: schema.users.username,
 			displayName: schema.users.displayName
