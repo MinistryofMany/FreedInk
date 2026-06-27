@@ -3,7 +3,6 @@ import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getBlogBySlug } from '$lib/db/blogs';
 import { createPost } from '$lib/db/posts';
-import { requireRole, ROLES_WRITING } from '$lib/server/auth';
 import { verifyMembership } from '$lib/server/semaphore';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
@@ -35,16 +34,19 @@ const Body = z.object({
 });
 
 export const POST: RequestHandler = async (event) => {
-	await enforce(RULES.postCreate, event, { keyBy: 'user' });
-	const { request, locals } = event;
-	if (!locals.user) throw error(401, 'sign in required');
+	// Session-free write (Phase 2/Part 2): authorization is the Semaphore proof
+	// against the writers tree's CURRENT root, NOT a session. We rate-limit by IP
+	// (the only non-identifying signal left) and never read locals.user. A
+	// logged-out client holding a valid device secret for this blog CAN post —
+	// that is intended: the proof is the authority, not the login.
+	await enforce(RULES.postCreate, event, { keyBy: 'ip' });
+	const { request } = event;
 	const parsed = Body.safeParse(await request.json());
 	if (!parsed.success) throw error(422, parsed.error.message);
 	const { blog_slug, title, content, proof, submit_for_review, language } = parsed.data;
 
 	const blog = await getBlogBySlug(blog_slug);
 	if (!blog) throw error(404, 'blog not found');
-	await requireRole(blog.id, locals.user.id, ROLES_WRITING);
 
 	const expectedScope = `post:${blog.id}`;
 	const expectedMessage = `${title}\n\n${content}`;

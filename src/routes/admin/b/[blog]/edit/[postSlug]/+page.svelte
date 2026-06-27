@@ -90,6 +90,8 @@
 
 			const res = await fetch('/api/blog/post/edit', {
 				method: 'POST',
+				// Session-free write: never attach the session cookie.
+				credentials: 'omit',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					post_version_id: data.post.versionId,

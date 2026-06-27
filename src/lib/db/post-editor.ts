@@ -18,7 +18,11 @@ import { sluggify } from '$lib/utils';
 import { hasRole, ROLES_WRITING } from '$lib/server/auth';
 import { error } from '@sveltejs/kit';
 
-export async function getEditablePostForUser(versionId: string, userId: string) {
+// Resolve the post + version for an edit, asserting it is the CURRENT version,
+// WITHOUT any session/role check. Authorization for a session-free edit is the
+// Semaphore writers-tree proof (the caller verifies it). Used by the edit
+// endpoint (Phase 4 — session-free writes).
+export async function getCurrentVersionForEdit(versionId: string) {
 	const rows = await db
 		.select({
 			post: schema.blogPosts,
@@ -33,6 +37,14 @@ export async function getEditablePostForUser(versionId: string, userId: string) 
 	if (row.post.currentVersionId !== row.version.id) {
 		throw error(409, 'not the current version of this post');
 	}
+	return row;
+}
+
+// Session-authenticated variant: resolve + assert current version + require the
+// caller holds writing rights. Retained for any caller that still authorizes by
+// session (none in the session-free write path).
+export async function getEditablePostForUser(versionId: string, userId: string) {
+	const row = await getCurrentVersionForEdit(versionId);
 	if (!(await hasRole(row.post.blogId, userId, ROLES_WRITING))) {
 		throw error(403, 'forbidden');
 	}

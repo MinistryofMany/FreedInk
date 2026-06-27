@@ -215,6 +215,76 @@ describe('identity flow', () => {
 	});
 });
 
+describe('session-free writes (Phase 4)', () => {
+	it('a valid writers proof with NO cookie creates a post (200)', async () => {
+		const owner = await makeUser({ username: 'sf-owner', seed: 'sf-owner-seed' });
+		const blog = await makeBlogWith({ owner });
+		const proof = await buildTestProof({
+			blogId: blog.id,
+			identity: owner.identity,
+			scope: `post:${blog.id}`,
+			message: 'No Cookie Post\n\nbody',
+			capability: 'author'
+		});
+		// NO cookie passed — authorization is purely the proof.
+		const res = await postJSON('/api/blog/post', {
+			blog_slug: blog.slug,
+			title: 'No Cookie Post',
+			content: 'body',
+			proof,
+			submit_for_review: true
+		});
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.ok).toBe(true);
+	}, 60_000);
+
+	it('a wrong-tree proof (comment proof to the post endpoint) is rejected (400)', async () => {
+		const owner = await makeUser({ username: 'sf-wrong', seed: 'sf-wrong-seed' });
+		const commenter = await makeUser({ username: 'sf-com', seed: 'sf-com-seed' });
+		const blog = await makeBlogWith({
+			owner,
+			members: [{ user: commenter, role: 'commenter' }]
+		});
+		// Build a COMMENT-tree proof (commenter is in the comment tree, not author)
+		// but submit it to the post endpoint, whose scope is post:<blog>. The scope
+		// won't match AND the comment root isn't a writers root → 400.
+		const proof = await buildTestProof({
+			blogId: blog.id,
+			identity: commenter.identity,
+			scope: `comment:x`,
+			message: 'x',
+			capability: 'comment'
+		});
+		const res = await postJSON('/api/blog/post', {
+			blog_slug: blog.slug,
+			title: 'x',
+			content: 'x',
+			proof
+		});
+		expect(res.status).toBe(400);
+	}, 60_000);
+
+	it('a present cookie is ignored (not required, not rejected)', async () => {
+		const owner = await makeUser({ username: 'sf-cookie', seed: 'sf-cookie-seed' });
+		const blog = await makeBlogWith({ owner });
+		const { cookie } = await asUser(owner);
+		const proof = await buildTestProof({
+			blogId: blog.id,
+			identity: owner.identity,
+			scope: `post:${blog.id}`,
+			message: 'With Cookie\n\nbody',
+			capability: 'author'
+		});
+		const res = await postJSON(
+			'/api/blog/post',
+			{ blog_slug: blog.slug, title: 'With Cookie', content: 'body', proof },
+			{ cookie }
+		);
+		expect(res.status).toBe(200);
+	}, 60_000);
+});
+
 describe('full flow: post → vote → publish → comment', () => {
 	it('publishes a post when approvals reach threshold and rejects nullifier reuse', async () => {
 		const owner = await makeUser({ username: 'owner', seed: 'owner-seed' });

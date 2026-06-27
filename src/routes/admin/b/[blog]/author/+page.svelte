@@ -79,6 +79,10 @@
 
 			const res = await fetch('/api/blog/post', {
 				method: 'POST',
+				// Session-free write: never attach the session cookie. Authorization
+				// is the Semaphore proof; the request reveals nothing the proof
+				// doesn't already.
+				credentials: 'omit',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					blog_slug: data.blog.slug,
