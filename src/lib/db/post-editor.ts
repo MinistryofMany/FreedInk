@@ -16,6 +16,7 @@ import { db, schema } from './client';
 import { and, desc, eq } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { hasRole, ROLES_WRITING } from '$lib/server/auth';
+import { countEligibleReviewers } from './members';
 import { error } from '@sveltejs/kit';
 
 // Resolve the post + version for an edit, asserting it is the CURRENT version,
@@ -103,6 +104,17 @@ export async function createPostVersion(input: CreatePostVersionInput) {
 		const nextVersion = (latest[0]?.version ?? 0) + 1;
 		const language = input.language ?? latest[0]?.language ?? 'en';
 
+		// Freeze the quorum denominator when this new version enters review.
+		let eligibleReviewersAtReview: number | null = null;
+		if (input.submitForReview) {
+			const [owner] = await tx
+				.select({ blogId: schema.blogPosts.blogId })
+				.from(schema.blogPosts)
+				.where(eq(schema.blogPosts.id, input.postId))
+				.limit(1);
+			if (owner) eligibleReviewersAtReview = await countEligibleReviewers(owner.blogId, tx);
+		}
+
 		const [version] = await tx
 			.insert(schema.blogPostVersions)
 			.values({
@@ -116,7 +128,8 @@ export async function createPostVersion(input: CreatePostVersionInput) {
 				snapshotRoot: input.snapshotRoot,
 				nullifier: input.nullifier,
 				status,
-				submittedAt: input.submitForReview ? new Date() : null
+				submittedAt: input.submitForReview ? new Date() : null,
+				eligibleReviewersAtReview
 			})
 			.returning();
 

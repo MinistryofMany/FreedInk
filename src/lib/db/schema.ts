@@ -396,6 +396,14 @@ export const blogPostVersions = pgTable(
 		// root is unique per-blog, not globally.
 		snapshotRoot: text('snapshot_root'),
 		nullifier: text('nullifier'),
+		// Quorum denominator FROZEN at the moment this version entered under_review:
+		// the count of active can_review members at that instant. The tally uses
+		// this (not the live can_review count) as the threshold denominator, so an
+		// operator cannot lower the bar mid-review by demoting reviewers, nor can the
+		// bar drift as membership changes during a round. Null for legacy rows /
+		// versions that never entered review; the tally falls back to the live count
+		// only then. See evaluatePostReview.
+		eligibleReviewersAtReview: integer('eligible_reviewers_at_review'),
 		status: postStatus('status').notNull().default('draft'),
 		searchTsv: tsvectorType('search_tsv'),
 		submittedAt: timestamp('submitted_at', { withTimezone: true }),
@@ -524,6 +532,12 @@ export const voteTokenIssuances = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		// Written COARSENED to the start of the UTC hour (see recordIssuance /
+		// truncateToHour), not at default now() resolution, so an operator cannot
+		// pin an issuance to a precise instant and pair it with a redemption by
+		// timestamp. The DB default is still now() for any path that bypasses
+		// recordIssuance; the app always overrides it with the truncated value.
+		// Residual leak (small-reviewer blogs) is documented at recordIssuance.
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({

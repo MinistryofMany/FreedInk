@@ -266,6 +266,29 @@ export async function countAdmins(blogId: string): Promise<number> {
 	return rows.length;
 }
 
+// Count active members of a blog that hold can_review — the eligible-reviewer
+// population (everyone who COULD be issued a vote token). Snapshotted onto a post
+// version when it enters under_review to freeze the quorum denominator (see
+// blog_post_versions.eligibleReviewersAtReview and evaluatePostReview). Accepts
+// an optional transaction handle so the snapshot can be taken atomically with the
+// status transition.
+export async function countEligibleReviewers(
+	blogId: string,
+	tx: Pick<typeof db, 'select'> = db
+): Promise<number> {
+	const rows = await tx
+		.select({ id: schema.blogMembers.id })
+		.from(schema.blogMembers)
+		.where(
+			and(
+				eq(schema.blogMembers.blogId, blogId),
+				isNull(schema.blogMembers.removedAt),
+				eq(schema.blogMembers.canReview, true)
+			)
+		);
+	return rows.length;
+}
+
 // The four capabilities a permission-change diff can touch.
 export type CapabilityPatch = Partial<Record<Capability, boolean>>;
 

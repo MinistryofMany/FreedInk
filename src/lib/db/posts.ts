@@ -2,6 +2,7 @@ import { db, schema } from './client';
 import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
+import { countEligibleReviewers } from './members';
 
 type DateIdCursor = { key: string; id: string };
 
@@ -445,6 +446,11 @@ export async function createPost(input: CreatePostInput) {
 			language = b?.defaultLanguage ?? 'en';
 		}
 
+		// Freeze the quorum denominator when the post is created straight into
+		// review (snapshot the eligible-reviewer count); null while it's a draft.
+		const eligibleReviewersAtReview =
+			input.status === 'under_review' ? await countEligibleReviewers(input.blogId, tx) : null;
+
 		const [post] = await tx
 			.insert(schema.blogPosts)
 			.values({ blogId: input.blogId, status: input.status })
@@ -462,7 +468,8 @@ export async function createPost(input: CreatePostInput) {
 				snapshotRoot: input.snapshotRoot,
 				nullifier: input.nullifier,
 				status: input.status,
-				submittedAt: input.status === 'under_review' ? new Date() : null
+				submittedAt: input.status === 'under_review' ? new Date() : null,
+				eligibleReviewersAtReview
 			})
 			.returning();
 		await tx
@@ -475,17 +482,26 @@ export async function createPost(input: CreatePostInput) {
 
 export async function submitForReview(postVersionId: string): Promise<void> {
 	await db.transaction(async (tx) => {
-		const [version] = await tx
-			.update(schema.blogPostVersions)
-			.set({ status: 'under_review', submittedAt: new Date() })
+		// Resolve the owning blog so we can freeze the quorum denominator at the
+		// instant this version enters review.
+		const [owner] = await tx
+			.select({ blogId: schema.blogPosts.blogId, postId: schema.blogPosts.id })
+			.from(schema.blogPostVersions)
+			.innerJoin(schema.blogPosts, eq(schema.blogPosts.id, schema.blogPostVersions.postId))
 			.where(eq(schema.blogPostVersions.id, postVersionId))
-			.returning();
-		if (version) {
-			await tx
-				.update(schema.blogPosts)
-				.set({ status: 'under_review' })
-				.where(eq(schema.blogPosts.id, version.postId));
-		}
+			.limit(1);
+		if (!owner) return;
+
+		const eligibleReviewersAtReview = await countEligibleReviewers(owner.blogId, tx);
+
+		await tx
+			.update(schema.blogPostVersions)
+			.set({ status: 'under_review', submittedAt: new Date(), eligibleReviewersAtReview })
+			.where(eq(schema.blogPostVersions.id, postVersionId));
+		await tx
+			.update(schema.blogPosts)
+			.set({ status: 'under_review' })
+			.where(eq(schema.blogPosts.id, owner.postId));
 	});
 }
 

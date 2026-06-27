@@ -99,34 +99,28 @@ describe('evaluatePostReview thresholds', () => {
 		expect(result.status).toBe('rejected');
 	});
 
-	it('threshold tracks the LIVE can_review count: adding reviewers raises the bar', async () => {
-		const { blogId, owner } = await setupBlogWithReviewers(2); // 3 eligible, threshold 2
-		const post = await createUnderReviewPost(blogId);
+	it('threshold is FROZEN at review time: adding reviewers does NOT change the bar', async () => {
+		const { blogId, owner } = await setupBlogWithReviewers(2); // 3 eligible at review time
+		const post = await createUnderReviewPost(blogId); // snapshot = 3, threshold ceil(2/3*3)=2
 		await insertVote(post.version.id, 'approve', 'n1');
 		await insertVote(post.version.id, 'approve', 'n2');
-		// At 3 eligible, 2 approves would publish — but add 2 reviewers BEFORE the
-		// tally so eligible = 5, threshold ceil(2/3*5)=4. The two votes no longer
-		// suffice.
+
+		// Add 2 reviewers AFTER the version entered review. The live can_review count
+		// is now 5, but the denominator is frozen at the snapshot (3), so the bar
+		// stays at 2 — the two votes still publish.
 		const extra1 = await makeUser({ username: 'extra1' });
 		const extra2 = await makeUser({ username: 'extra2' });
 		await setRole(blogId, extra1.id, 'reviewer', owner.id);
 		await setRole(blogId, extra2.id, 'reviewer', owner.id);
 
 		const r = await evaluatePostReview(post.version.id);
-		expect(r.threshold).toBe(4);
+		expect(r.threshold).toBe(2);
 		expect(r.approves).toBe(2);
-		expect(r.status).toBe('under_review');
-
-		// Three more distinct token votes push approves to 5 ≥ 4 → published.
-		await insertVote(post.version.id, 'approve', 'n3');
-		await insertVote(post.version.id, 'approve', 'n4');
-		const done = await evaluatePostReview(post.version.id);
-		expect(done.approves).toBe(4);
-		expect(done.status).toBe('published');
+		expect(r.status).toBe('published');
 	});
 
-	it('removing a reviewer lowers the bar (threshold tracks live can_review)', async () => {
-		// owner + 3 reviewers = 4 eligible, threshold ceil(2/3 * 4) = 3.
+	it('QUORUM CAPTURE BLOCKED: demoting reviewers mid-review does NOT lower the bar', async () => {
+		// owner + 3 reviewers = 4 eligible at review time, threshold ceil(2/3*4)=3.
 		const owner = await makeUser({ username: 'owner' });
 		const reviewers = [];
 		for (let i = 0; i < 3; i++) reviewers.push(await makeUser({ username: `rev${i}` }));
@@ -134,20 +128,27 @@ describe('evaluatePostReview thresholds', () => {
 			owner,
 			members: reviewers.map((r) => ({ user: r, role: 'reviewer' as const }))
 		});
-		const post = await createUnderReviewPost(blogId);
+		const post = await createUnderReviewPost(blogId); // snapshot = 4, threshold 3
 		await insertVote(post.version.id, 'approve', 'a1');
 		await insertVote(post.version.id, 'approve', 'a2');
 		let r = await evaluatePostReview(post.version.id);
 		expect(r.threshold).toBe(3);
 		expect(r.status).toBe('under_review'); // 2 < 3
 
-		// Remove one reviewer → eligible 3, threshold ceil(2/3*3)=2. The two
-		// existing approves now meet the lower bar.
+		// An operator demotes a reviewer to try to drop the bar to ceil(2/3*3)=2 so
+		// the two existing approves publish. With the frozen denominator the bar
+		// stays at 3 — the capture is blocked and the post stays under review.
 		await removeMember(blogId, reviewers[2].id);
 		r = await evaluatePostReview(post.version.id);
-		expect(r.threshold).toBe(2);
+		expect(r.threshold).toBe(3);
 		expect(r.approves).toBe(2);
-		expect(r.status).toBe('published');
+		expect(r.status).toBe('under_review');
+
+		// A third legitimate approve still publishes at the honest bar.
+		await insertVote(post.version.id, 'approve', 'a3');
+		const done = await evaluatePostReview(post.version.id);
+		expect(done.approves).toBe(3);
+		expect(done.status).toBe('published');
 	});
 
 	it('does not move a post that is not currently under_review', async () => {
@@ -177,6 +178,56 @@ describe('evaluatePostReview thresholds', () => {
 		await insertVote(post.version.id, 'reject', 'r1');
 		const sum = await getReviewSummary(post.version.id);
 		expect(sum).toEqual({ approves: 1, rejects: 1 });
+	});
+
+	it('denominator is floored at the number of tokens ISSUED for the version', async () => {
+		// 1 eligible reviewer at review time → snapshot 1, threshold ceil(2/3*1)=1.
+		const owner = await makeUser({ username: 'floor-owner' });
+		const { id: blogId } = await makeBlogWith({ owner });
+		const post = await createUnderReviewPost(blogId);
+		// Issue 3 tokens for this version (more than the snapshot of 1). The floor
+		// raises the denominator to 3, so the bar becomes ceil(2/3*3)=2.
+		const blogRow = await db
+			.select()
+			.from(schema.blogs)
+			.where(eq(schema.blogs.id, blogId))
+			.limit(1);
+		const voters = [];
+		for (let i = 0; i < 3; i++) voters.push(await makeUser({ username: `floor-v${i}` }));
+		for (const v of voters) {
+			await db.insert(schema.voteTokenIssuances).values({
+				blogId: blogRow[0].id,
+				postVersionId: post.version.id,
+				userId: v.id
+			});
+		}
+		// One approve is no longer enough (bar is 2, floored at issued=3).
+		await insertVote(post.version.id, 'approve', 'f1');
+		let r = await evaluatePostReview(post.version.id);
+		expect(r.threshold).toBe(2);
+		expect(r.status).toBe('under_review');
+		// A second approve meets the floored bar.
+		await insertVote(post.version.id, 'approve', 'f2');
+		r = await evaluatePostReview(post.version.id);
+		expect(r.status).toBe('published');
+	});
+
+	it('legacy rows with no snapshot fall back to the live can_review count', async () => {
+		const { blogId } = await setupBlogWithReviewers(2); // 3 eligible
+		const post = await createUnderReviewPost(blogId);
+		// Simulate a legacy row that predates the snapshot column.
+		await db
+			.update(schema.blogPostVersions)
+			.set({ eligibleReviewersAtReview: null })
+			.where(eq(schema.blogPostVersions.id, post.version.id));
+		await insertVote(post.version.id, 'approve', 'l1');
+		// Falls back to live can_review (3) → threshold ceil(2/3*3)=2; 1 approve holds.
+		let r = await evaluatePostReview(post.version.id);
+		expect(r.threshold).toBe(2);
+		expect(r.status).toBe('under_review');
+		await insertVote(post.version.id, 'approve', 'l2');
+		r = await evaluatePostReview(post.version.id);
+		expect(r.status).toBe('published');
 	});
 });
 
