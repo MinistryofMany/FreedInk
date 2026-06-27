@@ -203,31 +203,17 @@ test('browser-side vote: approve fires the blind-token issuance round-trip', asy
 
 // The SECOND half — anonymous redemption (POST /api/post/review), the tally
 // crossing quorum, the post publishing, and it surfacing on the public blog page
-// + members roster — is BLOCKED by a source bug in the browser token finalize.
-//
-// Root cause (verified in this branch's e2e environment): the client's
-// requestAndBuildToken() throws an OperationError (empty message) at
-// suite.finalize(). The throw is inside @cloudflare/blindrsa-ts@0.4.6
-// PartiallyBlindRSA.finalize, at the `crypto.subtle.importKey('jwk', ...)` of the
-// per-metadata DERIVED public key (partially_blindrsa.js:171). Chromium's
-// WebCrypto rejects that derived-key JWK with OperationError; Node's WebCrypto
-// accepts the identical JWK (a full prepare→blind→blindSign→finalize→verify
-// round-trip passes under node:crypto but fails under chromium). Because
-// vote()'s catch sets `error = (e as Error).message` and the message is empty,
-// the UI shows nothing, castVote() (the redemption POST) never fires, and the
-// vote is silently dropped — the post never reaches quorum.
-//
-// This is an app-source defect, not a test defect, and the source is frozen for
-// a concurrent security audit on this branch, so the publish path is quarantined
-// here rather than worked around. Remove the fixme once the browser finalize is
-// fixed (e.g. a blindrsa bump or a derived-key import that chromium accepts).
+// + members roster. This is the proof that the Chromium token-finalize fix works
+// in a REAL browser: requestAndBuildToken() now finalizes via the WebCrypto-free
+// finalizeInBrowser (src/lib/client/vote-token.ts) instead of the library's
+// suite.finalize, which imported the 1024-bit derived public key into WebCrypto
+// and threw OperationError in Chromium. If this test goes green in chromium, the
+// browser vote works end-to-end (issuance → finalize → redemption → publish) and
+// the produced signature is byte-identical to the library's (asserted by the
+// vote-token unit test), so the wire scheme is unchanged.
 test('browser-side vote-to-publish: approve in UI, post appears on public page', async ({
 	page
 }) => {
-	test.fixme(
-		true,
-		'blind-token suite.finalize() throws OperationError in chromium (importKey jwk of the derived metadata key, partially_blindrsa.js:171); castVote never fires so the post cannot publish. App-source bug — see test comment.'
-	);
 	test.setTimeout(300_000);
 	page.on('console', (msg) => {
 		if (msg.type() === 'error') console.error('[browser]', msg.text());

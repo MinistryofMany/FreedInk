@@ -102,11 +102,15 @@ describe('listPublicMembers', () => {
 		const members = await listPublicMembers(blogId);
 		expect(members).toHaveLength(2);
 
-		// Only username, displayName, role, joinedAt are surfaced — never email
-		// and never the internal user id.
+		// Only username, displayName, role, joinedAt, and the non-sensitive
+		// can_author capability flag are surfaced — never email and never the
+		// internal user id. can_author is the public "could have authored" predicate
+		// the blog page uses to build the author anonymity set; it carries no
+		// private information (it is already implied by who appears in that set).
 		const keys = Object.keys(members[0]).sort();
-		expect(keys).toEqual(['displayName', 'joinedAt', 'role', 'username']);
+		expect(keys).toEqual(['canAuthor', 'displayName', 'joinedAt', 'role', 'username']);
 		for (const m of members) {
+			expect(typeof m.canAuthor).toBe('boolean');
 			expect(m).not.toHaveProperty('email');
 			expect(m).not.toHaveProperty('id');
 			expect(m).not.toHaveProperty('userId');
