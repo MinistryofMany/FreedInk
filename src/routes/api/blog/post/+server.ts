@@ -50,11 +50,13 @@ export const POST: RequestHandler = async (event) => {
 	const expectedMessage = `${title}\n\n${content}`;
 	const { snapshot, nullifier } = await verifyMembership({
 		blogId: blog.id,
+		// Authoring proves membership in the WRITERS tree (can_author holders).
+		capability: 'author',
 		proof,
 		expectedScope,
 		expectedMessage,
 		// A removed or rotated-away member must not be able to author: the
-		// proof has to match the blog's current proving-eligible snapshot.
+		// proof has to match the writers tree's current root.
 		requireCurrentRoot: true
 	});
 

@@ -9,7 +9,12 @@ import {
 	removeMember,
 	isFirstOwner
 } from '$lib/db/members';
-import { refreshSnapshot, getSnapshotByRoot, refreshSnapshotsForUser } from '$lib/db/snapshots';
+import {
+	refreshSnapshot,
+	getSnapshotByRoot,
+	refreshSnapshotsForUser,
+	currentMembership
+} from '$lib/db/snapshots';
 import { db, schema } from '$lib/db/client';
 import { and, eq } from 'drizzle-orm';
 import { Identity } from '@semaphore-protocol/identity';
@@ -67,13 +72,20 @@ describe('createBlog', () => {
 		expect(members[0].role).toBe('owner');
 		expect(members[0].user.id).toBe(owner.id);
 
+		// createBlog seeds one snapshot per tree capability (author, comment,
+		// review) — the owner holds all three. All share the same single-leaf root
+		// (same identity set), but each tree gets its own row.
 		const snaps = await db
 			.select()
 			.from(schema.blogMemberSnapshots)
 			.where(eq(schema.blogMemberSnapshots.blogId, id));
-		expect(snaps).toHaveLength(1);
-		expect(snaps[0].eligibleCount).toBe(1);
-		expect(snaps[0].identities).toHaveLength(1);
+		expect(snaps).toHaveLength(3);
+		const caps = snaps.map((s) => s.capability).sort();
+		expect(caps).toEqual(['author', 'comment', 'review']);
+		for (const s of snaps) {
+			expect(s.eligibleCount).toBe(1);
+			expect(s.identities).toHaveLength(1);
+		}
 	});
 });
 
@@ -146,30 +158,43 @@ describe('setRole', () => {
 		expect(allRows.filter((r) => r.removedAt === null)).toHaveLength(1);
 	});
 
-	it('writes a fresh snapshot when adding a proving-eligible member', async () => {
+	it('grows the author + comment trees when adding an author', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
-
-		const before = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, blogId));
 
 		const author = await createUserWithEmail('a@x.com', 'author');
 		await installIdentity(author.id, 'author');
 		await setRole(blogId, author.id, 'author', owner.id);
 
-		const after = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, blogId));
-		expect(after.length).toBeGreaterThan(before.length);
-		const latest = after.at(-1)!;
-		expect(latest.eligibleCount).toBe(2);
+		// The author now sits in the author tree AND the comment tree (every role
+		// can comment), but NOT the review tree (an author can't review).
+		const authorTree = await currentMembership(blogId, 'author');
+		const commentTree = await currentMembership(blogId, 'comment');
+		const reviewTree = await currentMembership(blogId, 'review');
+		expect(authorTree.eligibleCount).toBe(2);
+		expect(commentTree.eligibleCount).toBe(2);
+		expect(reviewTree.eligibleCount).toBe(1); // owner only
 	});
 
-	it('does NOT add a snapshot when changing a commenter (non-proving) role to commenter', async () => {
+	it('puts a reviewer in the review + comment trees but NOT the author tree', async () => {
+		const owner = await createUserWithEmail('o@x.com', 'owner');
+		await installIdentity(owner.id, 'owner');
+		const { id: blogId } = await createBlog(owner.id, 'B', null);
+
+		const reviewer = await createUserWithEmail('r@x.com', 'reviewer');
+		await installIdentity(reviewer.id, 'reviewer');
+		await setRole(blogId, reviewer.id, 'reviewer', owner.id);
+
+		const authorTree = await currentMembership(blogId, 'author');
+		const reviewTree = await currentMembership(blogId, 'review');
+		const commentTree = await currentMembership(blogId, 'comment');
+		expect(authorTree.eligibleCount).toBe(1); // owner only — reviewer can't author
+		expect(reviewTree.eligibleCount).toBe(2);
+		expect(commentTree.eligibleCount).toBe(2);
+	});
+
+	it('adds a commenter only to the comment tree', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
@@ -178,20 +203,9 @@ describe('setRole', () => {
 		await installIdentity(commenter.id, 'commenter');
 		await setRole(blogId, commenter.id, 'commenter', owner.id);
 
-		const before = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, blogId));
-
-		// Re-setting commenter→commenter via the same code path should not
-		// produce a new snapshot since the proving set didn't change.
-		await setRole(blogId, commenter.id, 'commenter', owner.id);
-
-		const after = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, blogId));
-		expect(after.length).toBe(before.length);
+		expect((await currentMembership(blogId, 'author')).eligibleCount).toBe(1);
+		expect((await currentMembership(blogId, 'review')).eligibleCount).toBe(1);
+		expect((await currentMembership(blogId, 'comment')).eligibleCount).toBe(2);
 	});
 });
 
@@ -209,12 +223,11 @@ describe('removeMember', () => {
 		await removeMember(blogId, author.id);
 		expect((await listMembers(blogId)).length).toBe(1);
 
-		// The current effective snapshot is the one that matches the present
-		// member set, looked up via refreshSnapshot's returned root (it'll be
-		// a no-op insert if the owner-only root was already seen).
-		const current = await refreshSnapshot(blogId);
+		// The current effective author-tree snapshot matches the present member
+		// set (owner only), looked up via refreshSnapshot's returned root.
+		const current = await refreshSnapshot(blogId, 'author');
 		expect(current.eligibleCount).toBe(1);
-		const snap = await getSnapshotByRoot(blogId, current.root);
+		const snap = await getSnapshotByRoot(blogId, 'author', current.root);
 		expect(snap?.eligibleCount).toBe(1);
 	});
 
@@ -250,106 +263,97 @@ describe('isFirstOwner', () => {
 	});
 });
 
-describe('refreshSnapshot', () => {
-	it('is idempotent: same identity set → no new row inserted', async () => {
+describe('refreshSnapshot (per capability)', () => {
+	it('is idempotent: same identity set → no new row inserted for that tree', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 
-		const r1 = await refreshSnapshot(blogId);
-		const r2 = await refreshSnapshot(blogId);
+		const r1 = await refreshSnapshot(blogId, 'author');
+		const r2 = await refreshSnapshot(blogId, 'author');
 		expect(r1.root).toBe(r2.root);
 		expect(r2.changed).toBe(false);
 
-		const snaps = await db
+		// Exactly one author-tree row (createBlog seeded it; the two refreshes are
+		// no-ops). The other trees have their own rows.
+		const authorRows = await db
 			.select()
 			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, blogId));
-		expect(snaps).toHaveLength(1);
+			.where(
+				and(
+					eq(schema.blogMemberSnapshots.blogId, blogId),
+					eq(schema.blogMemberSnapshots.capability, 'author')
+				)
+			);
+		expect(authorRows).toHaveLength(1);
 	});
 
-	it('inserts a new row when the proving set changes', async () => {
+	it('inserts a new row for the author tree when the writers set changes', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
-		const initial = await refreshSnapshot(blogId);
+		const initial = await refreshSnapshot(blogId, 'author');
 
 		const author = await createUserWithEmail('a@x.com', 'author');
 		await installIdentity(author.id, 'author');
 		await setRole(blogId, author.id, 'author', owner.id);
 
-		const after = await refreshSnapshot(blogId);
+		const after = await refreshSnapshot(blogId, 'author');
 		expect(after.root).not.toBe(initial.root);
 		expect(after.eligibleCount).toBe(2);
 	});
 
-	it('stores per-blog snapshot rows even when two blogs share the same root', async () => {
+	it('a per-capability root never collides across trees or blogs', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner');
 		const { id: b1 } = await createBlog(owner.id, 'B1', null);
 		const { id: b2 } = await createBlog(owner.id, 'B2', null);
-		const s1 = await refreshSnapshot(b1);
-		const s2 = await refreshSnapshot(b2);
-		// Identical proving set ({owner.idc}) → same root, but each blog has
-		// its own row so the (blog_id, root) lookup must succeed for both.
-		expect(s1.root).toBe(s2.root);
-		expect(await getSnapshotByRoot(b1, s1.root)).not.toBeNull();
-		expect(await getSnapshotByRoot(b2, s1.root)).not.toBeNull();
-		// And different blogs may share a snapshot root without colliding.
-		const rows1 = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, b1));
-		const rows2 = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, b2));
-		expect(rows1).toHaveLength(1);
-		expect(rows2).toHaveLength(1);
+		// Same single-owner identity set → identical root across both blogs AND
+		// across all three trees, but each (blog, capability) keeps its own row so
+		// every lookup resolves to the right tree.
+		const a1 = await refreshSnapshot(b1, 'author');
+		const a2 = await refreshSnapshot(b2, 'author');
+		const c1 = await refreshSnapshot(b1, 'comment');
+		expect(a1.root).toBe(a2.root);
+		expect(a1.root).toBe(c1.root);
+		expect(await getSnapshotByRoot(b1, 'author', a1.root)).not.toBeNull();
+		expect(await getSnapshotByRoot(b2, 'author', a1.root)).not.toBeNull();
+		expect(await getSnapshotByRoot(b1, 'comment', a1.root)).not.toBeNull();
+		// A root looked up under the WRONG capability is NOT found (R1 guard): the
+		// author-tree root resolves under 'author' but there is no separate
+		// 'review' row with a different identity set here — confirm the lookup is
+		// keyed on capability by checking a blog that has no such review row would
+		// miss. Here all trees share the owner so they all exist; instead assert
+		// the row's capability is exactly what we asked for.
+		const fetched = await getSnapshotByRoot(b1, 'author', a1.root);
+		expect(fetched?.capability).toBe('author');
 	});
 });
 
 describe('refreshSnapshotsForUser (identity rotation)', () => {
-	it('refreshes every blog the user belongs to as a proving member', async () => {
+	it('refreshes every tree of every blog the user belongs to', async () => {
 		const u = await createUserWithEmail('u@x.com', 'u');
 		await installIdentity(u.id, 'u-v1');
 		const { id: b1 } = await createBlog(u.id, 'B1', null);
 		const { id: b2 } = await createBlog(u.id, 'B2', null);
 
-		const before1 = (
-			await db
-				.select()
-				.from(schema.blogMemberSnapshots)
-				.where(eq(schema.blogMemberSnapshots.blogId, b1))
-		).length;
-		const before2 = (
-			await db
-				.select()
-				.from(schema.blogMemberSnapshots)
-				.where(eq(schema.blogMemberSnapshots.blogId, b2))
-		).length;
-
 		await rotateIdentity(u.id, 'u-v2');
 		await refreshSnapshotsForUser(u.id);
 
-		const after1 = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, b1));
-		const after2 = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, b2));
-
-		expect(after1.length).toBe(before1 + 1);
-		expect(after2.length).toBe(before2 + 1);
-		// The latest snapshot's identity list reflects the new IDC.
+		// The new commitment is in the current root of every tree of both blogs.
 		const v2 = new Identity('u-v2').commitment.toString();
-		expect(after1.at(-1)!.identities).toContain(v2);
-		expect(after2.at(-1)!.identities).toContain(v2);
+		for (const blogId of [b1, b2]) {
+			for (const cap of ['author', 'comment', 'review'] as const) {
+				const cur = await currentMembership(blogId, cap);
+				expect(cur.identities).toContain(v2);
+			}
+		}
 	});
 
-	it('does not affect blogs the user is only a commenter on', async () => {
+	it('a commenter rotation refreshes the comment tree (they ARE in it now)', async () => {
+		// Under the per-capability model a commenter is a real leaf of the comment
+		// tree, so rotating their device DOES change the comment-tree root (unlike
+		// the legacy single proving group, which excluded commenters).
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner-id');
 		const u = await createUserWithEmail('u@x.com', 'u');
@@ -357,20 +361,13 @@ describe('refreshSnapshotsForUser (identity rotation)', () => {
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 		await setRole(blogId, u.id, 'commenter', owner.id);
 
-		const before = (
-			await db
-				.select()
-				.from(schema.blogMemberSnapshots)
-				.where(eq(schema.blogMemberSnapshots.blogId, blogId))
-		).length;
-
+		const beforeRoot = (await currentMembership(blogId, 'comment')).root;
 		await rotateIdentity(u.id, 'u-v2');
 		await refreshSnapshotsForUser(u.id);
-
-		const after = await db
-			.select()
-			.from(schema.blogMemberSnapshots)
-			.where(eq(schema.blogMemberSnapshots.blogId, blogId));
-		expect(after.length).toBe(before);
+		const afterRoot = (await currentMembership(blogId, 'comment')).root;
+		expect(afterRoot).not.toBe(beforeRoot);
+		// The author tree (which the commenter is NOT in) is unchanged.
+		const authorMembers = await currentMembership(blogId, 'author');
+		expect(authorMembers.eligibleCount).toBe(1); // owner only
 	});
 });

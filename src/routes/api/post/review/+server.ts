@@ -68,12 +68,18 @@ export const POST: RequestHandler = async (event) => {
 	const expectedMessage = parsed.data.vote;
 	const { snapshot, nullifier } = await verifyMembership({
 		blogId: row.post.blogId,
+		// TRANSITIONAL (Phases 2–4): votes still prove membership in the reviewers
+		// tree (can_review holders). Phase 5 replaces this whole proof with a
+		// blind-signature token (issuance + anonymous redemption) and removes the
+		// reviewers tree. Until then the review path is unchanged save for pinning
+		// the lookup to the 'review' capability tree (design R1).
+		capability: 'review',
 		proof: parsed.data.proof,
 		expectedScope,
 		expectedMessage,
-		// Reviews verify against the current snapshot so the voting population
-		// matches the one the tally threshold is computed from (M1). A removed
-		// or rotated-away member can no longer vote.
+		// Reviews verify against the current reviewers-tree snapshot so the voting
+		// population matches the one the tally threshold is computed from (M1). A
+		// removed or rotated-away member can no longer vote.
 		requireCurrentRoot: true
 	});
 

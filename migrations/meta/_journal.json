@@ -57,6 +57,13 @@
 			"when": 1782538028743,
 			"tag": "0007_member_capabilities",
 			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1782538494565,
+			"tag": "0008_snapshot_capability",
+			"breakpoints": true
 		}
 	]
 }

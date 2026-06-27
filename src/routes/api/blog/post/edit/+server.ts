@@ -60,11 +60,14 @@ export const POST: RequestHandler = async (event) => {
 	const expectedMessage = `${title}\n\n${content}`;
 	const { snapshot, nullifier } = await verifyMembership({
 		blogId: row.post.blogId,
+		// Editing (a new version) proves membership in the WRITERS tree, same as
+		// authoring — any writer may revise a post.
+		capability: 'author',
 		proof,
 		expectedScope,
 		expectedMessage,
-		// Same rule as authoring: an edit must be proven against the current
-		// snapshot, so a removed/rotated member can't push new versions.
+		// Same rule as authoring: an edit must be proven against the writers tree's
+		// current root, so a removed/rotated member can't push new versions.
 		requireCurrentRoot: true
 	});
 

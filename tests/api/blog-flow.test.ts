@@ -35,13 +35,17 @@ describe('blog/group', () => {
 		const owner = await makeUser({ username: 'owner' });
 		const stranger = await makeUser({ username: 'stranger' });
 		const blog = await makeBlogWith({ owner });
-		await refreshSnapshot(blog.id);
+		await refreshSnapshot(blog.id, 'author');
 		const { cookie } = await asUser(stranger);
-		const res = await postJSON('/api/blog/group', { blog_slug: blog.slug }, { cookie });
+		const res = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'author' },
+			{ cookie }
+		);
 		expect(res.status).toBe(403);
 	});
 
-	it('member receives the snapshot identities', async () => {
+	it('member receives the author-tree identities', async () => {
 		const owner = await makeUser({ username: 'owner' });
 		const author = await makeUser({ username: 'author' });
 		const blog = await makeBlogWith({
@@ -49,7 +53,11 @@ describe('blog/group', () => {
 			members: [{ user: author, role: 'author' }]
 		});
 		const { cookie } = await asUser(author);
-		const res = await postJSON('/api/blog/group', { blog_slug: blog.slug }, { cookie });
+		const res = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'author' },
+			{ cookie }
+		);
 		expect(res.status).toBe(200);
 		const json = await res.json();
 		expect(json.identities).toContain(owner.identity.commitment.toString());
@@ -57,10 +65,40 @@ describe('blog/group', () => {
 		expect(json.eligible_count).toBe(2);
 	});
 
+	it('an author requesting the REVIEW tree is forbidden (R1: only your own trees)', async () => {
+		const owner = await makeUser({ username: 'owner' });
+		const author = await makeUser({ username: 'author' });
+		const blog = await makeBlogWith({
+			owner,
+			members: [{ user: author, role: 'author' }]
+		});
+		const { cookie } = await asUser(author);
+		// The author holds can_author + can_comment but NOT can_review, so the
+		// review tree fetch is 403 — a member can only fetch the trees they hold.
+		const res = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'review' },
+			{ cookie }
+		);
+		expect(res.status).toBe(403);
+	});
+
+	it('rejects a missing/invalid capability with 422', async () => {
+		const owner = await makeUser({ username: 'owner' });
+		const blog = await makeBlogWith({ owner });
+		const { cookie } = await asUser(owner);
+		const res = await postJSON('/api/blog/group', { blog_slug: blog.slug }, { cookie });
+		expect(res.status).toBe(422);
+	});
+
 	it('unknown blog → 404', async () => {
 		const u = await makeUser({ username: 'u' });
 		const { cookie } = await asUser(u);
-		const res = await postJSON('/api/blog/group', { blog_slug: 'nope' }, { cookie });
+		const res = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: 'nope', capability: 'author' },
+			{ cookie }
+		);
 		expect(res.status).toBe(404);
 	});
 });
@@ -103,10 +141,23 @@ describe('blog/members', () => {
 		const json = await res.json();
 		expect(json.member.role).toBe('reviewer');
 
-		// Target should now be in the proving set → fetch group and assert.
-		const group = await postJSON('/api/blog/group', { blog_slug: blog.slug }, { cookie });
+		// Target is now a reviewer → in the REVIEW tree. Fetch it (owner holds all
+		// capabilities so may fetch any tree) and assert the target's commitment.
+		const group = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'review' },
+			{ cookie }
+		);
 		const g = await group.json();
 		expect(g.identities).toContain(target.identity.commitment.toString());
+		// And NOT in the author tree (a reviewer can't author).
+		const authorGroup = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'author' },
+			{ cookie }
+		);
+		const ag = await authorGroup.json();
+		expect(ag.identities).not.toContain(target.identity.commitment.toString());
 	});
 
 	it('owner cannot remove themselves', async () => {

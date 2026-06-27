@@ -11,7 +11,16 @@ import { createBlog } from '$lib/db/blogs';
 import { setRole } from '$lib/db/members';
 import { refreshSnapshot } from '$lib/db/snapshots';
 import { hashToField } from '$lib/utils';
-import type { MemberRole } from '$lib/db/schema';
+import type { MemberRole, TreeCapability } from '$lib/db/schema';
+
+// Map a proof scope prefix to the capability tree it proves against. Mirrors the
+// endpoints: post:/edit: → author (writers tree), comment: → comment, review: →
+// review (transitional). Used as the default tree for buildTestProof.
+function capabilityForScope(scope: string): TreeCapability {
+	if (scope.startsWith('comment:')) return 'comment';
+	if (scope.startsWith('review:')) return 'review';
+	return 'author'; // post:<blog> and edit:<post>:<v>
+}
 
 export type TestUser = {
 	id: string;
@@ -94,11 +103,17 @@ function nodeArtifactsForDepth(depth: number): { wasm: string; zkey: string } | 
 
 // Build a proof against the *current* snapshot for `blogId`. Mirrors the
 // client/semaphore.ts buildProof so server expectations line up.
+//
+// `capability` selects which tree to prove against (author/comment/review). It
+// is derived from the scope prefix when omitted: post:/edit: → author,
+// comment: → comment, review: → review. Pass it explicitly for adversarial
+// "prove against the wrong tree" tests.
 export async function buildTestProof(opts: {
 	blogId: string;
 	identity: Identity;
 	scope: string;
 	message: string;
+	capability?: TreeCapability;
 }): Promise<{
 	merkleTreeDepth: number;
 	merkleTreeRoot: string;
@@ -107,7 +122,8 @@ export async function buildTestProof(opts: {
 	scope: string;
 	points: string[];
 }> {
-	const snap = await refreshSnapshot(opts.blogId);
+	const capability = opts.capability ?? capabilityForScope(opts.scope);
+	const snap = await refreshSnapshot(opts.blogId, capability);
 	const group = new Group();
 	// Match the server's canonical order (user-creation-date) — refreshSnapshot
 	// already returned them in that order. Do NOT re-sort here, or the Merkle

@@ -108,7 +108,7 @@
 			let identity = getCachedIdentity();
 			if (!identity) identity = await unlock();
 
-			const group = await fetchGroup(data.blog.slug);
+			const group = await fetchGroup(data.blog.slug, 'review');
 			const proof = await buildProof({
 				identity: identity!,
 				identities: group.identities,

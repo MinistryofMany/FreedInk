@@ -1,7 +1,7 @@
 import { db, schema } from './client';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { MemberRole, Capability } from './schema';
-import { refreshSnapshot } from './snapshots';
+import { refreshSnapshot, refreshAllSnapshots } from './snapshots';
 
 const PROVING: MemberRole[] = ['owner', 'editor', 'reviewer', 'author'];
 
@@ -126,8 +126,19 @@ export async function setRole(
 		});
 	});
 
+	// A role change can shift author-tree membership (and comment-tree membership
+	// if this was a brand-new member, though setRole on an existing member keeps
+	// comment membership since every role can comment). Refreshing both trees is
+	// idempotent — refreshSnapshot is a no-op when that tree's root is unchanged —
+	// so we refresh all rather than track which set was touched. `wasProving` /
+	// `willBeProving` are retained only to skip the work when neither side ever
+	// touched a proving capability.
 	if (wasProving || willBeProving) {
-		await refreshSnapshot(blogId);
+		await refreshAllSnapshots(blogId);
+	} else {
+		// Even a non-proving change (e.g. commenter↔commenter) is a fresh active
+		// row; refresh the comment tree so a newly-added commenter lands in it.
+		await refreshSnapshot(blogId, 'comment');
 	}
 }
 
@@ -199,11 +210,11 @@ export async function setCapability(
 		.set({ [field]: value, role: roleLabelFor(after) })
 		.where(eq(schema.blogMembers.id, existing.id));
 
-	// Only author/comment back a tree; review and admin do not. Phase 2 makes
-	// refreshSnapshot capability-aware, at which point this refreshes exactly the
-	// affected tree.
-	if (capability === 'author' || capability === 'comment') {
-		await refreshSnapshot(blogId);
+	// author/comment back a tree; 'review' backs a transitional tree (Phases 2–4,
+	// removed in Phase 5); admin never backs a tree. Refresh exactly the affected
+	// tree so the leaf set reflects the grant/revoke immediately.
+	if (capability === 'author' || capability === 'comment' || capability === 'review') {
+		await refreshSnapshot(blogId, capability);
 	}
 	return { before, after };
 }
@@ -226,9 +237,9 @@ export async function removeMember(blogId: string, targetUserId: string): Promis
 		.update(schema.blogMembers)
 		.set({ removedAt: new Date() })
 		.where(eq(schema.blogMembers.id, existing.id));
-	if (PROVING.includes(existing.role)) {
-		await refreshSnapshot(blogId);
-	}
+	// A removed member drops out of every tree they were in. They always held
+	// can_comment (universal) and may have held can_author, so refresh both trees.
+	await refreshAllSnapshots(blogId);
 }
 
 export async function isFirstOwner(blogId: string, userId: string): Promise<boolean> {

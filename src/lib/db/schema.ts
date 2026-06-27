@@ -305,8 +305,11 @@ export const blogMembers = pgTable(
 	})
 );
 
-// One row per change to the proving-eligible set; identities frozen at that point.
-// The proof verification path looks up snapshots by `root`.
+// One row per change to a capability's eligible set; identities frozen at that
+// point. The proof verification path looks up snapshots by (blog, capability,
+// root). A blog has independent trees per proving capability — today that is
+// `author` (writers) and `comment` (commenters). Votes do NOT use a tree (they
+// are blind tokens), so there is no `review` tree.
 export const blogMemberSnapshots = pgTable(
 	'blog_member_snapshots',
 	{
@@ -314,18 +317,30 @@ export const blogMemberSnapshots = pgTable(
 		blogId: uuid('blog_id')
 			.notNull()
 			.references(() => blogs.id, { onDelete: 'cascade' }),
+		// Which capability tree this snapshot belongs to: 'author' | 'comment'.
+		// Stored as text (matches Capability/TreeCapability) — kept un-enum'd so a
+		// future tree capability doesn't need an enum migration. Backfilled on the
+		// legacy mixed rows in migration 0008 (see R4: legacy rows are recomputed,
+		// not reinterpreted).
+		capability: text('capability').notNull(),
 		root: text('root').notNull(),
 		identities: text('identities').array().notNull(),
 		eligibleCount: integer('eligible_count').notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({
-		// Per-blog uniqueness so two different blogs that happen to share an
-		// identity set (e.g. both have the same single owner at creation) can
-		// each have their own snapshot row. Also serves as the FK target for
-		// blog_post_versions.snapshot_root via a composite (blog_id, root).
-		blogRootKey: uniqueIndex('blog_member_snapshots_blog_root_key').on(t.blogId, t.root),
-		blogIdx: index('blog_member_snapshots_blog_idx').on(t.blogId)
+		// Per-(blog, capability) uniqueness so each tree has its own row even when
+		// two trees of the same blog share an identity set (e.g. a single owner is
+		// in both the author and comment trees → same root, two rows). Replaces the
+		// old (blog_id, root) unique — that could not hold two capabilities at one
+		// root for the same blog.
+		blogCapRootKey: uniqueIndex('blog_member_snapshots_blog_cap_root_key').on(
+			t.blogId,
+			t.capability,
+			t.root
+		),
+		blogIdx: index('blog_member_snapshots_blog_idx').on(t.blogId),
+		blogCapIdx: index('blog_member_snapshots_blog_cap_idx').on(t.blogId, t.capability)
 	})
 );
 
@@ -837,6 +852,15 @@ export type PostStatus = (typeof postStatus.enumValues)[number];
 export type Capability = 'author' | 'review' | 'comment' | 'admin';
 
 // Capabilities that have their own per-capability Semaphore membership tree.
-// NOT 'review' (votes are blind tokens, not a reviewers tree) and NOT 'admin'
-// (admin actions are deliberately session-authenticated, never proof-anonymous).
-export type TreeCapability = 'author' | 'comment';
+//
+// END STATE (after Phase 5): only 'author' (writers) and 'comment' (commenters).
+// Votes use blind-signature tokens, NOT a reviewers tree, and 'admin' actions are
+// session-authenticated (never proof-anonymous), so neither is a tree.
+//
+// TRANSITIONAL (Phases 2–4): 'review' is included so the existing review
+// endpoint keeps verifying a Semaphore membership proof unchanged while votes
+// have not yet been migrated to blind tokens. Phase 5 removes 'review' from this
+// union (and drops/legacy-marks its snapshots) when token issuance/redemption
+// replaces the reviewers-tree proof. Keeping it here for the interim is what lets
+// every intermediate commit stay correct and member-anonymous.
+export type TreeCapability = 'author' | 'comment' | 'review';

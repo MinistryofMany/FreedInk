@@ -21,7 +21,10 @@ async function setupBlogWithReviewers(n: number) {
 }
 
 async function createUnderReviewPost(blogId: string, nullifier = 'n') {
-	const snap = await refreshSnapshot(blogId);
+	// Reviews are tallied against the REVIEW tree's current root, so stamp the
+	// post's snapshotRoot with the review-tree root: the inserted review rows
+	// reuse it and must match what evaluatePostReview counts against.
+	const snap = await refreshSnapshot(blogId, 'review');
 	const r = await createPost({
 		blogId,
 		title: 'Vote me',
@@ -133,7 +136,7 @@ describe('evaluatePostReview thresholds', () => {
 		expect(stale.status).toBe('under_review');
 
 		// Reviewers re-cast against the new current root. Fetch it.
-		const current = await currentMembership(blogId);
+		const current = await currentMembership(blogId, 'review');
 		await insertReview(post.version.id, current.root, 'approve', 'c1');
 		await insertReview(post.version.id, current.root, 'approve', 'c2');
 		await insertReview(post.version.id, current.root, 'approve', 'c3');
@@ -165,7 +168,7 @@ describe('evaluatePostReview thresholds', () => {
 		// current root. eligible drops to 3, threshold ceil(2/3 * 3) = 2.
 		await removeMember(blogId, reviewers[2].id);
 
-		const current = await currentMembership(blogId);
+		const current = await currentMembership(blogId, 'review');
 		expect(current.root).not.toBe(staleRoot);
 		expect(current.eligibleCount).toBe(3);
 

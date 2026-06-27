@@ -35,10 +35,12 @@ export async function evaluatePostReview(postVersionId: string): Promise<{
 	const row = versionRows[0];
 	if (!row) throw new Error('post version not found');
 
-	// Anchor to the blog's live membership (the current root), derived the same
-	// way the client and the review endpoint derive it - not the newest snapshot
-	// row, which can be stale if membership has cycled.
-	const current = await currentMembership(row.post.blogId);
+	// Anchor to the blog's live REVIEWERS membership (the current review-tree
+	// root), derived the same way the review endpoint derives it - not the newest
+	// snapshot row, which can be stale if membership has cycled. The threshold
+	// population (eligible reviewers) and the counted-votes population must be the
+	// same tree. (Transitional: Phase 5 replaces this with the blind-token tally.)
+	const current = await currentMembership(row.post.blogId, 'review');
 	const currentRoot = current.root;
 	const eligibleCount = current.eligibleCount;
 

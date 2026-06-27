@@ -177,7 +177,7 @@
 				}
 			}
 			const sem = await import('$lib/client/semaphore');
-			const group = await sem.fetchGroup(data.Blog.slug);
+			const group = await sem.fetchGroup(data.Blog.slug, 'comment');
 			const proof = await sem.buildProof({
 				identity,
 				identities: group.identities,

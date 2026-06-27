@@ -46,6 +46,11 @@ export const POST: RequestHandler = async (event) => {
 	const expectedMessage = parsed.data.body;
 	const { snapshot, nullifier } = await verifyMembership({
 		blogId: row.post.blogId,
+		// Commenting proves membership in the COMMENTERS tree (can_comment holders,
+		// i.e. every member). requireCurrentRoot stays off here for now — comments
+		// tolerate any historical commenters-tree snapshot; Phase 4 turns it on per
+		// design D11 to kill the stale-comment-after-revoke vector.
+		capability: 'comment',
 		proof: parsed.data.proof,
 		expectedScope,
 		expectedMessage
