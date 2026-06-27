@@ -1,5 +1,5 @@
 import { db, schema } from './client';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, desc, inArray } from 'drizzle-orm';
 import type { MemberRole, Capability } from './schema';
 import { refreshSnapshot, refreshAllSnapshots } from './snapshots';
 
@@ -44,6 +44,10 @@ export async function listMembers(blogId: string) {
 		.select({
 			id: schema.blogMembers.id,
 			role: schema.blogMembers.role,
+			canAuthor: schema.blogMembers.canAuthor,
+			canReview: schema.blogMembers.canReview,
+			canComment: schema.blogMembers.canComment,
+			canAdmin: schema.blogMembers.canAdmin,
 			addedAt: schema.blogMembers.addedAt,
 			user: {
 				id: schema.users.id,
@@ -239,6 +243,127 @@ export async function removeMember(blogId: string, targetUserId: string): Promis
 	// A removed member drops out of every tree they were in. They always held
 	// can_comment (universal) and may have held can_author, so refresh both trees.
 	await refreshAllSnapshots(blogId);
+}
+
+// Count active members of a blog that hold can_admin. Used by the last-admin
+// guard (D7/R9): the final admin can't be stripped of can_admin or removed.
+export async function countAdmins(blogId: string): Promise<number> {
+	const rows = await db
+		.select({ id: schema.blogMembers.id })
+		.from(schema.blogMembers)
+		.where(
+			and(
+				eq(schema.blogMembers.blogId, blogId),
+				isNull(schema.blogMembers.removedAt),
+				eq(schema.blogMembers.canAdmin, true)
+			)
+		);
+	return rows.length;
+}
+
+// The four capabilities a permission-change diff can touch.
+export type CapabilityPatch = Partial<Record<Capability, boolean>>;
+
+// Apply a capability diff to a member, enforcing the last-admin guard, and write
+// BOTH logs (the internal audit_log via the caller, and the member-visible
+// permission_changes here). Returns the before/after capability sets, or throws a
+// SvelteKit error on a guard violation. The actor is recorded for attribution
+// (these admin actions are deliberately non-anonymous).
+//
+// Last-admin guard: if the patch would remove can_admin from the blog's only
+// remaining admin, it is rejected (error 409). Granting is always allowed.
+export async function changeCapabilities(opts: {
+	blogId: string;
+	targetUserId: string;
+	actorUserId: string;
+	patch: CapabilityPatch;
+}): Promise<{ before: CapabilitySet; after: CapabilitySet }> {
+	const { error } = await import('@sveltejs/kit');
+	const existing = await getActiveMember(opts.blogId, opts.targetUserId);
+	if (!existing) throw error(404, 'target is not an active member');
+
+	const before: CapabilitySet = {
+		canAuthor: existing.canAuthor,
+		canReview: existing.canReview,
+		canComment: existing.canComment,
+		canAdmin: existing.canAdmin
+	};
+
+	// Last-admin guard: revoking can_admin from the final admin is blocked.
+	if (opts.patch.admin === false && existing.canAdmin) {
+		if ((await countAdmins(opts.blogId)) <= 1) {
+			throw error(409, 'cannot remove the last admin of this blog');
+		}
+	}
+
+	// Apply each changed capability via setCapability (which refreshes the right
+	// tree for author/comment). setCapability also keeps the legacy role label
+	// coherent.
+	let after: CapabilitySet = before;
+	for (const cap of ['author', 'review', 'comment', 'admin'] as Capability[]) {
+		const want = opts.patch[cap];
+		if (want === undefined) continue;
+		const res = await setCapability(opts.blogId, opts.targetUserId, cap, want);
+		if (res) after = res.after;
+	}
+
+	// Member-visible attributed log (NEVER IP/UA — design R8).
+	await db.insert(schema.permissionChanges).values({
+		blogId: opts.blogId,
+		actorUserId: opts.actorUserId,
+		subjectUserId: opts.targetUserId,
+		oldCaps: before,
+		newCaps: after
+	});
+
+	return { before, after };
+}
+
+// Member-visible permission change feed for a blog, newest first. Selects ONLY
+// the safe columns (never IP/UA — there are none on this table) and resolves the
+// actor/subject usernames for display.
+export async function listPermissionChanges(blogId: string, limit = 50) {
+	const actor = schema.users;
+	const rows = await db
+		.select({
+			id: schema.permissionChanges.id,
+			oldCaps: schema.permissionChanges.oldCaps,
+			newCaps: schema.permissionChanges.newCaps,
+			createdAt: schema.permissionChanges.createdAt,
+			actorUserId: schema.permissionChanges.actorUserId,
+			subjectUserId: schema.permissionChanges.subjectUserId
+		})
+		.from(schema.permissionChanges)
+		.where(eq(schema.permissionChanges.blogId, blogId))
+		.orderBy(desc(schema.permissionChanges.createdAt))
+		.limit(limit);
+	if (rows.length === 0) return [];
+
+	// Resolve usernames for the actor + subject ids referenced.
+	const ids = new Set<string>();
+	for (const r of rows) {
+		if (r.actorUserId) ids.add(r.actorUserId);
+		if (r.subjectUserId) ids.add(r.subjectUserId);
+	}
+	const userRows = ids.size
+		? await db
+				.select({
+					id: actor.id,
+					username: actor.username,
+					displayName: actor.displayName
+				})
+				.from(actor)
+				.where(inArray(actor.id, [...ids]))
+		: [];
+	const nameOf = new Map(userRows.map((u) => [u.id, u.displayName?.trim() || u.username]));
+	return rows.map((r) => ({
+		id: r.id,
+		oldCaps: r.oldCaps as CapabilitySet,
+		newCaps: r.newCaps as CapabilitySet,
+		createdAt: r.createdAt,
+		actor: r.actorUserId ? (nameOf.get(r.actorUserId) ?? null) : null,
+		subject: r.subjectUserId ? (nameOf.get(r.subjectUserId) ?? null) : null
+	}));
 }
 
 export async function isFirstOwner(blogId: string, userId: string): Promise<boolean> {

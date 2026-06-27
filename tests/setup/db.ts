@@ -54,6 +54,7 @@ const TRUNCATE_ORDER = [
 	'post_submission_nonces',
 	'blog_member_snapshots',
 	'blog_invitations',
+	'permission_changes',
 	'blog_members',
 	'blogs',
 	'tags',

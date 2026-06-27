@@ -122,6 +122,10 @@
 					username: json.member.username,
 					displayName: null,
 					role: json.member.role,
+					// Derive caps from the role for the optimistic row (same mapping
+					// the server's capabilitiesForRole uses). The next load reflects
+					// the authoritative columns.
+					caps: capsForRole(json.member.role),
 					addedAt: new Date()
 				}
 			];
@@ -134,6 +138,71 @@
 	function onRoleChange(user_id: string, ev: Event) {
 		const target = ev.currentTarget as HTMLSelectElement;
 		setRole({ user_id }, target.value as Role);
+	}
+
+	type Capability = 'author' | 'review' | 'comment' | 'admin';
+
+	// Client mirror of the server's capabilitiesForRole, for optimistic UI only.
+	function capsForRole(role: Role): {
+		author: boolean;
+		review: boolean;
+		comment: boolean;
+		admin: boolean;
+	} {
+		return {
+			author: role === 'owner' || role === 'editor' || role === 'author',
+			review: role === 'owner' || role === 'editor' || role === 'reviewer',
+			comment: true,
+			admin: role === 'owner'
+		};
+	}
+	const CAPABILITIES: Capability[] = ['author', 'review', 'comment', 'admin'];
+
+	// Toggle one capability on a member via the can_admin-gated PATCH. On success
+	// we sync the row's caps from the response (the server may re-derive the
+	// role label too). On failure (e.g. last-admin guard) we surface the error and
+	// leave the checkbox state to be reset by the reactive bind.
+	async function toggleCapability(
+		member: (typeof members)[number],
+		cap: Capability,
+		value: boolean
+	) {
+		busy = true;
+		msg = '';
+		msgIsError = false;
+		const res = await fetch('/api/blog/members', {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				blog_id: blog.id,
+				target: { username: member.username },
+				caps: { [cap]: value }
+			})
+		});
+		busy = false;
+		if (res.ok) {
+			const json = await res.json();
+			members = members.map((m) => (m.user_id === member.user_id ? { ...m, caps: json.caps } : m));
+		} else {
+			msg = await res.text();
+			msgIsError = true;
+			// Force a re-render so the checkbox reverts to the unchanged caps.
+			members = [...members];
+		}
+	}
+
+	function onCapToggle(member: (typeof members)[number], cap: Capability, ev: Event) {
+		const target = ev.currentTarget as HTMLInputElement;
+		toggleCapability(member, cap, target.checked);
+	}
+
+	// Render a permission-change entry as a +/- capability diff string.
+	function diffCaps(oldCaps: Record<string, boolean>, newCaps: Record<string, boolean>): string {
+		const parts: string[] = [];
+		for (const cap of CAPABILITIES) {
+			if (oldCaps[cap] !== newCaps[cap]) parts.push((newCaps[cap] ? '+' : '−') + cap);
+		}
+		return parts.join(', ') || 'no change';
 	}
 
 	async function remove(user_id: string) {
@@ -260,6 +329,62 @@
 	</div>
 </section>
 
+<!-- Permissions grid (capability checkboxes). can_admin-gated; the last admin
+     can't be demoted (server-enforced). A member can't toggle their own caps. -->
+<section class="section">
+	<Kicker>Permissions</Kicker>
+	<p class="section-note">
+		Toggle each member's capabilities. Authors write posts; reviewers cast publish votes; commenters
+		comment; admins manage the blog. Changes are recorded and shown to all members below.
+	</p>
+	<div class="perm-grid" role="table" aria-label="Member permissions">
+		<div class="perm-row perm-head" role="row">
+			<span role="columnheader">Member</span>
+			{#each CAPABILITIES as cap}
+				<span role="columnheader" class="perm-cap">{cap}</span>
+			{/each}
+		</div>
+		{#each members as member (member.user_id)}
+			<div class="perm-row" role="row">
+				<span class="perm-name">{member.displayName?.trim() || member.username}</span>
+				{#each CAPABILITIES as cap}
+					<span class="perm-cell">
+						<input
+							type="checkbox"
+							checked={member.caps[cap]}
+							disabled={busy || member.user_id === data.currentUserId}
+							on:change={(e) => onCapToggle(member, cap, e)}
+							aria-label="{cap} for {member.username}"
+						/>
+					</span>
+				{/each}
+			</div>
+		{/each}
+	</div>
+</section>
+
+<!-- Member-visible attributed permission change log (never IP/UA). -->
+<section class="section">
+	<Kicker>Permission changes</Kicker>
+	{#if data.permissionChanges.length === 0}
+		<p class="section-note">No permission changes yet.</p>
+	{:else}
+		<ul class="change-log" role="list">
+			{#each data.permissionChanges as change (change.id)}
+				<li class="change-item">
+					<span class="change-text">
+						<strong>{change.actor ?? 'A former member'}</strong>
+						changed
+						<strong>{change.subject ?? 'a former member'}</strong>'s permissions:
+						{diffCaps(change.oldCaps, change.newCaps)}
+					</span>
+					<span class="change-date">{new Date(change.createdAt).toLocaleString()}</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</section>
+
 <!-- Invitations section -->
 <section class="section">
 	<Kicker>Invitations</Kicker>
@@ -356,6 +481,76 @@
 </section>
 
 <style>
+	.section-note {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+		max-width: 64ch;
+		margin: 0 0 var(--space-3);
+	}
+
+	.perm-grid {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+	}
+
+	.perm-row {
+		display: grid;
+		grid-template-columns: minmax(8rem, 1fr) repeat(4, 4rem);
+		align-items: center;
+		gap: var(--space-2);
+		padding-bottom: var(--space-2);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.perm-head {
+		font-weight: 600;
+		color: var(--color-text-muted);
+	}
+
+	.perm-cap {
+		text-transform: capitalize;
+		text-align: center;
+	}
+
+	.perm-name {
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.perm-cell {
+		text-align: center;
+	}
+
+	.change-log {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+	}
+
+	.change-item {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+		padding-bottom: var(--space-2);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.change-date {
+		color: var(--color-text-muted);
+		font-size: var(--text-xs);
+		white-space: nowrap;
+	}
+
 	.page-header {
 		margin-bottom: var(--space-5);
 	}

@@ -590,6 +590,36 @@ export const auditLog = pgTable(
 	})
 );
 
+// Member-visible, ATTRIBUTED permission change log — distinct from the internal
+// audit_log (which is operator-only, carries IP/UA, and prunes at 90 days). This
+// is a product surface shown to ALL members of a blog: "Bob changed George's
+// permissions: +review, −author". These admin actions are deliberately
+// non-anonymous — attribution is the feature.
+//
+// CRITICAL (design R8): this table MUST NEVER carry IP, user-agent, or any
+// operator-only field. The member-facing loader selects only the safe columns.
+// Both this AND audit_log are written on a capability change.
+export const permissionChanges = pgTable(
+	'permission_changes',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
+		// Who made the change / whom it was made to. SET NULL on user delete so the
+		// log survives account deletion (shows as "a former member").
+		actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+		subjectUserId: uuid('subject_user_id').references(() => users.id, { onDelete: 'set null' }),
+		// {canAuthor, canReview, canComment, canAdmin} before and after the change.
+		oldCaps: jsonb('old_caps').notNull(),
+		newCaps: jsonb('new_caps').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => ({
+		blogIdx: index('permission_changes_blog_idx').on(t.blogId, t.createdAt)
+	})
+);
+
 // Owner-issued invitations to join a blog by email. The invitee follows the
 // link in the email, signs up (or signs in), and the role assignment lands on
 // accept. One-shot tokens; consumed/expired rows reaped by cleanup.
