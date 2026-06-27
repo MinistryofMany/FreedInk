@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { requestAndBuildToken, castVote } from '$lib/client/vote-token';
+	import { requestAndBuildToken, castVote, VotePendingError } from '$lib/client/vote-token';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { REJECTION_REASONS } from '$lib/rejection-reasons';
@@ -11,6 +11,10 @@
 	export let data;
 	let busy = false;
 	let error = '';
+	// Per-version "preparing voting for this post…" flag. Set while we wait for the
+	// issuer key to finish generating (async pre-gen / Signet keygen) and poll. The
+	// vote button stays disabled and a hint shows instead of an error.
+	let preparingByVersion: Record<string, boolean> = {};
 	// Built blind-token per version (cached so a vote-flip reuses the same token —
 	// the server UPSERTs on the token nonce). Never sent anywhere but the vote
 	// redemption; holds no identity.
@@ -68,6 +72,36 @@
 		}
 	}
 
+	// Build a redeemable token, transparently waiting out the "key not ready yet"
+	// (VotePendingError) window. When the issuer key is still being generated
+	// (async pre-gen / Signet keygen), the issuance endpoints return 202 and
+	// requestAndBuildToken throws VotePendingError WITHOUT consuming the user's
+	// token (the server rolls back the reservation). We flip the per-version
+	// "preparing voting…" hint and poll with backoff up to a bounded number of
+	// attempts. Any non-pending error propagates to vote()'s catch and surfaces
+	// normally.
+	async function buildTokenWithPending(versionId: string) {
+		const MAX_ATTEMPTS = 30; // ~ up to ~30s of keygen wait, then give up
+		const DELAY_MS = 1000;
+		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+			try {
+				const token = await requestAndBuildToken(versionId);
+				preparingByVersion[versionId] = false;
+				preparingByVersion = { ...preparingByVersion };
+				return token;
+			} catch (e) {
+				if (e instanceof VotePendingError) {
+					preparingByVersion[versionId] = true;
+					preparingByVersion = { ...preparingByVersion };
+					await new Promise((r) => setTimeout(r, DELAY_MS));
+					continue;
+				}
+				throw e;
+			}
+		}
+		throw new Error('Voting is still being prepared for this post. Please try again shortly.');
+	}
+
 	async function vote(post_version_id: string, choice: 'approve' | 'reject') {
 		busy = true;
 		error = '';
@@ -90,7 +124,7 @@
 			// token. We keep the built token per version so a flip reuses it.
 			let token = tokensByVersion[post_version_id];
 			if (!token) {
-				token = await requestAndBuildToken(post_version_id);
+				token = await buildTokenWithPending(post_version_id);
 				tokensByVersion[post_version_id] = token;
 			}
 
@@ -118,6 +152,9 @@
 			error = err?.message?.trim() || err?.name || 'Could not cast your vote. Please try again.';
 		} finally {
 			busy = false;
+			// Clear the per-version preparing hint once we're done (success or error).
+			preparingByVersion[post_version_id] = false;
+			preparingByVersion = { ...preparingByVersion };
 		}
 	}
 </script>
@@ -178,6 +215,12 @@
 									{/each}
 								</div>
 							</fieldset>
+						{/if}
+
+						{#if preparingByVersion[p.version.id]}
+							<p class="preparing" role="status">
+								Preparing voting for this post… this only takes a moment.
+							</p>
 						{/if}
 
 						<div class="actions">
@@ -246,6 +289,13 @@
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
 		margin: 0 0 var(--space-4);
+	}
+
+	.preparing {
+		color: var(--color-text-muted);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0;
 	}
 
 	.queue {

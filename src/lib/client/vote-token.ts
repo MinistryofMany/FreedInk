@@ -240,6 +240,20 @@ export type RedeemableToken = {
 	preparedNonce: string;
 };
 
+// Thrown when the issuer key isn't ready yet (async pre-gen still running, or a
+// Signet keygen in flight): the key preflight or the issuance POST returned
+// HTTP 202 { status: 'pending' }. The caller should show "preparing voting…" and
+// retry rather than surface this as a hard error. The user's single
+// one-per-(user,version) token is NOT consumed on a pending issuance (the server
+// rolls back the reservation), so retrying is safe.
+export class VotePendingError extends Error {
+	readonly pending = true;
+	constructor() {
+		super('preparing voting for this post…');
+		this.name = 'VotePendingError';
+	}
+}
+
 // Step 1 — authenticated issuance. Blinds a fresh random nonce, gets it
 // blind-signed, finalizes. Sends the session cookie (default credentials).
 export async function requestAndBuildToken(versionId: string): Promise<RedeemableToken> {
@@ -252,7 +266,8 @@ export async function requestAndBuildToken(versionId: string): Promise<Redeemabl
 
 	// blind() needs the issuer public key, so fetch it via a cheap preflight (no
 	// token consumed) before blinding. The key is per-blog and stable, so this is
-	// effectively a one-time fetch the browser caches.
+	// effectively a one-time fetch the browser caches. Throws VotePendingError if
+	// the key is still being generated (async pre-gen / Signet keygen).
 	const pubKeyB64 = await fetchIssuerPublicKey(versionId);
 	const pub = await importPub(pubKeyB64);
 	const { blindedMsg, inv } = await suite.blind(pub, prepared, info);
@@ -266,6 +281,9 @@ export async function requestAndBuildToken(versionId: string): Promise<Redeemabl
 			blinded_message: bytesToB64url(blindedMsg)
 		})
 	});
+	// 202 = key not ready yet (the reservation was rolled back server-side, so no
+	// token was consumed). Signal the caller to show "preparing voting…" + retry.
+	if (res.status === 202) throw new VotePendingError();
 	if (!res.ok) throw new Error(await res.text());
 	const { blind_signature } = await res.json();
 	const blindSig = b64urlToBytes(blind_signature);
@@ -281,10 +299,13 @@ export async function requestAndBuildToken(versionId: string): Promise<Redeemabl
 }
 
 // Preflight: fetch the blog's issuer public key for a version (no token consumed).
+// Returns 202 { status: 'pending' } while the key is still being generated; we
+// surface that as VotePendingError so the caller shows "preparing voting…".
 async function fetchIssuerPublicKey(versionId: string): Promise<string> {
 	const res = await fetch(
 		`/api/blog/vote-token/key?post_version_id=${encodeURIComponent(versionId)}`
 	);
+	if (res.status === 202) throw new VotePendingError();
 	if (!res.ok) throw new Error(await res.text());
 	const { public_key } = await res.json();
 	return public_key;
