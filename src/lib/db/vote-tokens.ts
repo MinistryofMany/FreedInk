@@ -1,6 +1,7 @@
 import { db, schema } from './client';
 import { and, eq, isNull } from 'drizzle-orm';
 import { generateVoteTokenKey } from '$lib/server/vote-token';
+import { isUniqueViolation } from '$lib/server/db-errors';
 
 // Fetch the blog's ACTIVE (non-retired) vote-token issuer key, creating one on
 // first use. Concurrency-safe: a unique partial index
@@ -29,8 +30,13 @@ export async function getOrCreateVoteTokenKey(blogId: string): Promise<{
 				privateKeyPkcs8: schema.blogVoteTokenKeys.privateKeyPkcs8
 			});
 		return row;
-	} catch {
-		// Lost the race to another request; the winner's key is now active.
+	} catch (e) {
+		// Only a unique-violation means we lost the race to a concurrent insert
+		// (the partial unique index blog_vote_token_keys_blog_active_key allows one
+		// active key per blog) — in that case the winner's key is now active and we
+		// re-read it. Any other error (connection drop, serialization failure, etc.)
+		// is a real fault and must propagate, not be silently swallowed.
+		if (!isUniqueViolation(e)) throw e;
 		const winner = await activeKey(blogId);
 		if (winner) return winner;
 		throw new Error('failed to create or read vote-token key');
