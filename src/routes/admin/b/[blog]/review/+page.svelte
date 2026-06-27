@@ -110,7 +110,15 @@
 			rejectOpenByPost[post_version_id] = false;
 			await invalidateAll();
 		} catch (e) {
-			error = (e as Error).message;
+			// Surface a NON-EMPTY message no matter what. Some failures (notably the
+			// old Chromium WebCrypto OperationError in token finalize) carry an empty
+			// .message; falling closed-and-silent there hid a real bug. Fall back to
+			// the error name, then a generic line, so the user always sees something.
+			const err = e as Error;
+			error =
+				err?.message?.trim() ||
+				err?.name ||
+				'Could not cast your vote. Please try again.';
 		} finally {
 			busy = false;
 		}
