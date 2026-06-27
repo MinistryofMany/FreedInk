@@ -6,10 +6,9 @@ import { refreshSnapshot } from '$lib/db/snapshots';
 import { requireCapability } from '$lib/server/auth';
 import type { Capability } from '$lib/db/schema';
 
-// Which capability a requested tree corresponds to. Only the tree capabilities
-// are fetchable (author/comment for the per-device proofs; review transitionally
-// until Phase 5). 'admin' has no tree.
-const CapabilityEnum = z.enum(['author', 'comment', 'review']);
+// Which capability tree to fetch: author (writers) or comment (commenters).
+// Votes use blind tokens (no review tree) and admin is session-auth (no tree).
+const CapabilityEnum = z.enum(['author', 'comment']);
 const Body = z.object({
 	blog_slug: z.string().min(1),
 	capability: CapabilityEnum

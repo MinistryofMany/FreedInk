@@ -1,20 +1,18 @@
 import { db, schema } from '$lib/db/client';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { setPostStatus } from '$lib/db/posts';
-import { currentMembership } from '$lib/db/snapshots';
 
 // Decide whether a post version has crossed approve/reject thresholds.
 //
-// Tally consistency (M1): the population that *sets* the bar and the population
-// that *votes* must be the same snapshot. We anchor everything to the blog's
-// CURRENT snapshot:
-//   - threshold = ceil(currentSnapshot.eligibleCount * num / den)
-//   - count only review rows whose snapshotRoot == the current root
-// Reviews are proven against the current root at cast time (see the review
-// endpoint). If membership changes mid-review the current root rolls forward;
-// stale-root votes simply stop counting and reviewers re-cast against the new
-// root. That's acceptable and avoids the cross-snapshot mismatch where the bar
-// was set by one population and met by another.
+// Blind-token tally (Phase 5): votes are anonymous token redemptions, not
+// Semaphore proofs, so there is no snapshot root to anchor to. Instead:
+//   - Eligible population = the live set of members with can_review (the people
+//     who COULD be issued a token). threshold = ceil(eligibleReviewers*num/den).
+//   - Counted votes = the token-based review rows for this version (one row per
+//     redeemed token; vote-flip UPSERTs in place, so each token counts once).
+// The bar-setting population (eligible reviewers) and the voting population
+// (token holders, a subset of eligible reviewers at issue time) align: a token
+// is only ever issued to a can_review member.
 export async function evaluatePostReview(postVersionId: string): Promise<{
 	status: 'under_review' | 'published' | 'rejected';
 	approves: number;
@@ -35,24 +33,28 @@ export async function evaluatePostReview(postVersionId: string): Promise<{
 	const row = versionRows[0];
 	if (!row) throw new Error('post version not found');
 
-	// Anchor to the blog's live REVIEWERS membership (the current review-tree
-	// root), derived the same way the review endpoint derives it - not the newest
-	// snapshot row, which can be stale if membership has cycled. The threshold
-	// population (eligible reviewers) and the counted-votes population must be the
-	// same tree. (Transitional: Phase 5 replaces this with the blind-token tally.)
-	const current = await currentMembership(row.post.blogId, 'review');
-	const currentRoot = current.root;
-	const eligibleCount = current.eligibleCount;
+	// Eligible reviewers = active members with can_review on this blog.
+	const eligibleRows = await db
+		.select({ id: schema.blogMembers.id })
+		.from(schema.blogMembers)
+		.where(
+			and(
+				eq(schema.blogMembers.blogId, row.post.blogId),
+				isNull(schema.blogMembers.removedAt),
+				eq(schema.blogMembers.canReview, true)
+			)
+		);
+	const eligibleCount = eligibleRows.length;
 
-	// Count only votes proven against the current root, so the voting
-	// population matches the population the threshold is computed from.
+	// Count token-based votes for this version (tokenNonce IS NOT NULL). Each
+	// redeemed token is one row (vote-flip UPSERTs, so no double-count).
 	const reviewRows = await db
 		.select({ vote: schema.postReviews.vote })
 		.from(schema.postReviews)
 		.where(
 			and(
 				eq(schema.postReviews.postVersionId, postVersionId),
-				eq(schema.postReviews.snapshotRoot, currentRoot)
+				isNotNull(schema.postReviews.tokenNonce)
 			)
 		);
 

@@ -53,30 +53,31 @@ describe('verifyMembership tree/capability isolation (R1)', () => {
 		expect(ok.snapshot.capability).toBe('author');
 	}, 60_000);
 
-	it('rejects a review-tree proof presented as an author-tree proof', async () => {
-		// reviewer-only member: in review + comment trees, NOT author. A review
-		// proof presented as an author proof must fail (review root is not an
-		// author-tree root, and the reviewer is not in the author tree).
+	it('rejects a comment-tree proof presented as an author-tree proof', async () => {
+		// A commenter is in the comment tree, NOT the author tree. A comment proof
+		// presented as an author proof must fail: the commenters root (which
+		// includes the commenter) is not an author-tree root, and the commenter is
+		// not in the author tree.
 		const owner = await makeUser({ username: 'r1b-owner', seed: 'r1b-owner' });
-		const reviewer = await makeUser({ username: 'r1b-rev', seed: 'r1b-rev' });
+		const commenter = await makeUser({ username: 'r1b-com', seed: 'r1b-com' });
 		const { id: blogId } = await makeBlogWith({
 			owner,
-			members: [{ user: reviewer, role: 'reviewer' }]
+			members: [{ user: commenter, role: 'commenter' }]
 		});
-		const reviewProof = await buildTestProof({
+		const commentProof = await buildTestProof({
 			blogId,
-			identity: reviewer.identity,
-			scope: 'review:v1',
-			message: 'approve',
-			capability: 'review'
+			identity: commenter.identity,
+			scope: 'comment:v1',
+			message: 'hi',
+			capability: 'comment'
 		});
 		await expect(
 			verifyMembership({
 				blogId,
 				capability: 'author',
-				proof: reviewProof,
-				expectedScope: 'review:v1',
-				expectedMessage: 'approve'
+				proof: commentProof,
+				expectedScope: 'comment:v1',
+				expectedMessage: 'hi'
 			})
 		).rejects.toMatchObject({ status: 400 });
 	}, 60_000);

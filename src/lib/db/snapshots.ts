@@ -2,21 +2,18 @@ import { db, schema } from './client';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { TreeCapability } from './schema';
 
-// The capabilities that have their own Semaphore membership tree. 'author' and
-// 'comment' are the end-state trees; 'review' is TRANSITIONAL (Phases 2–4) so the
-// existing review endpoint keeps proving membership unchanged until Phase 5
-// swaps votes to blind tokens, at which point 'review' is removed here. 'admin'
-// is never a tree (session-auth). Iterated for "refresh all of a blog's / user's
-// trees".
-export const TREE_CAPABILITIES: readonly TreeCapability[] = ['author', 'comment', 'review'];
+// The capabilities that have their own Semaphore membership tree: author
+// (writers) and comment (commenters). Votes use blind tokens (no reviewers tree)
+// and admin is session-auth (no tree). Iterated for "refresh all of a blog's /
+// user's trees".
+export const TREE_CAPABILITIES: readonly TreeCapability[] = ['author', 'comment'];
 
 // Capability → blog_members column, for the tree capabilities only. Defined here
 // (rather than importing CAPABILITY_COLUMN from ./members) to avoid a circular
 // import — members.ts imports refreshSnapshot from this module.
 const TREE_CAPABILITY_COLUMN = {
 	author: schema.blogMembers.canAuthor,
-	comment: schema.blogMembers.canComment,
-	review: schema.blogMembers.canReview
+	comment: schema.blogMembers.canComment
 } as const;
 
 // Build the deterministic, current eligible set for ONE capability tree of a

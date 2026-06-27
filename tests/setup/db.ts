@@ -47,6 +47,8 @@ const TRUNCATE_ORDER = [
 	'blog_post_tags',
 	'post_comments',
 	'post_reviews',
+	'vote_token_issuances',
+	'blog_vote_token_keys',
 	'blog_post_versions',
 	'blog_posts',
 	'post_submission_nonces',

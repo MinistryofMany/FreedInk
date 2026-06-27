@@ -11,10 +11,12 @@ const stubProof = {
 };
 
 describe('auth gates: unauthenticated requests are rejected', () => {
-	// NOTE: /api/blog/post, /api/blog/post/edit and /api/post/comment are NO LONGER
-	// here — Phase 4 made them session-free (authorized purely by the Semaphore
-	// proof). They are covered by the session-free describe below. /api/post/review
-	// stays session-authed until Phase 5 (blind tokens).
+	// NOTE: /api/blog/post, /api/blog/post/edit, /api/post/comment AND
+	// /api/post/review are NO LONGER here — Phases 4–5 made them session-free
+	// (post/edit/comment authorized by a Semaphore proof; review by a blind
+	// token). They are covered by the session-free describe below. The vote-token
+	// ISSUANCE endpoint stays session-authed (it is the only step that reveals
+	// participation) → 401 unauthenticated.
 	it.each([
 		['/api/blog/create', { title: 't', description: 'd' }],
 		['/api/blog/group', { blog_slug: 'x', capability: 'author' }],
@@ -24,12 +26,8 @@ describe('auth gates: unauthenticated requests are rejected', () => {
 		],
 		['/api/blog/archive', { blog_id: '00000000-0000-0000-0000-000000000000', archive: true }],
 		[
-			'/api/post/review',
-			{
-				post_version_id: '00000000-0000-0000-0000-000000000000',
-				vote: 'approve',
-				proof: stubProof
-			}
+			'/api/blog/vote-token',
+			{ post_version_id: '00000000-0000-0000-0000-000000000000', blinded_message: 'AA' }
 		],
 		['/api/post/submit', { post_version_id: '00000000-0000-0000-0000-000000000000' }],
 		['/api/post/tags', { post_id: '00000000-0000-0000-0000-000000000000', tags: ['x'] }],

@@ -78,6 +78,13 @@
 			"when": 1782540210371,
 			"tag": "0010_identity_device_revoked_event",
 			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1782541898005,
+			"tag": "0011_vote_tokens",
+			"breakpoints": true
 		}
 	]
 }

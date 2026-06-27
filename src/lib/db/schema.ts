@@ -443,10 +443,17 @@ export const postReviews = pgTable(
 			.notNull()
 			.references(() => blogPostVersions.id, { onDelete: 'cascade' }),
 		vote: reviewVote('vote').notNull(),
-		proof: jsonb('proof').notNull(),
-		// See note on blog_post_versions.snapshotRoot — no FK, validated in app.
-		snapshotRoot: text('snapshot_root').notNull(),
-		nullifier: text('nullifier').notNull(),
+		// Blind-token vote model (Phase 5): the anonymous per-voter-per-version
+		// handle is the token nonce (a hash of the redeemed token's prepared
+		// message), NOT a Semaphore nullifier. Re-submitting the same
+		// (version, token_nonce) with a different vote UPSERTs (vote-flip). Unique
+		// (post_version_id, token_nonce) blocks double-spend. The legacy proof /
+		// snapshot_root / nullifier columns are nullable and unused for new
+		// token-based votes (kept for historical rows + a clean migration).
+		tokenNonce: text('token_nonce'),
+		proof: jsonb('proof'),
+		snapshotRoot: text('snapshot_root'),
+		nullifier: text('nullifier'),
 		comment: text('comment'),
 		// Only meaningful for vote='reject'. Multi-select from the
 		// rejection_reason enum — a post can be both rage_bait AND
@@ -456,11 +463,77 @@ export const postReviews = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({
+		// Legacy Semaphore-nullifier uniqueness (kept for historical rows).
 		nullifierIdx: uniqueIndex('post_reviews_version_nullifier_key').on(
 			t.postVersionId,
 			t.nullifier
 		),
+		// Token-nonce uniqueness: one vote per redeemed token per version
+		// (double-spend guard). Partial so only token-based rows are constrained.
+		tokenNonceIdx: uniqueIndex('post_reviews_version_token_nonce_key')
+			.on(t.postVersionId, t.tokenNonce)
+			.where(sql`${t.tokenNonce} IS NOT NULL`),
 		versionIdx: index('post_reviews_version_idx').on(t.postVersionId)
+	})
+);
+
+// Per-blog blind-signature voting-token ISSUER key. The signing key blind-signs
+// vote tokens; the public key verifies redeemed tokens. Operator-held signing
+// material. `retiredAt` supports per-round key rotation (auditor note): retire a
+// key when a round closes so a token issued but never spent can't be redeemed in
+// a later round.
+export const blogVoteTokenKeys = pgTable(
+	'blog_vote_token_keys',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
+		publicKeySpki: byteaType('public_key_spki').notNull(),
+		privateKeyPkcs8: byteaType('private_key_pkcs8').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		retiredAt: timestamp('retired_at', { withTimezone: true })
+	},
+	(t) => ({
+		// One active (non-retired) key per blog.
+		blogActiveIdx: uniqueIndex('blog_vote_token_keys_blog_active_key')
+			.on(t.blogId)
+			.where(sql`${t.retiredAt} IS NULL`),
+		blogIdx: index('blog_vote_token_keys_blog_idx').on(t.blogId)
+	})
+);
+
+// Records that a user was ISSUED a vote token for a version. Enforces one token
+// per (user, version). This is the only participation signal the server keeps —
+// it reveals "user asked for a token for version V", never the vote.
+//
+// CRITICAL (auditor R-replaces-R2): this table MUST NEVER be joined with
+// post_reviews. Doing so would link a voter to their vote and break the
+// unlinkability the blind signature provides. It is write-on-issue, read-only to
+// answer "has this user already been issued a token for this version".
+export const voteTokenIssuances = pgTable(
+	'vote_token_issuances',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
+		postVersionId: uuid('post_version_id')
+			.notNull()
+			.references(() => blogPostVersions.id, { onDelete: 'cascade' }),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => ({
+		// One issuance per (version, user). The unique constraint is the
+		// server-side enforcement of "one token per (user, version)".
+		versionUserIdx: uniqueIndex('vote_token_issuances_version_user_key').on(
+			t.postVersionId,
+			t.userId
+		),
+		versionIdx: index('vote_token_issuances_version_idx').on(t.postVersionId)
 	})
 );
 
@@ -858,15 +931,7 @@ export type PostStatus = (typeof postStatus.enumValues)[number];
 export type Capability = 'author' | 'review' | 'comment' | 'admin';
 
 // Capabilities that have their own per-capability Semaphore membership tree.
-//
-// END STATE (after Phase 5): only 'author' (writers) and 'comment' (commenters).
-// Votes use blind-signature tokens, NOT a reviewers tree, and 'admin' actions are
+// Only 'author' (writers) and 'comment' (commenters). Votes use blind-signature
+// tokens (Phase 5), NOT a reviewers tree, and 'admin' actions are
 // session-authenticated (never proof-anonymous), so neither is a tree.
-//
-// TRANSITIONAL (Phases 2–4): 'review' is included so the existing review
-// endpoint keeps verifying a Semaphore membership proof unchanged while votes
-// have not yet been migrated to blind tokens. Phase 5 removes 'review' from this
-// union (and drops/legacy-marks its snapshots) when token issuance/redemption
-// replaces the reviewers-tree proof. Keeping it here for the interim is what lets
-// every intermediate commit stay correct and member-anonymous.
-export type TreeCapability = 'author' | 'comment' | 'review';
+export type TreeCapability = 'author' | 'comment';

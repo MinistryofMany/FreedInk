@@ -1,7 +1,7 @@
 // End-to-end API flow: blog creation → invite members → post with real
 // Semaphore proof → review by other members → auto-publish → comment.
 import { describe, it, expect } from 'vitest';
-import { asUser, postJSON, getJSON } from './helpers';
+import { asUser, postJSON, getJSON, buildVoteToken, redeemVote, castTokenVote } from './helpers';
 import { makeUser, makeBlogWith, buildTestProof } from '../setup/factories';
 import { refreshSnapshot } from '$lib/db/snapshots';
 import { db, schema } from '$lib/db/client';
@@ -65,22 +65,34 @@ describe('blog/group', () => {
 		expect(json.eligible_count).toBe(2);
 	});
 
-	it('an author requesting the REVIEW tree is forbidden (R1: only your own trees)', async () => {
+	it('a member fetching a tree they do NOT hold is forbidden (R1: only your own trees)', async () => {
 		const owner = await makeUser({ username: 'owner' });
-		const author = await makeUser({ username: 'author' });
+		const commenter = await makeUser({ username: 'commenter' });
 		const blog = await makeBlogWith({
 			owner,
-			members: [{ user: author, role: 'author' }]
+			members: [{ user: commenter, role: 'commenter' }]
 		});
-		const { cookie } = await asUser(author);
-		// The author holds can_author + can_comment but NOT can_review, so the
-		// review tree fetch is 403 — a member can only fetch the trees they hold.
+		const { cookie } = await asUser(commenter);
+		// A commenter holds can_comment but NOT can_author, so the author-tree fetch
+		// is 403 — a member can only fetch the trees they hold.
+		const res = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'author' },
+			{ cookie }
+		);
+		expect(res.status).toBe(403);
+	});
+
+	it('requesting the removed review tree is a 422 (votes are blind tokens)', async () => {
+		const owner = await makeUser({ username: 'owner' });
+		const blog = await makeBlogWith({ owner });
+		const { cookie } = await asUser(owner);
 		const res = await postJSON(
 			'/api/blog/group',
 			{ blog_slug: blog.slug, capability: 'review' },
 			{ cookie }
 		);
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(422);
 	});
 
 	it('rejects a missing/invalid capability with 422', async () => {
@@ -141,16 +153,17 @@ describe('blog/members', () => {
 		const json = await res.json();
 		expect(json.member.role).toBe('reviewer');
 
-		// Target is now a reviewer → in the REVIEW tree. Fetch it (owner holds all
-		// capabilities so may fetch any tree) and assert the target's commitment.
-		const group = await postJSON(
+		// Target is now a reviewer. A reviewer is in the COMMENT tree (everyone can
+		// comment) but NOT the author tree, and there is no review tree (votes use
+		// blind tokens). Assert comment-tree inclusion and author-tree exclusion.
+		const commentGroup = await postJSON(
 			'/api/blog/group',
-			{ blog_slug: blog.slug, capability: 'review' },
+			{ blog_slug: blog.slug, capability: 'comment' },
 			{ cookie }
 		);
-		const g = await group.json();
-		expect(g.identities).toContain(target.identity.commitment.toString());
-		// And NOT in the author tree (a reviewer can't author).
+		const cg = await commentGroup.json();
+		expect(cg.identities).toContain(target.identity.commitment.toString());
+
 		const authorGroup = await postJSON(
 			'/api/blog/group',
 			{ blog_slug: blog.slug, capability: 'author' },
@@ -158,6 +171,14 @@ describe('blog/members', () => {
 		);
 		const ag = await authorGroup.json();
 		expect(ag.identities).not.toContain(target.identity.commitment.toString());
+
+		// The review tree is gone: requesting it is a 422 (invalid capability).
+		const reviewGroup = await postJSON(
+			'/api/blog/group',
+			{ blog_slug: blog.slug, capability: 'review' },
+			{ cookie }
+		);
+		expect(reviewGroup.status).toBe(422);
 	});
 
 	it('owner cannot remove themselves', async () => {
@@ -339,60 +360,44 @@ describe('full flow: post → vote → publish → comment', () => {
 		const dupJson = await dup.json();
 		expect(dupJson.post_id).not.toBe(post_id);
 
-		// 3) First reviewer approves.
+		// 3) First reviewer approves via a blind token (authenticated issuance +
+		// anonymous redemption). Build the token now (while under_review) and keep
+		// it to flip / re-cast.
 		const rev1Sess = await asUser(rev1);
-		const rev1Proof = await buildTestProof({
-			blogId: blog.id,
-			identity: rev1.identity,
-			scope: `review:${version_id}`,
-			message: 'approve'
-		});
-		const vote1 = await postJSON(
-			'/api/post/review',
-			{ post_version_id: version_id, vote: 'approve', proof: rev1Proof },
-			{ cookie: rev1Sess.cookie }
-		);
+		const rev1Token = await buildVoteToken(version_id, rev1Sess.cookie);
+		const vote1 = await redeemVote({ versionId: version_id, token: rev1Token, vote: 'approve' });
 		expect(vote1.status).toBe(200);
 		const vote1Json = await vote1.json();
 		expect(vote1Json.approves).toBe(1);
 		expect(vote1Json.status).toBe('under_review');
 		expect(vote1Json.threshold).toBe(2); // ceil(2/3 * 3) = 2
 
-		// 4) Re-submitting the same vote upserts on the reviewer's stable
-		// nullifier (change-vote semantics) — it does NOT double-count.
-		const dupVote = await postJSON(
-			'/api/post/review',
-			{ post_version_id: version_id, vote: 'approve', proof: rev1Proof },
-			{ cookie: rev1Sess.cookie }
-		);
+		// 4) Re-redeeming the SAME token upserts on the token nonce (vote-flip) —
+		// it does NOT double-count.
+		const dupVote = await redeemVote({ versionId: version_id, token: rev1Token, vote: 'approve' });
 		expect(dupVote.status).toBe(200);
 		expect((await dupVote.json()).approves).toBe(1);
 
+		// 4b) rev1 cannot be issued a SECOND token for this version (one per
+		// (user, version)).
+		await expect(buildVoteToken(version_id, rev1Sess.cookie)).rejects.toThrow(
+			/already been issued/
+		);
+
 		// 5) Second reviewer approves → auto-publish.
 		const rev2Sess = await asUser(rev2);
-		const rev2Proof = await buildTestProof({
-			blogId: blog.id,
-			identity: rev2.identity,
-			scope: `review:${version_id}`,
-			message: 'approve'
+		const vote2 = await castTokenVote({
+			versionId: version_id,
+			cookie: rev2Sess.cookie,
+			vote: 'approve'
 		});
-		const vote2 = await postJSON(
-			'/api/post/review',
-			{ post_version_id: version_id, vote: 'approve', proof: rev2Proof },
-			{ cookie: rev2Sess.cookie }
-		);
 		expect(vote2.status).toBe(200);
 		const vote2Json = await vote2.json();
 		expect(vote2Json.status).toBe('published');
 
-		// 5b) Voting is closed once published — a further vote is rejected.
-		// Reuse rev1's approve proof (message binds to 'approve') so we reach
-		// the voting-window guard rather than failing message-binding.
-		const lateVote = await postJSON(
-			'/api/post/review',
-			{ post_version_id: version_id, vote: 'approve', proof: rev1Proof },
-			{ cookie: rev1Sess.cookie }
-		);
+		// 5b) Voting is closed once published — re-redeeming rev1's token is
+		// rejected by the voting-window guard (status != under_review → 409).
+		const lateVote = await redeemVote({ versionId: version_id, token: rev1Token, vote: 'approve' });
 		expect(lateVote.status).toBe(409);
 
 		// 6) Post appears on the public blog page now.

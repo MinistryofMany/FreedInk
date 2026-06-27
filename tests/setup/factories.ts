@@ -14,11 +14,11 @@ import { hashToField } from '$lib/utils';
 import type { MemberRole, TreeCapability } from '$lib/db/schema';
 
 // Map a proof scope prefix to the capability tree it proves against. Mirrors the
-// endpoints: post:/edit: → author (writers tree), comment: → comment, review: →
-// review (transitional). Used as the default tree for buildTestProof.
+// endpoints: post:/edit: → author (writers tree), comment: → comment. Votes use
+// blind tokens (no tree), so there is no review case. Used as the default tree
+// for buildTestProof.
 function capabilityForScope(scope: string): TreeCapability {
 	if (scope.startsWith('comment:')) return 'comment';
-	if (scope.startsWith('review:')) return 'review';
 	return 'author'; // post:<blog> and edit:<post>:<v>
 }
 

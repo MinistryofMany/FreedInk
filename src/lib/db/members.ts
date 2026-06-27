@@ -210,10 +210,9 @@ export async function setCapability(
 		.set({ [field]: value, role: roleLabelFor(after) })
 		.where(eq(schema.blogMembers.id, existing.id));
 
-	// author/comment back a tree; 'review' backs a transitional tree (Phases 2–4,
-	// removed in Phase 5); admin never backs a tree. Refresh exactly the affected
-	// tree so the leaf set reflects the grant/revoke immediately.
-	if (capability === 'author' || capability === 'comment' || capability === 'review') {
+	// Only author/comment back a Semaphore tree; review (blind tokens) and admin
+	// (session-auth) do not. Refresh exactly the affected tree.
+	if (capability === 'author' || capability === 'comment') {
 		await refreshSnapshot(blogId, capability);
 	}
 	return { before, after };

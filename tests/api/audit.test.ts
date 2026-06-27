@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema } from '$lib/db/client';
 import { and, eq, desc } from 'drizzle-orm';
-import { asUser, postJSON } from './helpers';
+import { asUser, postJSON, castTokenVote } from './helpers';
 import { makeUser, makeBlogWith, buildTestProof } from '../setup/factories';
 import { BASE_URL } from '../setup/server';
 import type { AuditEvent } from '$lib/server/audit';
@@ -190,19 +190,15 @@ describe('audit log: post.submitted, review.cast, post.published', () => {
 		expect(submitted[0].ip).not.toBeNull();
 		expect((submitted[0].metadata as Record<string, unknown>)?.version_id).toBe(version_id);
 
-		// rev1 votes approve.
+		// rev1 votes approve (blind-token: authenticated issuance + anonymous
+		// redemption). The redemption carries NO session, so the audit row is
+		// anonymous.
 		const rev1Sess = await asUser(rev1);
-		const p1 = await buildTestProof({
-			blogId: blog.id,
-			identity: rev1.identity,
-			scope: `review:${version_id}`,
-			message: 'approve'
+		const v1 = await castTokenVote({
+			versionId: version_id,
+			cookie: rev1Sess.cookie,
+			vote: 'approve'
 		});
-		const v1 = await postJSON(
-			'/api/post/review',
-			{ post_version_id: version_id, vote: 'approve', proof: p1 },
-			{ cookie: rev1Sess.cookie }
-		);
 		expect(v1.status).toBe(200);
 		// review.cast is anonymous: not attributable to rev1, but recorded.
 		const ev1 = await eventsFor(rev1.id);
@@ -214,19 +210,13 @@ describe('audit log: post.submitted, review.cast, post.published', () => {
 		// The deciding-vote state-change has not fired yet (only one approve).
 		expect(ev1).not.toContain('post.published');
 
-		// rev2 votes approve → flip to published.
+		// rev2 votes approve → crosses quorum → published.
 		const rev2Sess = await asUser(rev2);
-		const p2 = await buildTestProof({
-			blogId: blog.id,
-			identity: rev2.identity,
-			scope: `review:${version_id}`,
-			message: 'approve'
+		const v2 = await castTokenVote({
+			versionId: version_id,
+			cookie: rev2Sess.cookie,
+			vote: 'approve'
 		});
-		const v2 = await postJSON(
-			'/api/post/review',
-			{ post_version_id: version_id, vote: 'approve', proof: p2 },
-			{ cookie: rev2Sess.cookie }
-		);
 		expect(v2.status).toBe(200);
 		const ev2 = await eventsFor(rev2.id);
 		// rev2's vote itself is anonymous...

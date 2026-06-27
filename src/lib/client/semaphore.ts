@@ -213,8 +213,8 @@ export async function buildProof(opts: {
 // The capability tree to fetch. Mirrors the server's TreeCapability:
 //   'author'  — writers tree (submit post, edit/revise)
 //   'comment' — commenters tree
-//   'review'  — reviewers tree (transitional vote path, removed in Phase 5)
-export type GroupCapability = 'author' | 'comment' | 'review';
+// Votes use blind tokens, not a tree (see $lib/client/vote-token).
+export type GroupCapability = 'author' | 'comment';
 
 // Fetch the current identity set + root for ONE capability tree of a blog. The
 // caller MUST request the tree matching the action it is about to prove (author

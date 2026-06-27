@@ -72,16 +72,16 @@ describe('createBlog', () => {
 		expect(members[0].role).toBe('owner');
 		expect(members[0].user.id).toBe(owner.id);
 
-		// createBlog seeds one snapshot per tree capability (author, comment,
-		// review) — the owner holds all three. All share the same single-leaf root
-		// (same identity set), but each tree gets its own row.
+		// createBlog seeds one snapshot per tree capability (author, comment) — the
+		// owner holds both. They share the same single-leaf root (same identity
+		// set), but each tree gets its own row. Votes use blind tokens (no tree).
 		const snaps = await db
 			.select()
 			.from(schema.blogMemberSnapshots)
 			.where(eq(schema.blogMemberSnapshots.blogId, id));
-		expect(snaps).toHaveLength(3);
+		expect(snaps).toHaveLength(2);
 		const caps = snaps.map((s) => s.capability).sort();
-		expect(caps).toEqual(['author', 'comment', 'review']);
+		expect(caps).toEqual(['author', 'comment']);
 		for (const s of snaps) {
 			expect(s.eligibleCount).toBe(1);
 			expect(s.identities).toHaveLength(1);
@@ -168,16 +168,14 @@ describe('setRole', () => {
 		await setRole(blogId, author.id, 'author', owner.id);
 
 		// The author now sits in the author tree AND the comment tree (every role
-		// can comment), but NOT the review tree (an author can't review).
+		// can comment). Votes use blind tokens, so there is no review tree.
 		const authorTree = await currentMembership(blogId, 'author');
 		const commentTree = await currentMembership(blogId, 'comment');
-		const reviewTree = await currentMembership(blogId, 'review');
 		expect(authorTree.eligibleCount).toBe(2);
 		expect(commentTree.eligibleCount).toBe(2);
-		expect(reviewTree.eligibleCount).toBe(1); // owner only
 	});
 
-	it('puts a reviewer in the review + comment trees but NOT the author tree', async () => {
+	it('puts a reviewer in the comment tree but NOT the author tree', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
 		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
@@ -186,11 +184,11 @@ describe('setRole', () => {
 		await installIdentity(reviewer.id, 'reviewer');
 		await setRole(blogId, reviewer.id, 'reviewer', owner.id);
 
+		// A reviewer can comment (comment tree) but not author (author tree). Their
+		// review capability gates blind-token issuance, not any tree membership.
 		const authorTree = await currentMembership(blogId, 'author');
-		const reviewTree = await currentMembership(blogId, 'review');
 		const commentTree = await currentMembership(blogId, 'comment');
 		expect(authorTree.eligibleCount).toBe(1); // owner only — reviewer can't author
-		expect(reviewTree.eligibleCount).toBe(2);
 		expect(commentTree.eligibleCount).toBe(2);
 	});
 
@@ -204,7 +202,6 @@ describe('setRole', () => {
 		await setRole(blogId, commenter.id, 'commenter', owner.id);
 
 		expect((await currentMembership(blogId, 'author')).eligibleCount).toBe(1);
-		expect((await currentMembership(blogId, 'review')).eligibleCount).toBe(1);
 		expect((await currentMembership(blogId, 'comment')).eligibleCount).toBe(2);
 	});
 });
@@ -343,7 +340,7 @@ describe('refreshSnapshotsForUser (identity rotation)', () => {
 		// The new commitment is in the current root of every tree of both blogs.
 		const v2 = new Identity('u-v2').commitment.toString();
 		for (const blogId of [b1, b2]) {
-			for (const cap of ['author', 'comment', 'review'] as const) {
+			for (const cap of ['author', 'comment'] as const) {
 				const cur = await currentMembership(blogId, cap);
 				expect(cur.identities).toContain(v2);
 			}
