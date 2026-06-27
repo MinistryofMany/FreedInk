@@ -61,6 +61,7 @@ export const auditEvent = pgEnum('audit_event', [
 	'email.verified',
 	'identity.created',
 	'identity.rotated',
+	'identity.device_revoked',
 	'blog.created',
 	'blog.archived',
 	'blog.unarchived',
@@ -196,6 +197,11 @@ export const userIdentities = pgTable(
 		kdfParams: jsonb('kdf_params').notNull(),
 		nonce: byteaType('nonce').notNull(),
 		status: identityStatus('status').notNull().default('active'),
+		// Optional human label for the device this commitment belongs to ("laptop",
+		// "phone"). Per-device model (Phase 3): a user may hold several active
+		// commitments, one per enrolled device. Null for pre-Phase-3 rows and when
+		// the user doesn't name the device.
+		deviceLabel: text('device_label'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		revokedAt: timestamp('revoked_at', { withTimezone: true })
 	},
@@ -280,6 +286,18 @@ export const blogMembers = pgTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		role: memberRole('role').notNull(),
+		// Independent boolean capabilities — the source of truth for what a member
+		// may do. `role` is kept during the migration as a derived display label
+		// (RSS/llms.txt/roster want one word) and is dropped once nothing reads it.
+		// Capabilities back the per-capability Semaphore trees (can_author /
+		// can_comment) and gate vote-token issuance (can_review) and admin actions
+		// (can_admin). Backfilled from `role` in the migration:
+		//   owner→all; editor→author+review+comment; reviewer→review+comment;
+		//   author→author+comment; commenter→comment.
+		canAuthor: boolean('can_author').notNull().default(false),
+		canReview: boolean('can_review').notNull().default(false),
+		canComment: boolean('can_comment').notNull().default(false),
+		canAdmin: boolean('can_admin').notNull().default(false),
 		addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
 		addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
 		removedAt: timestamp('removed_at', { withTimezone: true })
@@ -293,8 +311,11 @@ export const blogMembers = pgTable(
 	})
 );
 
-// One row per change to the proving-eligible set; identities frozen at that point.
-// The proof verification path looks up snapshots by `root`.
+// One row per change to a capability's eligible set; identities frozen at that
+// point. The proof verification path looks up snapshots by (blog, capability,
+// root). A blog has independent trees per proving capability — today that is
+// `author` (writers) and `comment` (commenters). Votes do NOT use a tree (they
+// are blind tokens), so there is no `review` tree.
 export const blogMemberSnapshots = pgTable(
 	'blog_member_snapshots',
 	{
@@ -302,18 +323,30 @@ export const blogMemberSnapshots = pgTable(
 		blogId: uuid('blog_id')
 			.notNull()
 			.references(() => blogs.id, { onDelete: 'cascade' }),
+		// Which capability tree this snapshot belongs to: 'author' | 'comment'.
+		// Stored as text (matches Capability/TreeCapability) — kept un-enum'd so a
+		// future tree capability doesn't need an enum migration. Backfilled on the
+		// legacy mixed rows in migration 0008 (see R4: legacy rows are recomputed,
+		// not reinterpreted).
+		capability: text('capability').notNull(),
 		root: text('root').notNull(),
 		identities: text('identities').array().notNull(),
 		eligibleCount: integer('eligible_count').notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({
-		// Per-blog uniqueness so two different blogs that happen to share an
-		// identity set (e.g. both have the same single owner at creation) can
-		// each have their own snapshot row. Also serves as the FK target for
-		// blog_post_versions.snapshot_root via a composite (blog_id, root).
-		blogRootKey: uniqueIndex('blog_member_snapshots_blog_root_key').on(t.blogId, t.root),
-		blogIdx: index('blog_member_snapshots_blog_idx').on(t.blogId)
+		// Per-(blog, capability) uniqueness so each tree has its own row even when
+		// two trees of the same blog share an identity set (e.g. a single owner is
+		// in both the author and comment trees → same root, two rows). Replaces the
+		// old (blog_id, root) unique — that could not hold two capabilities at one
+		// root for the same blog.
+		blogCapRootKey: uniqueIndex('blog_member_snapshots_blog_cap_root_key').on(
+			t.blogId,
+			t.capability,
+			t.root
+		),
+		blogIdx: index('blog_member_snapshots_blog_idx').on(t.blogId),
+		blogCapIdx: index('blog_member_snapshots_blog_cap_idx').on(t.blogId, t.capability)
 	})
 );
 
@@ -363,6 +396,14 @@ export const blogPostVersions = pgTable(
 		// root is unique per-blog, not globally.
 		snapshotRoot: text('snapshot_root'),
 		nullifier: text('nullifier'),
+		// Quorum denominator FROZEN at the moment this version entered under_review:
+		// the count of active can_review members at that instant. The tally uses
+		// this (not the live can_review count) as the threshold denominator, so an
+		// operator cannot lower the bar mid-review by demoting reviewers, nor can the
+		// bar drift as membership changes during a round. Null for legacy rows /
+		// versions that never entered review; the tally falls back to the live count
+		// only then. See evaluatePostReview.
+		eligibleReviewersAtReview: integer('eligible_reviewers_at_review'),
 		status: postStatus('status').notNull().default('draft'),
 		searchTsv: tsvectorType('search_tsv'),
 		submittedAt: timestamp('submitted_at', { withTimezone: true }),
@@ -410,10 +451,17 @@ export const postReviews = pgTable(
 			.notNull()
 			.references(() => blogPostVersions.id, { onDelete: 'cascade' }),
 		vote: reviewVote('vote').notNull(),
-		proof: jsonb('proof').notNull(),
-		// See note on blog_post_versions.snapshotRoot — no FK, validated in app.
-		snapshotRoot: text('snapshot_root').notNull(),
-		nullifier: text('nullifier').notNull(),
+		// Blind-token vote model (Phase 5): the anonymous per-voter-per-version
+		// handle is the token nonce (a hash of the redeemed token's prepared
+		// message), NOT a Semaphore nullifier. Re-submitting the same
+		// (version, token_nonce) with a different vote UPSERTs (vote-flip). Unique
+		// (post_version_id, token_nonce) blocks double-spend. The legacy proof /
+		// snapshot_root / nullifier columns are nullable and unused for new
+		// token-based votes (kept for historical rows + a clean migration).
+		tokenNonce: text('token_nonce'),
+		proof: jsonb('proof'),
+		snapshotRoot: text('snapshot_root'),
+		nullifier: text('nullifier'),
 		comment: text('comment'),
 		// Only meaningful for vote='reject'. Multi-select from the
 		// rejection_reason enum — a post can be both rage_bait AND
@@ -423,11 +471,83 @@ export const postReviews = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({
+		// Legacy Semaphore-nullifier uniqueness (kept for historical rows).
 		nullifierIdx: uniqueIndex('post_reviews_version_nullifier_key').on(
 			t.postVersionId,
 			t.nullifier
 		),
+		// Token-nonce uniqueness: one vote per redeemed token per version
+		// (double-spend guard). Partial so only token-based rows are constrained.
+		tokenNonceIdx: uniqueIndex('post_reviews_version_token_nonce_key')
+			.on(t.postVersionId, t.tokenNonce)
+			.where(sql`${t.tokenNonce} IS NOT NULL`),
 		versionIdx: index('post_reviews_version_idx').on(t.postVersionId)
+	})
+);
+
+// Per-blog blind-signature voting-token ISSUER key. The signing key blind-signs
+// vote tokens; the public key verifies redeemed tokens. Operator-held signing
+// material. `retiredAt` supports per-round key rotation (auditor note): retire a
+// key when a round closes so a token issued but never spent can't be redeemed in
+// a later round.
+export const blogVoteTokenKeys = pgTable(
+	'blog_vote_token_keys',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
+		publicKeySpki: byteaType('public_key_spki').notNull(),
+		privateKeyPkcs8: byteaType('private_key_pkcs8').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		retiredAt: timestamp('retired_at', { withTimezone: true })
+	},
+	(t) => ({
+		// One active (non-retired) key per blog.
+		blogActiveIdx: uniqueIndex('blog_vote_token_keys_blog_active_key')
+			.on(t.blogId)
+			.where(sql`${t.retiredAt} IS NULL`),
+		blogIdx: index('blog_vote_token_keys_blog_idx').on(t.blogId)
+	})
+);
+
+// Records that a user was ISSUED a vote token for a version. Enforces one token
+// per (user, version). This is the only participation signal the server keeps —
+// it reveals "user asked for a token for version V", never the vote.
+//
+// CRITICAL (auditor R-replaces-R2): this table MUST NEVER be joined with
+// post_reviews. Doing so would link a voter to their vote and break the
+// unlinkability the blind signature provides. It is write-on-issue, read-only to
+// answer "has this user already been issued a token for this version".
+export const voteTokenIssuances = pgTable(
+	'vote_token_issuances',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
+		postVersionId: uuid('post_version_id')
+			.notNull()
+			.references(() => blogPostVersions.id, { onDelete: 'cascade' }),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		// Written COARSENED to the start of the UTC hour (see recordIssuance /
+		// truncateToHour), not at default now() resolution, so an operator cannot
+		// pin an issuance to a precise instant and pair it with a redemption by
+		// timestamp. The DB default is still now() for any path that bypasses
+		// recordIssuance; the app always overrides it with the truncated value.
+		// Residual leak (small-reviewer blogs) is documented at recordIssuance.
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => ({
+		// One issuance per (version, user). The unique constraint is the
+		// server-side enforcement of "one token per (user, version)".
+		versionUserIdx: uniqueIndex('vote_token_issuances_version_user_key').on(
+			t.postVersionId,
+			t.userId
+		),
+		versionIdx: index('vote_token_issuances_version_idx').on(t.postVersionId)
 	})
 );
 
@@ -481,6 +601,36 @@ export const auditLog = pgTable(
 		subjectBlogIdx: index('audit_log_subject_blog_idx').on(t.subjectBlogId, t.createdAt),
 		eventIdx: index('audit_log_event_idx').on(t.event, t.createdAt),
 		createdAtIdx: index('audit_log_created_at_idx').on(t.createdAt)
+	})
+);
+
+// Member-visible, ATTRIBUTED permission change log — distinct from the internal
+// audit_log (which is operator-only, carries IP/UA, and prunes at 90 days). This
+// is a product surface shown to ALL members of a blog: "Bob changed George's
+// permissions: +review, −author". These admin actions are deliberately
+// non-anonymous — attribution is the feature.
+//
+// CRITICAL (design R8): this table MUST NEVER carry IP, user-agent, or any
+// operator-only field. The member-facing loader selects only the safe columns.
+// Both this AND audit_log are written on a capability change.
+export const permissionChanges = pgTable(
+	'permission_changes',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
+		// Who made the change / whom it was made to. SET NULL on user delete so the
+		// log survives account deletion (shows as "a former member").
+		actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+		subjectUserId: uuid('subject_user_id').references(() => users.id, { onDelete: 'set null' }),
+		// {canAuthor, canReview, canComment, canAdmin} before and after the change.
+		oldCaps: jsonb('old_caps').notNull(),
+		newCaps: jsonb('new_caps').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => ({
+		blogIdx: index('permission_changes_blog_idx').on(t.blogId, t.createdAt)
 	})
 );
 
@@ -816,3 +966,16 @@ export type PostComment = typeof postComments.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type MemberRole = (typeof memberRole.enumValues)[number];
 export type PostStatus = (typeof postStatus.enumValues)[number];
+
+// Independent member capabilities (the source of truth replacing the single
+// role enum). The three *proving* capabilities (author, review, comment) plus
+// admin. Only author + comment back a Semaphore tree (review gates blind
+// vote-token issuance, admin gates non-anonymous admin actions). The DB columns
+// are can_author / can_review / can_comment / can_admin on blog_members.
+export type Capability = 'author' | 'review' | 'comment' | 'admin';
+
+// Capabilities that have their own per-capability Semaphore membership tree.
+// Only 'author' (writers) and 'comment' (commenters). Votes use blind-signature
+// tokens (Phase 5), NOT a reviewers tree, and 'admin' actions are
+// session-authenticated (never proof-anonymous), so neither is a tree.
+export type TreeCapability = 'author' | 'comment';

@@ -1,55 +1,104 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1779124016865,
-			"tag": "0000_yummy_thunderbolt",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1779124100000,
-			"tag": "0001_search_tsv",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1779131972340,
-			"tag": "0002_nervous_doctor_doom",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1779135700181,
-			"tag": "0003_faithful_king_cobra",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1781319000000,
-			"tag": "0004_oidc_tables",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1781320000000,
-			"tag": "0005_minister_only_auth",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "7",
-			"when": 1781325279000,
-			"tag": "0006_post_archive_and_kdf_default",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779124016865,
+      "tag": "0000_yummy_thunderbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779124100000,
+      "tag": "0001_search_tsv",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779131972340,
+      "tag": "0002_nervous_doctor_doom",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779135700181,
+      "tag": "0003_faithful_king_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781319000000,
+      "tag": "0004_oidc_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781320000000,
+      "tag": "0005_minister_only_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781325279000,
+      "tag": "0006_post_archive_and_kdf_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782538028743,
+      "tag": "0007_member_capabilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782538494565,
+      "tag": "0008_snapshot_capability",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782540083805,
+      "tag": "0009_device_label",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782540210371,
+      "tag": "0010_identity_device_revoked_event",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782541898005,
+      "tag": "0011_vote_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782544006672,
+      "tag": "0012_permission_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782568085063,
+      "tag": "0013_eligible_reviewers_snapshot",
+      "breakpoints": true
+    }
+  ]
 }

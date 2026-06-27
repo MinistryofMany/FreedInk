@@ -12,11 +12,10 @@ import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { MemberRole } from './schema';
 import { randomToken } from '$lib/server/session';
-import { refreshSnapshot } from './snapshots';
+import { refreshAllSnapshots } from './snapshots';
+import { capabilitiesForRole } from './members';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-const PROVING: MemberRole[] = ['owner', 'editor', 'reviewer', 'author'];
 
 export type CreateInvitationInput = {
 	blogId: string;
@@ -126,7 +125,7 @@ export async function acceptInvitation(
 		);
 	}
 
-	let provingDelta = false;
+	let memberAdded = false;
 	const result = await db.transaction(async (tx) => {
 		// Re-check + mark accepted in the same tx to avoid double-accept races.
 		const claim = await tx
@@ -150,9 +149,12 @@ export async function acceptInvitation(
 				blogId: ctx.blogId,
 				userId: input.userId,
 				role: ctx.role,
+				...capabilitiesForRole(ctx.role),
 				addedBy: ctx.inviterUserId
 			});
-			if (PROVING.includes(ctx.role)) provingDelta = true;
+			// A brand-new member always joins at least the comment tree (every
+			// role can comment) and possibly the author tree. Refresh both.
+			memberAdded = true;
 		}
 
 		return {
@@ -164,8 +166,8 @@ export async function acceptInvitation(
 		};
 	});
 
-	if (provingDelta) {
-		await refreshSnapshot(ctx.blogId);
+	if (memberAdded) {
+		await refreshAllSnapshots(ctx.blogId);
 	}
 	return result;
 }

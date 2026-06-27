@@ -11,7 +11,16 @@ import { createBlog } from '$lib/db/blogs';
 import { setRole } from '$lib/db/members';
 import { refreshSnapshot } from '$lib/db/snapshots';
 import { hashToField } from '$lib/utils';
-import type { MemberRole } from '$lib/db/schema';
+import type { MemberRole, TreeCapability } from '$lib/db/schema';
+
+// Map a proof scope prefix to the capability tree it proves against. Mirrors the
+// endpoints: post:/edit: → author (writers tree), comment: → comment. Votes use
+// blind tokens (no tree), so there is no review case. Used as the default tree
+// for buildTestProof.
+function capabilityForScope(scope: string): TreeCapability {
+	if (scope.startsWith('comment:')) return 'comment';
+	return 'author'; // post:<blog> and edit:<post>:<v>
+}
 
 export type TestUser = {
 	id: string;
@@ -45,6 +54,16 @@ export async function makeUser(
 	const identity = new Identity(opts.seed ?? username);
 	await installIdentity(user.id, identity);
 	return { id: user.id, username, identity };
+}
+
+// Enroll an ADDITIONAL active device commitment for an existing user (Phase 3:
+// per-device model). Returns the new device's Identity. The caller is
+// responsible for refreshing snapshots (e.g. refreshSnapshotsForUser) so the new
+// leaf enters the trees, mirroring the /api/identity enroll endpoint.
+export async function enrollDevice(userId: string, seed: string): Promise<Identity> {
+	const identity = new Identity(seed);
+	await installIdentity(userId, identity);
+	return identity;
 }
 
 export async function rotateUserIdentity(userId: string, seed: string): Promise<Identity> {
@@ -94,11 +113,17 @@ function nodeArtifactsForDepth(depth: number): { wasm: string; zkey: string } | 
 
 // Build a proof against the *current* snapshot for `blogId`. Mirrors the
 // client/semaphore.ts buildProof so server expectations line up.
+//
+// `capability` selects which tree to prove against (author/comment/review). It
+// is derived from the scope prefix when omitted: post:/edit: → author,
+// comment: → comment, review: → review. Pass it explicitly for adversarial
+// "prove against the wrong tree" tests.
 export async function buildTestProof(opts: {
 	blogId: string;
 	identity: Identity;
 	scope: string;
 	message: string;
+	capability?: TreeCapability;
 }): Promise<{
 	merkleTreeDepth: number;
 	merkleTreeRoot: string;
@@ -107,7 +132,8 @@ export async function buildTestProof(opts: {
 	scope: string;
 	points: string[];
 }> {
-	const snap = await refreshSnapshot(opts.blogId);
+	const capability = opts.capability ?? capabilityForScope(opts.scope);
+	const snap = await refreshSnapshot(opts.blogId, capability);
 	const group = new Group();
 	// Match the server's canonical order (user-creation-date) — refreshSnapshot
 	// already returned them in that order. Do NOT re-sort here, or the Merkle

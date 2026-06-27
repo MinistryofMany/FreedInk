@@ -72,8 +72,12 @@ export const POST: RequestHandler = async (event) => {
 
 	await refreshSnapshotsForUser(locals.user.id);
 
-	// Rotation reason might be loss-of-trust on another device — re-issue the
-	// caller's session and revoke every other session for this user.
+	// Rotate is the "reset all devices" PANIC action (design D12): it revokes
+	// EVERY active commitment above and replaces them with a single fresh one, so
+	// it is distinct from the routine per-device revoke (/api/identity/[id]/revoke,
+	// which drops one device and keeps the rest). Because the trigger is usually
+	// loss-of-trust, also re-issue the caller's session and revoke every other
+	// session for this user.
 	const oldRaw = cookies.get(SESSION_COOKIE_NAME);
 	await destroySession(oldRaw);
 	const sessionId = await createSession(locals.user.id, {

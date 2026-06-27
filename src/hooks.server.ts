@@ -65,22 +65,50 @@ const mainHandle: Handle = async ({ event, resolve }) => {
 		});
 	}
 
-	// Same-origin guard for JSON API mutations. SvelteKit's default CSRF
-	// check covers form posts via the Origin header; for JSON we add our own
-	// because JSON requests can be made cross-origin without preflight if the
-	// content-type is `text/plain` (the simple-request loophole). We reject
-	// mismatched origins for *every* unsafe JSON POST under /api/.
+	// Same-origin guard for JSON API mutations. SvelteKit's default CSRF check
+	// covers form posts via the Origin header; for JSON we add our own because
+	// JSON requests can be made cross-origin without preflight if the
+	// content-type is `text/plain` (the simple-request loophole).
+	//
+	// Phase 4 hardening (R7): the session-free content writes (post/edit/comment)
+	// no longer carry ambient authority — a forged cross-origin request can't
+	// attach a session and can't forge a valid Semaphore proof — so classic CSRF
+	// is moot for them. But we still want to reject obviously cross-site state
+	// changes, so we close the previous "Origin absent → allowed" gap:
+	//   • Origin present and mismatched → reject (as before).
+	//   • Origin absent → consult Sec-Fetch-Site: anything other than
+	//     'same-origin' / 'none' (a user-initiated top-level request) is rejected.
+	//     Browsers send Sec-Fetch-Site on all fetches; a same-origin fetch sends
+	//     'same-origin'. Non-browser clients that send neither header are allowed
+	//     (they have no ambient authority to abuse and the proof still gates the
+	//     write), which keeps server-to-server and test clients working.
 	const pathname = event.url.pathname;
 	const method = event.request.method.toUpperCase();
 	const isApi = pathname.startsWith('/api/');
 	if (isApi && UNSAFE_METHODS.has(method)) {
 		const ct = event.request.headers.get('content-type') ?? '';
-		const origin = event.request.headers.get('origin');
-		if (origin && ct.toLowerCase().includes('application/json')) {
-			if (origin !== event.url.origin) {
+		if (ct.toLowerCase().includes('application/json')) {
+			const origin = event.request.headers.get('origin');
+			const secFetchSite = event.request.headers.get('sec-fetch-site');
+			let crossOrigin = false;
+			if (origin) {
+				crossOrigin = origin !== event.url.origin;
+			} else if (secFetchSite) {
+				// No Origin but the browser told us the relationship. 'same-origin'
+				// and 'none' (user-typed / bookmark) are fine; 'cross-site' and
+				// 'same-site' (different subdomain) are rejected for state changes.
+				crossOrigin = secFetchSite !== 'same-origin' && secFetchSite !== 'none';
+			}
+			if (crossOrigin) {
 				log.warn(
-					{ request_id: requestId, origin, expected: event.url.origin, path: pathname },
-					'csrf: origin mismatch'
+					{
+						request_id: requestId,
+						origin,
+						sec_fetch_site: secFetchSite,
+						expected: event.url.origin,
+						path: pathname
+					},
+					'csrf: cross-origin json write rejected'
 				);
 				return new Response('Forbidden: cross-origin request', {
 					status: 403,

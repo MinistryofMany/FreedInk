@@ -1,22 +1,20 @@
 <script lang="ts">
-	import {
-		getCachedIdentity,
-		cacheUnlockedIdentity,
-		unlockIdentity,
-		decodeFromWire
-	} from '$lib/client/vault';
-	import { buildProof, fetchGroup } from '$lib/client/semaphore';
+	import { requestAndBuildToken, castVote } from '$lib/client/vote-token';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { REJECTION_REASONS } from '$lib/rejection-reasons';
 	import { Card, Field, Button, Badge, Kicker, EmptyState } from '$lib/components/ui';
 	// Prover prewarm happens at the root layout for any logged-in user.
 
+	import type { RedeemableToken } from '$lib/client/vote-token';
+
 	export let data;
 	let busy = false;
 	let error = '';
-	let password = '';
-	let needsPassword = false;
+	// Built blind-token per version (cached so a vote-flip reuses the same token —
+	// the server UPSERTs on the token nonce). Never sent anywhere but the vote
+	// redemption; holds no identity.
+	let tokensByVersion: Record<string, RedeemableToken> = {};
 	let commentByPost: Record<string, string> = {};
 	// Per-post: open the reject panel + which reasons are checked. We keep
 	// them keyed by version id so multiple cards on screen don't share state.
@@ -70,32 +68,12 @@
 		}
 	}
 
-	async function unlock() {
-		const res = await fetch('/api/identity');
-		const json = await res.json();
-		if (!json.identity) throw new Error('no identity — create one in /signup/identity');
-		const blob = decodeFromWire(json.identity);
-		const id = await unlockIdentity(blob, password);
-		cacheUnlockedIdentity(id);
-		needsPassword = false;
-		password = '';
-		return id;
-	}
-
-	async function unlockFromForm() {
-		try {
-			await unlock();
-		} catch (e) {
-			error = (e as Error).message;
-		}
-	}
-
 	async function vote(post_version_id: string, choice: 'approve' | 'reject') {
 		busy = true;
 		error = '';
 		try {
-			// Reject requires at least one reason — server enforces too, but
-			// catch the obvious case here so we don't waste a proof.
+			// Reject requires at least one reason — server enforces too, but catch
+			// the obvious case here before spending a token.
 			let reasons: string[] | undefined;
 			if (choice === 'reject') {
 				reasons = selectedReasons(post_version_id);
@@ -105,26 +83,23 @@
 				}
 			}
 
-			let identity = getCachedIdentity();
-			if (!identity) identity = await unlock();
+			// Blind-token vote: (1) authenticated issuance builds an unlinkable
+			// token for this version; (2) anonymous, session-free redemption casts
+			// the vote. Re-voting fetches a fresh token only on the first cast — to
+			// flip a vote the server UPSERTs on the token nonce, so we reuse the same
+			// token. We keep the built token per version so a flip reuses it.
+			let token = tokensByVersion[post_version_id];
+			if (!token) {
+				token = await requestAndBuildToken(post_version_id);
+				tokensByVersion[post_version_id] = token;
+			}
 
-			const group = await fetchGroup(data.blog.slug);
-			const proof = await buildProof({
-				identity: identity!,
-				identities: group.identities,
-				scope: `review:${post_version_id}`,
-				message: choice
-			});
-			const res = await fetch('/api/post/review', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					post_version_id,
-					vote: choice,
-					comment: commentByPost[post_version_id] || undefined,
-					rejection_reasons: reasons,
-					proof
-				})
+			const res = await castVote({
+				versionId: post_version_id,
+				token,
+				vote: choice,
+				comment: commentByPost[post_version_id] || undefined,
+				rejectionReasons: reasons
 			});
 			if (!res.ok) {
 				error = await res.text();
@@ -135,7 +110,12 @@
 			rejectOpenByPost[post_version_id] = false;
 			await invalidateAll();
 		} catch (e) {
-			error = (e as Error).message;
+			// Surface a NON-EMPTY message no matter what. Some failures (notably the
+			// old Chromium WebCrypto OperationError in token finalize) carry an empty
+			// .message; falling closed-and-silent there hid a real bug. Fall back to
+			// the error name, then a generic line, so the user always sees something.
+			const err = e as Error;
+			error = err?.message?.trim() || err?.name || 'Could not cast your vote. Please try again.';
 		} finally {
 			busy = false;
 		}
@@ -151,22 +131,6 @@
 		<Kicker>Review queue</Kicker>
 		<h1 class="page-heading">{data.blog.title}</h1>
 	</header>
-
-	{#if needsPassword}
-		<Card padding="lg" class="unlock-card">
-			<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
-				<Field
-					label="Identity password"
-					type="password"
-					bind:value={password}
-					required
-					autocomplete="current-password"
-					class="grow"
-				/>
-				<Button type="submit">Unlock</Button>
-			</form>
-		</Card>
-	{/if}
 
 	{#if error}<p class="error" role="alert">{error}</p>{/if}
 
@@ -282,20 +246,6 @@
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
 		margin: 0 0 var(--space-4);
-	}
-
-	.page-wrap :global(.unlock-card) {
-		margin-bottom: var(--space-5);
-	}
-
-	.unlock-form {
-		display: flex;
-		align-items: flex-end;
-		gap: var(--space-3);
-	}
-
-	.unlock-form :global(.grow) {
-		flex: 1;
 	}
 
 	.queue {

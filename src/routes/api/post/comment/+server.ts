@@ -3,7 +3,6 @@ import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
-import { requireRole, ROLES_COMMENTING } from '$lib/server/auth';
 import { verifyMembership } from '$lib/server/semaphore';
 import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
@@ -25,9 +24,10 @@ const Body = z.object({
 });
 
 export const POST: RequestHandler = async (event) => {
-	await enforce(RULES.commentPost, event, { keyBy: 'user' });
-	const { request, locals } = event;
-	if (!locals.user) throw error(401, 'sign in required');
+	// Session-free write (Phase 4): authorization is the commenters-tree proof,
+	// not a session. Rate-limit by IP; never read locals.user.
+	await enforce(RULES.commentPost, event, { keyBy: 'ip' });
+	const { request } = event;
 	const parsed = Body.safeParse(await request.json());
 	if (!parsed.success) throw error(422, parsed.error.message);
 
@@ -40,15 +40,22 @@ export const POST: RequestHandler = async (event) => {
 	const row = versionRows[0];
 	if (!row) throw error(404, 'post version not found');
 
-	await requireRole(row.post.blogId, locals.user.id, ROLES_COMMENTING);
-
 	const expectedScope = `comment:${parsed.data.post_version_id}`;
 	const expectedMessage = parsed.data.body;
 	const { snapshot, nullifier } = await verifyMembership({
 		blogId: row.post.blogId,
+		// Commenting proves membership in the COMMENTERS tree (can_comment holders).
+		capability: 'comment',
 		proof: parsed.data.proof,
 		expectedScope,
-		expectedMessage
+		expectedMessage,
+		// D11: require the CURRENT commenters-tree root. This kills the
+		// stale-comment-after-revoke vector (a just-revoked device commenting on an
+		// old root) AND closes the R1 historical-cross-tree-root match (an author
+		// proof matching a historical comment root that equalled the author root at
+		// blog creation). The tradeoff: a member who just lost comment rights can't
+		// comment on an old version — acceptable.
+		requireCurrentRoot: true
 	});
 
 	let inserted;
@@ -69,7 +76,8 @@ export const POST: RequestHandler = async (event) => {
 	}
 	await audit(event, {
 		event: 'comment.posted',
-		actorUserId: locals.user.id,
+		// Anonymous content action: record IP/UA but never the acting member.
+		anonymous: true,
 		subjectBlogId: row.post.blogId,
 		metadata: {
 			post_id: row.post.id,

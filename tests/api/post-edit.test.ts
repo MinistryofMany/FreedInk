@@ -16,14 +16,18 @@ const stubProof = {
 };
 
 describe('POST /api/blog/post/edit', () => {
-	it('unauth → 401', async () => {
+	it('no cookie → NOT 401 (session-free, Phase 4): unknown version → 404', async () => {
+		// Edit is session-free; authorization is the writers proof. With no session
+		// AND an unknown version the request fails at resolution (404), never at an
+		// auth gate — the session is no longer consulted.
 		const res = await postJSON('/api/blog/post/edit', {
 			post_version_id: '00000000-0000-0000-0000-000000000000',
 			title: 't',
 			content: 'c',
 			proof: stubProof
 		});
-		expect(res.status).toBe(401);
+		expect(res.status).not.toBe(401);
+		expect(res.status).toBe(404);
 	});
 
 	it('missing proof field → 422', async () => {
@@ -42,8 +46,12 @@ describe('POST /api/blog/post/edit', () => {
 		expect(res.status).toBe(422);
 	});
 
-	it('user without ROLES_WRITING → 403', async () => {
-		// Owner creates a post; commenter (no writing role) tries to edit it.
+	it('a non-writer cannot edit: no valid writers proof → 400 (authz is the proof, Phase 4)', async () => {
+		// Owner creates a post; a commenter (not in the writers tree) tries to edit.
+		// Session no longer gates this — authorization is the writers proof. A
+		// commenter can't produce a valid writers-tree proof, so the stub proof
+		// fails verification → 400 (not a 403 role gate). Even WITH a session the
+		// session is ignored.
 		const owner = await makeUser({ username: 'owner', seed: 'o-403' });
 		const commenter = await makeUser({ username: 'commenter', seed: 'c-403' });
 		const blog = await makeBlogWith({
@@ -71,7 +79,7 @@ describe('POST /api/blog/post/edit', () => {
 		expect(created.status).toBe(200);
 		const { version_id } = await created.json();
 
-		// commenter tries to edit
+		// commenter tries to edit with a bogus proof (they have no writers proof).
 		const commenterSess = await asUser(commenter);
 		const res = await postJSON(
 			'/api/blog/post/edit',
@@ -84,7 +92,7 @@ describe('POST /api/blog/post/edit', () => {
 			},
 			{ cookie: commenterSess.cookie }
 		);
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(400);
 	}, 60_000);
 
 	it('creates a new version on success with a real proof', async () => {

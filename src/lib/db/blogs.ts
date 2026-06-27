@@ -2,7 +2,8 @@ import { db, schema } from './client';
 import type { Blog, MemberRole } from './schema';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
-import { refreshSnapshot } from './snapshots';
+import { refreshAllSnapshots } from './snapshots';
+import { capabilitiesForRole } from './members';
 import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 
 export async function listBlogs() {
@@ -103,9 +104,11 @@ export async function createBlog(
 		blogId: blog.id,
 		userId,
 		role: 'owner',
+		...capabilitiesForRole('owner'),
 		addedBy: userId
 	});
-	await refreshSnapshot(blog.id);
+	// Owner holds every capability → seed both the author and comment trees.
+	await refreshAllSnapshots(blog.id);
 	return { id: blog.id, slug };
 }
 

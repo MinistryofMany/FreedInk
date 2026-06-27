@@ -57,6 +57,7 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@cloudflare/blindrsa-ts": "^0.4.6",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@fontsource-variable/literata": "^5.2.8",
 		"@fontsource-variable/lora": "^5.2.8",

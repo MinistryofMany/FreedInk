@@ -177,7 +177,7 @@
 				}
 			}
 			const sem = await import('$lib/client/semaphore');
-			const group = await sem.fetchGroup(data.Blog.slug);
+			const group = await sem.fetchGroup(data.Blog.slug, 'comment');
 			const proof = await sem.buildProof({
 				identity,
 				identities: group.identities,
@@ -186,6 +186,8 @@
 			});
 			const res = await fetch('/api/post/comment', {
 				method: 'POST',
+				// Session-free write: never attach the session cookie.
+				credentials: 'omit',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ post_version_id: data.Post.versionId, body, proof })
 			});

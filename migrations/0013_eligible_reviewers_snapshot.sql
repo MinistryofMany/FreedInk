@@ -1,0 +1,1 @@
+ALTER TABLE "blog_post_versions" ADD COLUMN "eligible_reviewers_at_review" integer;

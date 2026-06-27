@@ -255,6 +255,30 @@
 		}
 	}
 
+	// Revoke ONE device commitment (this or another device). Blocked server-side
+	// for the last active device; the UI also disables that case.
+	async function revokeDevice(id: string) {
+		const t = get(_);
+		if (!confirm(t('settings.device_revoke_confirm'))) return;
+		busy = true;
+		msg = '';
+		try {
+			const res = await fetch(`/api/identity/${encodeURIComponent(id)}/revoke`, {
+				method: 'POST'
+			});
+			if (!res.ok) {
+				msg = await res.text();
+				return;
+			}
+			msg = t('settings.device_revoked');
+			location.reload();
+		} catch (e) {
+			msg = (e as Error).message;
+		} finally {
+			busy = false;
+		}
+	}
+
 	const themeOptions = [
 		{ value: 'system', label: 'System' },
 		{ value: 'light', label: 'Light' },
@@ -286,7 +310,13 @@
 					<dt>{$_('settings.email_label')}</dt>
 					<dd>{data.user.email ?? '—'}</dd>
 				</dl>
-				<form on:submit|preventDefault={saveProfile} class="row-form">
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						saveProfile();
+					}}
+					class="row-form"
+				>
 					<Field
 						label={$_('settings.display_name_label')}
 						bind:value={displayName}
@@ -308,14 +338,28 @@
 		<Card padding="lg">
 			<div class="stack">
 				<Kicker>{$_('settings.identity_heading')}</Kicker>
+				<p class="muted">{$_('settings.devices_blurb')}</p>
 				<ul class="id-list">
 					{#each identities as id}
 						<li>
+							<span class="device-label"
+								>{id.deviceLabel?.trim() || $_('settings.device_unnamed')}</span
+							>
 							<code>{id.idc.slice(0, 12)}…</code>
 							<Badge tone={badgeTone(id.status)}>{id.status}</Badge>
 							{#if id.status === 'revoked' && id.revokedAt}
 								<span class="muted-inline">· revoked {new Date(id.revokedAt).toLocaleString()}</span
 								>
+							{:else if id.status === 'active'}
+								<button
+									type="button"
+									class="link-button"
+									disabled={busy || data.activeDeviceCount <= 1}
+									title={data.activeDeviceCount <= 1 ? $_('settings.device_last_active_hint') : ''}
+									onclick={() => revokeDevice(id.id)}
+								>
+									{$_('settings.device_revoke_button')}
+								</button>
 							{/if}
 						</li>
 					{/each}
@@ -324,7 +368,13 @@
 					<summary>{$_('settings.rotate_identity_summary')}</summary>
 					<div class="stack disclosure-body">
 						<p class="muted">{$_('settings.rotate_identity_blurb')}</p>
-						<form on:submit|preventDefault={rotateIdentity} class="stack-form">
+						<form
+							onsubmit={(e) => {
+								e.preventDefault();
+								rotateIdentity();
+							}}
+							class="stack-form"
+						>
 							<Field
 								label={$_('settings.new_password_label')}
 								type="password"
@@ -580,6 +630,29 @@
 	.muted-inline {
 		color: var(--color-text-muted);
 		font-size: var(--text-xs);
+	}
+
+	.device-label {
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.link-button {
+		background: none;
+		border: none;
+		padding: 0;
+		margin-left: auto;
+		color: var(--color-danger, var(--color-text));
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		cursor: pointer;
+		text-decoration: underline;
+	}
+
+	.link-button:disabled {
+		color: var(--color-text-muted);
+		cursor: not-allowed;
+		text-decoration: none;
 	}
 
 	.disclosure {

@@ -44,8 +44,27 @@ describe('CSRF: same-origin guard for JSON API mutations', () => {
 		expect(res.status).not.toBe(403);
 	});
 
-	it('no Origin header is allowed (e.g. direct curl) — only browsers send it', async () => {
+	it('no Origin and no Sec-Fetch-Site is allowed (e.g. direct curl / server-to-server)', async () => {
 		const res = await jsonPost('/api/identity', { idc: '1' });
+		expect(res.status).not.toBe(403);
+	});
+
+	it('Phase 4: Origin absent but Sec-Fetch-Site: cross-site → 403 (closed gap)', async () => {
+		const res = await api('/api/identity', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' },
+			body: JSON.stringify({ idc: '1' })
+		});
+		expect(res.status).toBe(403);
+	});
+
+	it('Phase 4: Origin absent but Sec-Fetch-Site: same-origin is allowed', async () => {
+		const res = await api('/api/identity', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+			body: JSON.stringify({ idc: '1' })
+		});
+		// Not 403 from the guard (downstream 401 is fine).
 		expect(res.status).not.toBe(403);
 	});
 

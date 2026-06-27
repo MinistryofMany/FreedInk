@@ -6,7 +6,21 @@
 // directly (see ./_session) instead of driving an OIDC round-trip. Each authed
 // test then starts at /signup/identity — exactly where a first Minister sign-in
 // drops a brand-new user — and exercises the real identity + proof flows.
-import { test, expect } from '@playwright/test';
+//
+// Post-anonymity-overhaul (privacy/public-roster-anon-audit), the lifecycle this
+// file drives is:
+//   - Post creation: a session-free, per-device Semaphore proof against the blog's
+//     `author` capability tree (the write itself carries no cookie). Unchanged at
+//     the DOM level; the author page builds the proof and POSTs to /api/blog/post.
+//   - Vote-to-publish: blind-signature vote TOKENS (Privacy Pass-style), NOT a
+//     Semaphore reviewers tree. Clicking Approve/Reject runs a two-step client
+//     flow inside the review page's vote(): (1) an authenticated, can_review-gated
+//     issuance — GET /api/blog/vote-token/key then POST /api/blog/vote-token — that
+//     blind-signs a random nonce bound to the version_id; (2) an anonymous,
+//     session-free redemption — POST /api/post/review with credentials:'omit' —
+//     that casts the vote. The review-page DOM is unchanged, so this test drives
+//     the new path through the same Approve button.
+import { test, expect, type Page } from '@playwright/test';
 import { signInAsNewUser } from './_session';
 
 const STRONG_PASSWORD = 'aVeryStrongPassword12345';
@@ -39,8 +53,14 @@ test('signup → identity → blog → manage', async ({ page }) => {
 	await page.waitForURL(/\/admin\/b\/.+\/manage$/);
 
 	// 4) Manage page reflects ownership.
-	await expect(page.getByRole('cell', { name: username })).toBeVisible();
-	await expect(page.getByRole('row').filter({ hasText: username })).toContainText('owner');
+	// The manage page now renders TWO grids that expose rows for the same user:
+	// the members table (caption "Blog members") and the Phase 5/6 permissions
+	// capability grid (role="table" "Member permissions"). Scope the row lookup
+	// to the members table by its accessible caption name so the assertion isn't
+	// a strict-mode violation across both grids.
+	const membersTable = page.getByRole('table', { name: 'Blog members' });
+	await expect(membersTable.getByRole('cell', { name: username })).toBeVisible();
+	await expect(membersTable.getByRole('row').filter({ hasText: username })).toContainText('owner');
 
 	// 5) Dashboard "Owned" lists the blog after a fresh load.
 	await page.goto('/admin');
@@ -105,17 +125,15 @@ test('browser-side post creation: real Semaphore proof, post lands in review que
 	await expect(page.getByRole('heading', { name: postTitle })).toBeVisible();
 });
 
-test('browser-side vote-to-publish: approve in UI, post appears on public page', async ({
-	page
-}) => {
-	test.setTimeout(300_000);
-	page.on('console', (msg) => {
-		if (msg.type() === 'error') console.error('[browser]', msg.text());
-	});
-	page.on('pageerror', (err) => console.error('[browser pageerror]', err));
-
-	const stamp = Date.now();
-	await signInAsNewUser(page, { username: `vote${stamp}`.slice(0, 32) });
+// Helper: seed a fresh owner with an unlocked identity and a blog holding a post
+// under review. Returns the blog slug, username, and post title/body so the
+// caller can drive the vote flow and the downstream public-page assertions.
+async function seedBlogWithPostUnderReview(
+	page: Page,
+	stamp: number
+): Promise<{ blogSlug: string; username: string; postTitle: string; postBody: string }> {
+	const username = `vote${stamp}`.slice(0, 32);
+	await signInAsNewUser(page, { username });
 	await page.goto('/signup/identity');
 	// Labels carry a required-asterisk span, so getByLabel's text match is
 	// "Password *" / "Confirm *" — substring (non-exact) keeps these stable.
@@ -126,8 +144,7 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 
 	await page.getByRole('link', { name: /create a new blog/i }).click();
 	await page.waitForURL('**/admin/new');
-	const blogTitle = `Vote Blog ${stamp}`;
-	await page.getByLabel('Title').fill(blogTitle);
+	await page.getByLabel('Title').fill(`Vote Blog ${stamp}`);
 	await page.getByLabel('Description').fill('Voting flow blog');
 	await page.getByRole('button', { name: /^create$/i }).click();
 	await page.waitForURL(/\/admin\/b\/.+\/manage$/);
@@ -147,6 +164,68 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 	await page.getByRole('button', { name: /create post/i }).click();
 	await page.waitForURL('**/admin', { timeout: 180_000 });
 
+	return { blogSlug, username, postTitle, postBody };
+}
+
+// The first half of the vote lifecycle that DOES work in the browser today: the
+// owner opens the review queue and casts an approve, which fires the authenticated,
+// can_review-gated blind-token ISSUANCE round-trip (vote-token/key + vote-token).
+// We assert the issuance HTTP calls succeed — this proves the new token-issuance
+// path is wired end-to-end through the Approve button in a real browser.
+test('browser-side vote: approve fires the blind-token issuance round-trip', async ({ page }) => {
+	test.setTimeout(300_000);
+	page.on('console', (msg) => {
+		if (msg.type() === 'error') console.error('[browser]', msg.text());
+	});
+	page.on('pageerror', (err) => console.error('[browser pageerror]', err));
+
+	const stamp = Date.now();
+	const { blogSlug, postTitle } = await seedBlogWithPostUnderReview(page, stamp);
+
+	await page.goto(`/admin/b/${blogSlug}/review`);
+	await expect(page.getByRole('heading', { name: postTitle })).toBeVisible();
+
+	// Capture the two issuance calls the Approve click triggers. Both must 200.
+	const keyResp = page.waitForResponse(
+		(r) => r.url().includes('/api/blog/vote-token/key') && r.request().method() === 'GET'
+	);
+	const tokenResp = page.waitForResponse(
+		(r) => r.url().endsWith('/api/blog/vote-token') && r.request().method() === 'POST'
+	);
+	await page
+		.getByRole('button', { name: /^approve$/i })
+		.first()
+		.click();
+
+	expect((await keyResp).status()).toBe(200);
+	expect((await tokenResp).status()).toBe(200);
+});
+
+// The SECOND half — anonymous redemption (POST /api/post/review), the tally
+// crossing quorum, the post publishing, and it surfacing on the public blog page
+// + members roster. This is the proof that the Chromium token-finalize fix works
+// in a REAL browser: requestAndBuildToken() now finalizes via the WebCrypto-free
+// finalizeInBrowser (src/lib/client/vote-token.ts) instead of the library's
+// suite.finalize, which imported the 1024-bit derived public key into WebCrypto
+// and threw OperationError in Chromium. If this test goes green in chromium, the
+// browser vote works end-to-end (issuance → finalize → redemption → publish) and
+// the produced signature is byte-identical to the library's (asserted by the
+// vote-token unit test), so the wire scheme is unchanged.
+test('browser-side vote-to-publish: approve in UI, post appears on public page', async ({
+	page
+}) => {
+	test.setTimeout(300_000);
+	page.on('console', (msg) => {
+		if (msg.type() === 'error') console.error('[browser]', msg.text());
+	});
+	page.on('pageerror', (err) => console.error('[browser pageerror]', err));
+
+	const stamp = Date.now();
+	const { blogSlug, username, postTitle, postBody } = await seedBlogWithPostUnderReview(
+		page,
+		stamp
+	);
+
 	// Owner casts approve. Threshold for a 1-member proving set is
 	// ceil(2/3 * 1) = 1, so a single approve auto-publishes.
 	await page.goto(`/admin/b/${blogSlug}/review`);
@@ -156,8 +235,8 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 		.first()
 		.click();
 
-	// After the proof + API round-trip the post leaves the under_review
-	// queue (status flips to published).
+	// After the token issuance + anonymous redemption round-trip the post leaves
+	// the under_review queue (status flips to published).
 	await expect(page.getByRole('heading', { name: postTitle })).toBeHidden({
 		timeout: 120_000
 	});
@@ -165,6 +244,17 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 	// Public page now lists it.
 	await page.goto(`/b/${blogSlug}`);
 	await expect(page.getByRole('link', { name: postTitle })).toBeVisible();
+
+	// Public, unauthenticated members roster: the "See all members" link leads
+	// to /b/<slug>/members, which lists the joined member (the owner) by name
+	// with no auth gate. The owner's email is never surfaced on this page.
+	await page.getByRole('link', { name: /see all members/i }).click();
+	await page.waitForURL(`**/b/${blogSlug}/members`);
+	await expect(page.getByRole('heading', { name: /members/i })).toBeVisible();
+	await expect(page.getByText(`@${username}`)).toBeVisible();
+	await expect(page.getByText('@example.com')).toHaveCount(0);
+
+	await page.goto(`/b/${blogSlug}`);
 	await page.getByRole('link', { name: postTitle }).click();
 	await expect(page.getByRole('heading', { name: postTitle })).toBeVisible();
 	await expect(page.getByText(postBody)).toBeVisible();

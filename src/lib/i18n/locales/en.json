@@ -38,8 +38,18 @@
 		"contributors_heading": "Contributors",
 		"contributors_note": "Any of these contributors could have written any post below — individual authorship is hidden.",
 		"posts_heading": "Posts",
+		"view_members": "See all members",
 		"not_found_heading": "Blog not found?",
 		"not_found_hint": "Maybe the blog was deleted or there was a mistype?"
+	},
+	"members": {
+		"title": "Members of {blog}",
+		"heading": "Members",
+		"count": "{count} members",
+		"note": "Everyone who has joined this blog and could have written any post. Individual authorship is never revealed.",
+		"joined": "Joined {date}",
+		"empty": "No members yet.",
+		"back_to_blog": "← Back to blog"
 	},
 	"post": {
 		"published_at": "Published {date}",
@@ -126,6 +136,12 @@
 		"display_name_saved": "Display name updated.",
 		"display_name_too_long": "display name must be 80 characters or fewer",
 		"identity_heading": "Identity",
+		"devices_blurb": "Each device you sign in on holds its own private key. Revoke a lost or unused device to drop it from every blog you can act in.",
+		"device_unnamed": "Unnamed device",
+		"device_revoke_button": "Revoke",
+		"device_revoke_confirm": "Revoke this device? It will no longer be able to post, comment, or vote in any blog. This cannot be undone.",
+		"device_revoked": "Device revoked.",
+		"device_last_active_hint": "You can't revoke your last active device — enroll another first, or use “reset all devices”.",
 		"rotate_identity_summary": "Rotate identity",
 		"rotate_identity_blurb": "Generates a new Semaphore identity, revokes the active one, and refreshes the membership snapshot of every blog you belong to. Past proofs (votes, comments, posts) keep verifying against their original snapshot.",
 		"new_password_label": "New password",

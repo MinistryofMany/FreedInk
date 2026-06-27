@@ -63,7 +63,7 @@
 			if (!identity) identity = await unlock();
 			if (!identity) return;
 
-			const group = await fetchGroup(data.blog.slug);
+			const group = await fetchGroup(data.blog.slug, 'author');
 			if (!group.identities.includes(identity.commitment.toString())) {
 				error =
 					"your active identity isn't in this blog's membership snapshot — ask an owner to refresh your role";
@@ -79,6 +79,10 @@
 
 			const res = await fetch('/api/blog/post', {
 				method: 'POST',
+				// Session-free write: never attach the session cookie. Authorization
+				// is the Semaphore proof; the request reveals nothing the proof
+				// doesn't already.
+				credentials: 'omit',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					blog_slug: data.blog.slug,
