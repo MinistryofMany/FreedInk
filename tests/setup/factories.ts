@@ -56,6 +56,16 @@ export async function makeUser(
 	return { id: user.id, username, identity };
 }
 
+// Enroll an ADDITIONAL active device commitment for an existing user (Phase 3:
+// per-device model). Returns the new device's Identity. The caller is
+// responsible for refreshing snapshots (e.g. refreshSnapshotsForUser) so the new
+// leaf enters the trees, mirroring the /api/identity enroll endpoint.
+export async function enrollDevice(userId: string, seed: string): Promise<Identity> {
+	const identity = new Identity(seed);
+	await installIdentity(userId, identity);
+	return identity;
+}
+
 export async function rotateUserIdentity(userId: string, seed: string): Promise<Identity> {
 	const identity = new Identity(seed);
 	await db.transaction(async (tx) => {

@@ -20,15 +20,17 @@ const TREE_CAPABILITY_COLUMN = {
 } as const;
 
 // Build the deterministic, current eligible set for ONE capability tree of a
-// blog: the active (non-revoked) identity commitment of each member that holds
-// `capability`, ordered strictly by USER creation time (oldest first, tiebreak
-// user id). User creation time is stable across identity rotations, so a
-// rotation by an older user doesn't shuffle the Merkle tree position of every
-// newer user — only that user's leaf changes.
+// blog: EVERY active (non-revoked) device commitment of each member that holds
+// `capability`. Per-device model (Phase 3): a member contributes K leaves, one
+// per enrolled device, so a 2-device member is provable from either device.
 //
-// Phase 2 keeps the one-commitment-per-user shape (multi-device is Phase 3);
-// the only change from the legacy single mixed group is the membership
-// predicate, which is now the capability column rather than role ∈ PROVING.
+// Ordering (design D9 — deterministic, replica-independent, leaf-local): sort by
+//   (userCreatedAt ASC, userId ASC, deviceCreatedAt ASC, idc ASC)
+// User creation time first keeps each member's leaves contiguous and stable
+// across other members' changes; within a member, device-creation-then-idc keeps
+// device order stable so adding/revoking ONE device is a local insert/delete
+// rather than a reshuffle of the whole tree. The root is a pure function of the
+// ordered commitment list, so any two replicas derive the identical root.
 async function currentEligibleIdentities(
 	blogId: string,
 	capability: TreeCapability
@@ -50,7 +52,10 @@ async function currentEligibleIdentities(
 		);
 	if (memberRows.length === 0) return [];
 
-	const userIds = memberRows.map((r) => r.userId);
+	// Map each eligible member to their stable user-creation time (for ordering).
+	const userCreatedAt = new Map<string, Date>();
+	for (const m of memberRows) userCreatedAt.set(m.userId, m.userCreatedAt);
+
 	const identityRows = await db
 		.select({
 			userId: schema.userIdentities.userId,
@@ -60,31 +65,28 @@ async function currentEligibleIdentities(
 		.from(schema.userIdentities)
 		.where(eq(schema.userIdentities.status, 'active'));
 
-	// Pick the most recently created active identity per user (Phase 2: still one
-	// leaf per user; Phase 3 emits all active commitments). Filter to this tree's
-	// members.
-	const memberSet = new Set(userIds);
-	const byUser = new Map<string, string>();
-	const byUserCreated = new Map<string, Date>();
-	for (const row of identityRows) {
-		if (!memberSet.has(row.userId)) continue;
-		const cur = byUserCreated.get(row.userId);
-		if (!cur || row.createdAt > cur) {
-			byUser.set(row.userId, row.idc);
-			byUserCreated.set(row.userId, row.createdAt);
-		}
-	}
+	// Emit ALL active commitments of each eligible member (not one per user).
+	const leaves = identityRows
+		.filter((row) => userCreatedAt.has(row.userId))
+		.map((row) => ({
+			idc: row.idc,
+			userId: row.userId,
+			userCreatedAt: userCreatedAt.get(row.userId)!,
+			deviceCreatedAt: row.createdAt
+		}));
 
-	// Sort by user creation date ASC, tiebreak by user id (UUID, stable string
-	// comparison) so the order is fully deterministic and replica-independent.
-	const sorted = memberRows
-		.filter((m) => byUser.has(m.userId))
-		.slice()
-		.sort((a, b) => {
-			const t = a.userCreatedAt.getTime() - b.userCreatedAt.getTime();
-			return t !== 0 ? t : a.userId.localeCompare(b.userId);
-		});
-	return sorted.map((m) => byUser.get(m.userId)!);
+	leaves.sort((a, b) => {
+		const t = a.userCreatedAt.getTime() - b.userCreatedAt.getTime();
+		if (t !== 0) return t;
+		if (a.userId !== b.userId) return a.userId.localeCompare(b.userId);
+		const d = a.deviceCreatedAt.getTime() - b.deviceCreatedAt.getTime();
+		if (d !== 0) return d;
+		// Final tiebreak on the commitment string: total order even if two devices
+		// share a created_at timestamp (e.g. bulk insert in tests).
+		return a.idc.localeCompare(b.idc);
+	});
+
+	return leaves.map((l) => l.idc);
 }
 
 async function rootOf(identities: string[]): Promise<string> {

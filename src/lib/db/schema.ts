@@ -61,6 +61,7 @@ export const auditEvent = pgEnum('audit_event', [
 	'email.verified',
 	'identity.created',
 	'identity.rotated',
+	'identity.device_revoked',
 	'blog.created',
 	'blog.archived',
 	'blog.unarchived',
@@ -196,6 +197,11 @@ export const userIdentities = pgTable(
 		kdfParams: jsonb('kdf_params').notNull(),
 		nonce: byteaType('nonce').notNull(),
 		status: identityStatus('status').notNull().default('active'),
+		// Optional human label for the device this commitment belongs to ("laptop",
+		// "phone"). Per-device model (Phase 3): a user may hold several active
+		// commitments, one per enrolled device. Null for pre-Phase-3 rows and when
+		// the user doesn't name the device.
+		deviceLabel: text('device_label'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		revokedAt: timestamp('revoked_at', { withTimezone: true })
 	},

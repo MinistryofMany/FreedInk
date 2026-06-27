@@ -188,23 +188,30 @@ describe('identity flow', () => {
 		expect(json.identity.kdf).toBe('pbkdf2-sha256');
 	});
 
-	it('POST /api/identity rejects when an active identity already exists (409)', async () => {
+	it('POST /api/identity enrolls a SECOND device (per-device model, Phase 3)', async () => {
+		// makeUser already installed device #1. Enrolling a distinct commitment as a
+		// second device now succeeds (the old single-active 409 block is gone).
 		const user = await makeUser({ username: 'u' });
 		const { cookie } = await asUser(user);
 		const res = await postJSON(
 			'/api/identity',
 			{
-				idc: '1',
+				idc: '12345678901234567890',
 				public_key: '[1,2]',
 				ciphertext: 'AA',
 				salt: 'AA',
 				nonce: 'AA',
 				kdf: 'pbkdf2-sha256',
-				kdf_params: { name: 'PBKDF2', iterations: 600_000, hash: 'SHA-256' }
+				kdf_params: { name: 'PBKDF2', iterations: 600_000, hash: 'SHA-256' },
+				device_label: 'second-device'
 			},
 			{ cookie }
 		);
-		expect(res.status).toBe(409);
+		expect(res.status).toBe(200);
+		// Both devices are now active.
+		const list = await getJSON('/api/identity', { cookie });
+		const json = await list.json();
+		expect(json.identities).toHaveLength(2);
 	});
 });
 

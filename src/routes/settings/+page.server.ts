@@ -12,6 +12,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			.select({
 				id: schema.userIdentities.id,
 				idc: schema.userIdentities.idc,
+				deviceLabel: schema.userIdentities.deviceLabel,
 				status: schema.userIdentities.status,
 				createdAt: schema.userIdentities.createdAt,
 				revokedAt: schema.userIdentities.revokedAt
@@ -39,6 +40,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 		ip: s.ip,
 		current: s.id === current
 	}));
+	const activeDeviceCount = identities.filter((i) => i.status === 'active').length;
 	return {
 		user: {
 			id: locals.user.id,
@@ -47,6 +49,9 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			email: locals.user.email
 		},
 		identities,
+		// Drives the device-revoke UI: revoking the LAST active device is blocked
+		// server-side (you'd lose the ability to act), so the UI disables it too.
+		activeDeviceCount,
 		sessions
 	};
 };
