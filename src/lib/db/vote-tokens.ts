@@ -2,6 +2,7 @@ import { db, schema } from './client';
 import { and, eq, isNull } from 'drizzle-orm';
 import { generateVoteTokenKey } from '$lib/server/vote-token';
 import { isUniqueViolation } from '$lib/server/db-errors';
+import { log } from '$lib/server/log';
 
 // Fetch the blog's ACTIVE (non-retired) vote-token issuer key, creating one on
 // first use. Concurrency-safe: a unique partial index
@@ -40,6 +41,28 @@ export async function getOrCreateVoteTokenKey(blogId: string): Promise<{
 		const winner = await activeKey(blogId);
 		if (winner) return winner;
 		throw new Error('failed to create or read vote-token key');
+	}
+}
+
+// Pre-generation (LOCAL mode): ensure a key exists for the blog WITHOUT blocking
+// the caller. Local safe-prime keygen is ~1s; this runs it off the request path
+// so a freshly-created under_review post (or a blog's 2nd reviewer) warms the key
+// before the first vote is attempted. Idempotent and concurrency-safe:
+// getOrCreateVoteTokenKey no-ops when a key already exists and loses-the-race
+// re-reads on a unique violation. A failure here is non-fatal (the on-demand
+// getOrCreateVoteTokenKey at issuance time is the hard guarantee) — we log it.
+//
+// Concurrency note: a second in-flight keygen for the same blog can still race to
+// the insert and lose on the partial unique index; that path is handled inside
+// getOrCreateVoteTokenKey, which re-reads the winner. So at most one wasted ~1s
+// keygen, never a duplicate active key.
+export async function ensureLocalVoteTokenKey(blogId: string): Promise<void> {
+	try {
+		const existing = await getVoteTokenPublicKey(blogId);
+		if (existing) return;
+		await getOrCreateVoteTokenKey(blogId);
+	} catch (err) {
+		log.warn({ err, blogId }, 'local vote-token key pre-gen failed');
 	}
 }
 
@@ -107,4 +130,25 @@ export async function recordIssuance(opts: {
 		})
 		.returning({ id: schema.voteTokenIssuances.id });
 	return inserted.length > 0;
+}
+
+// Roll back an issuance reservation. Called ONLY when signing fails AFTER a fresh
+// recordIssuance (e.g. the signer returned `pending`/`rate_limited`, or threw on a
+// transient transport error) — so the user's single one-per-(user,version) token
+// is not burned by a failure they did not cause and can retry. This mirrors
+// Signet's own "reservation rolled back if signing fails" behavior on the
+// FreedInk side. It is a no-op if the row is already gone. It must NEVER be called
+// after a successful sign: that would let a user re-issue.
+export async function releaseIssuance(opts: {
+	postVersionId: string;
+	userId: string;
+}): Promise<void> {
+	await db
+		.delete(schema.voteTokenIssuances)
+		.where(
+			and(
+				eq(schema.voteTokenIssuances.postVersionId, opts.postVersionId),
+				eq(schema.voteTokenIssuances.userId, opts.userId)
+			)
+		);
 }
