@@ -54,9 +54,9 @@ describe('partially-blind RSA client finalize under jsdom', () => {
 		// SERVER: verify our signature with the UNMODIFIED library (wire compat).
 		expect(await SUITE.verify(publicKey, mine, prepared, info)).toBe(true);
 		// Cross-version replay is impossible: a different info fails.
-		expect(
-			await SUITE.verify(publicKey, mine, prepared, new TextEncoder().encode('other'))
-		).toBe(false);
+		expect(await SUITE.verify(publicKey, mine, prepared, new TextEncoder().encode('other'))).toBe(
+			false
+		);
 	}, 30_000);
 
 	it('finalizeInBrowser rejects a tampered blind signature (self-check intact)', async () => {

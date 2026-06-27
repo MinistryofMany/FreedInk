@@ -61,11 +61,11 @@ describe('recordIssuance', () => {
 			nullifier: 'ti-n2',
 			status: 'under_review'
 		});
-		expect(await recordIssuance({ blogId, postVersionId: post.version.id, userId: reviewer.id })).toBe(
-			true
-		);
-		expect(await recordIssuance({ blogId, postVersionId: post.version.id, userId: reviewer.id })).toBe(
-			false
-		);
+		expect(
+			await recordIssuance({ blogId, postVersionId: post.version.id, userId: reviewer.id })
+		).toBe(true);
+		expect(
+			await recordIssuance({ blogId, postVersionId: post.version.id, userId: reviewer.id })
+		).toBe(false);
 	});
 });

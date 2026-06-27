@@ -115,10 +115,7 @@
 			// .message; falling closed-and-silent there hid a real bug. Fall back to
 			// the error name, then a generic line, so the user always sees something.
 			const err = e as Error;
-			error =
-				err?.message?.trim() ||
-				err?.name ||
-				'Could not cast your vote. Please try again.';
+			error = err?.message?.trim() || err?.name || 'Could not cast your vote. Please try again.';
 		} finally {
 			busy = false;
 		}
