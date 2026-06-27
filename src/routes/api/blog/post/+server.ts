@@ -78,7 +78,8 @@ export const POST: RequestHandler = async (event) => {
 	if (submit_for_review) {
 		await audit(event, {
 			event: 'post.submitted',
-			actorUserId: locals.user.id,
+			// Anonymous content action: record IP/UA but never the acting member.
+			anonymous: true,
 			subjectBlogId: blog.id,
 			metadata: { post_id: result.post.id, version_id: result.version.id, title }
 		});

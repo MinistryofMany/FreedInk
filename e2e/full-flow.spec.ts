@@ -115,7 +115,8 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 	page.on('pageerror', (err) => console.error('[browser pageerror]', err));
 
 	const stamp = Date.now();
-	await signInAsNewUser(page, { username: `vote${stamp}`.slice(0, 32) });
+	const username = `vote${stamp}`.slice(0, 32);
+	await signInAsNewUser(page, { username });
 	await page.goto('/signup/identity');
 	// Labels carry a required-asterisk span, so getByLabel's text match is
 	// "Password *" / "Confirm *" — substring (non-exact) keeps these stable.
@@ -165,6 +166,17 @@ test('browser-side vote-to-publish: approve in UI, post appears on public page',
 	// Public page now lists it.
 	await page.goto(`/b/${blogSlug}`);
 	await expect(page.getByRole('link', { name: postTitle })).toBeVisible();
+
+	// Public, unauthenticated members roster: the "See all members" link leads
+	// to /b/<slug>/members, which lists the joined member (the owner) by name
+	// with no auth gate. The owner's email is never surfaced on this page.
+	await page.getByRole('link', { name: /see all members/i }).click();
+	await page.waitForURL(`**/b/${blogSlug}/members`);
+	await expect(page.getByRole('heading', { name: /members/i })).toBeVisible();
+	await expect(page.getByText(`@${username}`)).toBeVisible();
+	await expect(page.getByText('@example.com')).toHaveCount(0);
+
+	await page.goto(`/b/${blogSlug}`);
 	await page.getByRole('link', { name: postTitle }).click();
 	await expect(page.getByRole('heading', { name: postTitle })).toBeVisible();
 	await expect(page.getByText(postBody)).toBeVisible();

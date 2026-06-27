@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { createUserWithEmail } from '$lib/db/users';
 import { createBlog, getBlogById } from '$lib/db/blogs';
-import { listMembers, getActiveMember, setRole, removeMember, isFirstOwner } from '$lib/db/members';
+import {
+	listMembers,
+	listPublicMembers,
+	getActiveMember,
+	setRole,
+	removeMember,
+	isFirstOwner
+} from '$lib/db/members';
 import { refreshSnapshot, getSnapshotByRoot, refreshSnapshotsForUser } from '$lib/db/snapshots';
 import { db, schema } from '$lib/db/client';
 import { and, eq } from 'drizzle-orm';
@@ -67,6 +74,49 @@ describe('createBlog', () => {
 		expect(snaps).toHaveLength(1);
 		expect(snaps[0].eligibleCount).toBe(1);
 		expect(snaps[0].identities).toHaveLength(1);
+	});
+});
+
+describe('listPublicMembers', () => {
+	it('returns joined members with only non-sensitive fields and no email', async () => {
+		const owner = await createUserWithEmail('owner@secret.example', 'pub-owner');
+		await installIdentity(owner.id, 'pub-owner');
+		const author = await createUserWithEmail('author@secret.example', 'pub-author');
+		await installIdentity(author.id, 'pub-author');
+
+		const { id: blogId } = await createBlog(owner.id, 'Pub Blog', null);
+		await setRole(blogId, author.id, 'author', owner.id);
+
+		const members = await listPublicMembers(blogId);
+		expect(members).toHaveLength(2);
+
+		// Only username, displayName, role, joinedAt are surfaced — never email
+		// and never the internal user id.
+		const keys = Object.keys(members[0]).sort();
+		expect(keys).toEqual(['displayName', 'joinedAt', 'role', 'username']);
+		for (const m of members) {
+			expect(m).not.toHaveProperty('email');
+			expect(m).not.toHaveProperty('id');
+			expect(m).not.toHaveProperty('userId');
+		}
+		const usernames = members.map((m) => m.username).sort();
+		expect(usernames).toEqual(['pub-author', 'pub-owner']);
+	});
+
+	it('excludes removed members (removed_at IS NOT NULL)', async () => {
+		const owner = await createUserWithEmail('o@x.example', 'pub-o2');
+		await installIdentity(owner.id, 'pub-o2');
+		const author = await createUserWithEmail('a@x.example', 'pub-a2');
+		await installIdentity(author.id, 'pub-a2');
+
+		const { id: blogId } = await createBlog(owner.id, 'B2', null);
+		await setRole(blogId, author.id, 'author', owner.id);
+		expect(await listPublicMembers(blogId)).toHaveLength(2);
+
+		await removeMember(blogId, author.id);
+		const remaining = await listPublicMembers(blogId);
+		expect(remaining).toHaveLength(1);
+		expect(remaining[0].username).toBe('pub-o2');
 	});
 });
 

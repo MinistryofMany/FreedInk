@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getBlogBySlug } from '$lib/db/blogs';
 import { listPublishedPostsPage } from '$lib/db/posts';
-import { listMembers } from '$lib/db/members';
+import { listPublicMembers } from '$lib/db/members';
 import { parseLimit } from '$lib/pagination';
 
 export const load: PageServerLoad = async ({ params, url }) => {
@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	const limit = parseLimit(url.searchParams.get('limit'));
 	const [posts, members] = await Promise.all([
 		listPublishedPostsPage(blog.id, { cursor, limit }),
-		listMembers(blog.id)
+		listPublicMembers(blog.id)
 	]);
 	return {
 		Blog: {
@@ -28,8 +28,11 @@ export const load: PageServerLoad = async ({ params, url }) => {
 			// llms.txt.
 			authors: members
 				.filter((m) => m.role !== 'commenter')
-				.map((m) => m.user.displayName?.trim() || m.user.username)
-				.sort((a, b) => a.localeCompare(b))
+				.map((m) => m.displayName?.trim() || m.username)
+				.sort((a, b) => a.localeCompare(b)),
+			// Total count of joined members (the visible anonymity set, including
+			// commenters). Drives the "See all members" link to the public roster.
+			memberCount: members.length
 		},
 		Posts: posts.items.map((p) => ({
 			id: p.id,

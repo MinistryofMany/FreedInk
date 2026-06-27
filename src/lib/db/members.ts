@@ -27,6 +27,29 @@ export async function listMembers(blogId: string) {
 	return rows;
 }
 
+// Public, unauthenticated roster of a blog's JOINED members — the visible
+// anonymity set ("who could have written any post"). Intentionally NOT gated by
+// owner/manage roles: this is meant to be readable by anyone. Exposes only
+// non-sensitive fields (username, displayName, role, joinedAt) and NEVER email
+// or pending/unaccepted invitations (those live in a separate `invitations`
+// table that this function does not touch). Only active memberships
+// (`removed_at IS NULL`) are returned. Structured so a per-blog visibility
+// toggle could gate it later; for v1 it is always public.
+export async function listPublicMembers(blogId: string) {
+	const rows = await db
+		.select({
+			role: schema.blogMembers.role,
+			joinedAt: schema.blogMembers.addedAt,
+			username: schema.users.username,
+			displayName: schema.users.displayName
+		})
+		.from(schema.blogMembers)
+		.innerJoin(schema.users, eq(schema.users.id, schema.blogMembers.userId))
+		.where(and(eq(schema.blogMembers.blogId, blogId), isNull(schema.blogMembers.removedAt)))
+		.orderBy(schema.blogMembers.addedAt);
+	return rows;
+}
+
 export async function listMembersByRole(blogId: string, role: MemberRole) {
 	const all = await listMembers(blogId);
 	return all.filter((m) => m.role === role);

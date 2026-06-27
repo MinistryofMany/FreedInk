@@ -19,6 +19,16 @@ async function eventsFor(actor: string): Promise<AuditEvent[]> {
 	return rows.map((r) => r.event);
 }
 
+// All audit rows for a blog of a given event type, newest first. Used to assert
+// the anonymous content actions (which carry NO actorUserId) still landed.
+async function eventRowsForBlog(subjectBlog: string, event: AuditEvent) {
+	return db
+		.select()
+		.from(schema.auditLog)
+		.where(and(eq(schema.auditLog.subjectBlogId, subjectBlog), eq(schema.auditLog.event, event)))
+		.orderBy(desc(schema.auditLog.createdAt));
+}
+
 async function lastEvent(filter: { actor?: string; subjectBlog?: string }) {
 	const conds = [];
 	if (filter.actor) conds.push(eq(schema.auditLog.actorUserId, filter.actor));
@@ -171,8 +181,14 @@ describe('audit log: post.submitted, review.cast, post.published', () => {
 		}
 		const { version_id } = await submit.json();
 
-		const events = await eventsFor(owner.id);
-		expect(events).toContain('post.submitted');
+		// post.submitted is an anonymous content action: it must NOT be linkable
+		// to the submitting user, but must still land (with IP retained).
+		expect(await eventsFor(owner.id)).not.toContain('post.submitted');
+		const submitted = await eventRowsForBlog(blog.id, 'post.submitted');
+		expect(submitted).toHaveLength(1);
+		expect(submitted[0].actorUserId).toBeNull();
+		expect(submitted[0].ip).not.toBeNull();
+		expect((submitted[0].metadata as Record<string, unknown>)?.version_id).toBe(version_id);
 
 		// rev1 votes approve.
 		const rev1Sess = await asUser(rev1);
@@ -188,8 +204,14 @@ describe('audit log: post.submitted, review.cast, post.published', () => {
 			{ cookie: rev1Sess.cookie }
 		);
 		expect(v1.status).toBe(200);
+		// review.cast is anonymous: not attributable to rev1, but recorded.
 		const ev1 = await eventsFor(rev1.id);
-		expect(ev1).toContain('review.cast');
+		expect(ev1).not.toContain('review.cast');
+		const cast1 = await eventRowsForBlog(blog.id, 'review.cast');
+		expect(cast1).toHaveLength(1);
+		expect(cast1[0].actorUserId).toBeNull();
+		expect(cast1[0].ip).not.toBeNull();
+		// The deciding-vote state-change has not fired yet (only one approve).
 		expect(ev1).not.toContain('post.published');
 
 		// rev2 votes approve → flip to published.
@@ -207,8 +229,20 @@ describe('audit log: post.submitted, review.cast, post.published', () => {
 		);
 		expect(v2.status).toBe(200);
 		const ev2 = await eventsFor(rev2.id);
-		expect(ev2).toContain('review.cast');
-		expect(ev2).toContain('post.published');
+		// rev2's vote itself is anonymous...
+		expect(ev2).not.toContain('review.cast');
+		const cast2 = await eventRowsForBlog(blog.id, 'review.cast');
+		expect(cast2).toHaveLength(2);
+		expect(cast2.every((r) => r.actorUserId === null)).toBe(true);
+		// ...and the resulting publish state-change is ALSO anonymous now
+		// (Phase 0): the deciding reviewer must never be recorded, so the publish
+		// event is NOT attributable to rev2 even though their vote triggered it.
+		expect(ev2).not.toContain('post.published');
+		const publishedRows = await eventRowsForBlog(blog.id, 'post.published');
+		expect(publishedRows).toHaveLength(1);
+		expect(publishedRows[0].actorUserId).toBeNull();
+		// IP/UA are still captured for abuse investigation.
+		expect(publishedRows[0].ip).not.toBeNull();
 	}, 120_000);
 });
 
@@ -251,8 +285,12 @@ describe('audit log: comment.posted', () => {
 			{ cookie: ownerSess.cookie }
 		);
 		expect(c.status).toBe(200);
-		const events = await eventsFor(owner.id);
-		expect(events).toContain('comment.posted');
+		// comment.posted is anonymous: recorded but not attributable to the user.
+		expect(await eventsFor(owner.id)).not.toContain('comment.posted');
+		const comments = await eventRowsForBlog(blog.id, 'comment.posted');
+		expect(comments).toHaveLength(1);
+		expect(comments[0].actorUserId).toBeNull();
+		expect(comments[0].ip).not.toBeNull();
 	}, 90_000);
 });
 

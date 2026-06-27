@@ -115,7 +115,8 @@ export const POST: RequestHandler = async (event) => {
 
 	await audit(event, {
 		event: 'review.cast',
-		actorUserId: locals.user.id,
+		// Anonymous content action: record IP/UA but never the acting member.
+		anonymous: true,
 		subjectBlogId: row.post.blogId,
 		metadata: {
 			post_id: row.post.id,
@@ -131,7 +132,10 @@ export const POST: RequestHandler = async (event) => {
 	if (result.status === 'published') {
 		await audit(event, {
 			event: 'post.published',
-			actorUserId: locals.user.id,
+			// Anonymous content action: the deciding vote is the moment a post
+			// crosses quorum. Stamping the reviewer who happened to cast it would
+			// de-anonymize that vote, so never record the acting member.
+			anonymous: true,
 			subjectBlogId: row.post.blogId,
 			metadata: {
 				post_id: row.post.id,
@@ -146,7 +150,9 @@ export const POST: RequestHandler = async (event) => {
 	} else if (result.status === 'rejected') {
 		await audit(event, {
 			event: 'post.rejected',
-			actorUserId: locals.user.id,
+			// Anonymous content action: same reasoning as post.published — the
+			// reviewer whose vote crossed the reject quorum must never be recorded.
+			anonymous: true,
 			subjectBlogId: row.post.blogId,
 			metadata: {
 				post_id: row.post.id,

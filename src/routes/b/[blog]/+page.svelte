@@ -71,6 +71,9 @@
 				{data.Blog.authors.join(', ')}
 			</p>
 			<p class="contributors-note">{$_('blog.contributors_note')}</p>
+			<p class="members-link">
+				<a href="/b/{data.Blog.slug}/members">{$_('blog.view_members')}</a>
+			</p>
 		</div>
 	</header>
 
@@ -151,6 +154,12 @@
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
 		color: var(--color-text-muted);
+		margin: 0;
+	}
+
+	.members-link {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
 		margin: 0;
 	}
 

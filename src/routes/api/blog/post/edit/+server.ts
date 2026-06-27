@@ -90,7 +90,8 @@ export const POST: RequestHandler = async (event) => {
 
 	await audit(event, {
 		event: 'post.edited',
-		actorUserId: locals.user.id,
+		// Anonymous content action: record IP/UA but never the acting member.
+		anonymous: true,
 		subjectBlogId: row.post.blogId,
 		metadata: {
 			post_id: row.post.id,

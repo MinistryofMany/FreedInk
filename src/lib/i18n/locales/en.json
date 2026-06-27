@@ -38,8 +38,18 @@
 		"contributors_heading": "Contributors",
 		"contributors_note": "Any of these contributors could have written any post below — individual authorship is hidden.",
 		"posts_heading": "Posts",
+		"view_members": "See all members",
 		"not_found_heading": "Blog not found?",
 		"not_found_hint": "Maybe the blog was deleted or there was a mistype?"
+	},
+	"members": {
+		"title": "Members of {blog}",
+		"heading": "Members",
+		"count": "{count} members",
+		"note": "Everyone who has joined this blog and could have written any post. Individual authorship is never revealed.",
+		"joined": "Joined {date}",
+		"empty": "No members yet.",
+		"back_to_blog": "← Back to blog"
 	},
 	"post": {
 		"published_at": "Published {date}",
