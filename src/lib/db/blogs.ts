@@ -3,6 +3,7 @@ import type { Blog, MemberRole } from './schema';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { sluggify } from '$lib/utils';
 import { refreshSnapshot } from './snapshots';
+import { capabilitiesForRole } from './members';
 import { decodeCursor, encodeCursor, type Page } from '$lib/pagination';
 
 export async function listBlogs() {
@@ -103,6 +104,7 @@ export async function createBlog(
 		blogId: blog.id,
 		userId,
 		role: 'owner',
+		...capabilitiesForRole('owner'),
 		addedBy: userId
 	});
 	await refreshSnapshot(blog.id);

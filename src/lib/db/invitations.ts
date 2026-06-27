@@ -13,6 +13,7 @@ import { error } from '@sveltejs/kit';
 import type { MemberRole } from './schema';
 import { randomToken } from '$lib/server/session';
 import { refreshSnapshot } from './snapshots';
+import { capabilitiesForRole } from './members';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -150,6 +151,7 @@ export async function acceptInvitation(
 				blogId: ctx.blogId,
 				userId: input.userId,
 				role: ctx.role,
+				...capabilitiesForRole(ctx.role),
 				addedBy: ctx.inviterUserId
 			});
 			if (PROVING.includes(ctx.role)) provingDelta = true;

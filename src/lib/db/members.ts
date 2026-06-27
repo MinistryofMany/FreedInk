@@ -1,12 +1,42 @@
 import { db, schema } from './client';
 import { and, eq, isNull } from 'drizzle-orm';
-import type { MemberRole } from './schema';
+import type { MemberRole, Capability } from './schema';
 import { refreshSnapshot } from './snapshots';
 
 const PROVING: MemberRole[] = ['owner', 'editor', 'reviewer', 'author'];
 
 function affectsProvingSet(...roles: MemberRole[]) {
 	return roles.some((r) => PROVING.includes(r));
+}
+
+// The capability column names on blog_members, indexed by capability. Single
+// source of truth so callers never hard-code 'can_author' etc.
+export const CAPABILITY_COLUMN = {
+	author: schema.blogMembers.canAuthor,
+	review: schema.blogMembers.canReview,
+	comment: schema.blogMembers.canComment,
+	admin: schema.blogMembers.canAdmin
+} as const;
+
+export type CapabilitySet = {
+	canAuthor: boolean;
+	canReview: boolean;
+	canComment: boolean;
+	canAdmin: boolean;
+};
+
+// Derive the capability booleans from a legacy role. This is the SAME mapping
+// the 0007 migration backfill uses; keep them in lockstep. Used at every
+// blog_members insert site so the columns stay consistent while `role` is still
+// the write path (Phase 1). Once `role` is dropped, capabilities become the
+// only write path and this collapses into setCapability.
+export function capabilitiesForRole(role: MemberRole): CapabilitySet {
+	return {
+		canAuthor: role === 'owner' || role === 'editor' || role === 'author',
+		canReview: role === 'owner' || role === 'editor' || role === 'reviewer',
+		canComment: true, // every current role can comment
+		canAdmin: role === 'owner'
+	};
 }
 
 export async function listMembers(blogId: string) {
@@ -91,6 +121,7 @@ export async function setRole(
 			blogId,
 			userId: targetUserId,
 			role: newRole,
+			...capabilitiesForRole(newRole),
 			addedBy: actingUserId
 		});
 	});
@@ -98,6 +129,94 @@ export async function setRole(
 	if (wasProving || willBeProving) {
 		await refreshSnapshot(blogId);
 	}
+}
+
+// Read a single capability on a member's active row. Returns false when the
+// user is not an active member of the blog. This is the capability-model
+// equivalent of hasRole and the predicate the per-capability trees use.
+export async function hasCapability(
+	blogId: string,
+	userId: string,
+	capability: Capability
+): Promise<boolean> {
+	const column = CAPABILITY_COLUMN[capability];
+	const rows = await db
+		.select({ has: column })
+		.from(schema.blogMembers)
+		.where(
+			and(
+				eq(schema.blogMembers.blogId, blogId),
+				eq(schema.blogMembers.userId, userId),
+				isNull(schema.blogMembers.removedAt)
+			)
+		)
+		.limit(1);
+	return rows[0]?.has === true;
+}
+
+// Grant or revoke one capability on a member's active row, in place. Unlike
+// setRole (which soft-removes + reinserts to change the single enum), a
+// capability flip is an independent column update. Returns the member's
+// capability set before and after so callers can write an attributed
+// permission-change log (Phase 5). When the flipped capability backs a Semaphore
+// tree (author/comment — NOT review/admin), the affected tree is refreshed so
+// the leaf set reflects the change immediately.
+//
+// `role` is also re-derived to keep the legacy label coherent while it still
+// exists (it is the union label closest to the capability set). This is a
+// best-effort label only; capabilities are the source of truth.
+export async function setCapability(
+	blogId: string,
+	targetUserId: string,
+	capability: Capability,
+	value: boolean
+): Promise<{ before: CapabilitySet; after: CapabilitySet } | null> {
+	const existing = await getActiveMember(blogId, targetUserId);
+	if (!existing) return null;
+
+	const before: CapabilitySet = {
+		canAuthor: existing.canAuthor,
+		canReview: existing.canReview,
+		canComment: existing.canComment,
+		canAdmin: existing.canAdmin
+	};
+	const after: CapabilitySet = { ...before };
+	const field = (
+		{
+			author: 'canAuthor',
+			review: 'canReview',
+			comment: 'canComment',
+			admin: 'canAdmin'
+		} as const
+	)[capability];
+	after[field] = value;
+
+	// No-op: nothing to write, no tree to refresh.
+	if (before[field] === value) return { before, after };
+
+	await db
+		.update(schema.blogMembers)
+		.set({ [field]: value, role: roleLabelFor(after) })
+		.where(eq(schema.blogMembers.id, existing.id));
+
+	// Only author/comment back a tree; review and admin do not. Phase 2 makes
+	// refreshSnapshot capability-aware, at which point this refreshes exactly the
+	// affected tree.
+	if (capability === 'author' || capability === 'comment') {
+		await refreshSnapshot(blogId);
+	}
+	return { before, after };
+}
+
+// Derive the legacy single-word role label from a capability set. Picks the
+// closest legacy union; used to keep blog_members.role coherent for RSS/llms.txt
+// while the column still exists. Dropped with the column.
+export function roleLabelFor(caps: CapabilitySet): MemberRole {
+	if (caps.canAdmin) return 'owner';
+	if (caps.canAuthor && caps.canReview) return 'editor';
+	if (caps.canReview) return 'reviewer';
+	if (caps.canAuthor) return 'author';
+	return 'commenter';
 }
 
 export async function removeMember(blogId: string, targetUserId: string): Promise<void> {

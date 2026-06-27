@@ -280,6 +280,18 @@ export const blogMembers = pgTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		role: memberRole('role').notNull(),
+		// Independent boolean capabilities — the source of truth for what a member
+		// may do. `role` is kept during the migration as a derived display label
+		// (RSS/llms.txt/roster want one word) and is dropped once nothing reads it.
+		// Capabilities back the per-capability Semaphore trees (can_author /
+		// can_comment) and gate vote-token issuance (can_review) and admin actions
+		// (can_admin). Backfilled from `role` in the migration:
+		//   owner→all; editor→author+review+comment; reviewer→review+comment;
+		//   author→author+comment; commenter→comment.
+		canAuthor: boolean('can_author').notNull().default(false),
+		canReview: boolean('can_review').notNull().default(false),
+		canComment: boolean('can_comment').notNull().default(false),
+		canAdmin: boolean('can_admin').notNull().default(false),
 		addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
 		addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
 		removedAt: timestamp('removed_at', { withTimezone: true })
@@ -816,3 +828,15 @@ export type PostComment = typeof postComments.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type MemberRole = (typeof memberRole.enumValues)[number];
 export type PostStatus = (typeof postStatus.enumValues)[number];
+
+// Independent member capabilities (the source of truth replacing the single
+// role enum). The three *proving* capabilities (author, review, comment) plus
+// admin. Only author + comment back a Semaphore tree (review gates blind
+// vote-token issuance, admin gates non-anonymous admin actions). The DB columns
+// are can_author / can_review / can_comment / can_admin on blog_members.
+export type Capability = 'author' | 'review' | 'comment' | 'admin';
+
+// Capabilities that have their own per-capability Semaphore membership tree.
+// NOT 'review' (votes are blind tokens, not a reviewers tree) and NOT 'admin'
+// (admin actions are deliberately session-authenticated, never proof-anonymous).
+export type TreeCapability = 'author' | 'comment';
