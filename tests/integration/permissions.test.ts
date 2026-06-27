@@ -111,4 +111,41 @@ describe('changeCapabilities', () => {
 		expect(after.canAdmin).toBe(false);
 		expect(await countAdmins(blogId)).toBe(1);
 	});
+
+	it('two concurrent demotions cannot strand a blog at zero admins (TOCTOU)', async () => {
+		const a = await createUserWithEmail('cc-a@x.com', 'cc-a');
+		await installIdentity(a.id, 'cc-a');
+		const b = await createUserWithEmail('cc-b@x.com', 'cc-b');
+		await installIdentity(b.id, 'cc-b');
+		const { id: blogId } = await createBlog(a.id, 'CC', null);
+		await setRole(blogId, b.id, 'owner', a.id); // exactly two admins
+		expect(await countAdmins(blogId)).toBe(2);
+
+		// Fire both demotions concurrently. The FOR UPDATE lock on the admin rows
+		// serializes them: one commits (count drops to 1), the other then re-counts
+		// inside its locked txn, sees the last admin, and is rejected with 409.
+		const results = await Promise.allSettled([
+			changeCapabilities({
+				blogId,
+				targetUserId: a.id,
+				actorUserId: a.id,
+				patch: { admin: false }
+			}),
+			changeCapabilities({
+				blogId,
+				targetUserId: b.id,
+				actorUserId: b.id,
+				patch: { admin: false }
+			})
+		]);
+
+		const fulfilled = results.filter((r) => r.status === 'fulfilled');
+		const rejected = results.filter((r) => r.status === 'rejected');
+		// Exactly one demotion succeeds; the other is blocked by the last-admin guard.
+		expect(fulfilled).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+		expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
+		// The invariant holds: the blog still has its one admin, never zero.
+		expect(await countAdmins(blogId)).toBe(1);
+	});
 });

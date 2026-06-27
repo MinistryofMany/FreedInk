@@ -294,18 +294,50 @@ export async function changeCapabilities(opts: {
 		canAdmin: existing.canAdmin
 	};
 
-	// Last-admin guard: revoking can_admin from the final admin is blocked.
-	if (opts.patch.admin === false && existing.canAdmin) {
-		if ((await countAdmins(opts.blogId)) <= 1) {
-			throw error(409, 'cannot remove the last admin of this blog');
-		}
+	// Track the running capability set so the role label + the permission_changes
+	// log reflect every applied change.
+	let after: CapabilitySet = { ...before };
+
+	// Admin REVOCATION is the only operation with a cross-row invariant (a blog
+	// must keep >= 1 admin), so it must be atomic against a concurrent demotion.
+	// We do the count-and-revoke inside ONE transaction that first locks every
+	// active admin row of the blog (SELECT … FOR UPDATE): a second concurrent
+	// demotion blocks on that lock until this txn commits, then re-counts and
+	// correctly sees the reduced count — closing the check-then-act TOCTOU that a
+	// plain countAdmins() + separate update would leave open (two demotions could
+	// each read count=2 and both succeed, stranding the blog at zero admins).
+	const revokingAdmin = opts.patch.admin === false && existing.canAdmin;
+	if (revokingAdmin) {
+		await db.transaction(async (tx) => {
+			const adminRows = await tx
+				.select({ id: schema.blogMembers.id })
+				.from(schema.blogMembers)
+				.where(
+					and(
+						eq(schema.blogMembers.blogId, opts.blogId),
+						isNull(schema.blogMembers.removedAt),
+						eq(schema.blogMembers.canAdmin, true)
+					)
+				)
+				.for('update');
+			// Re-count INSIDE the locked txn. <= 1 means the target is the last admin.
+			if (adminRows.length <= 1) {
+				throw error(409, 'cannot remove the last admin of this blog');
+			}
+			after.canAdmin = false;
+			await tx
+				.update(schema.blogMembers)
+				.set({ canAdmin: false, role: roleLabelFor(after) })
+				.where(eq(schema.blogMembers.id, existing.id));
+		});
 	}
 
-	// Apply each changed capability via setCapability (which refreshes the right
-	// tree for author/comment). setCapability also keeps the legacy role label
-	// coherent.
-	let after: CapabilitySet = before;
+	// Apply the remaining capability changes via setCapability (which refreshes the
+	// right tree for author/comment and keeps the legacy role label coherent).
+	// Admin is handled above when it is a revocation; an admin GRANT has no
+	// cross-row invariant, so it flows through setCapability like the others.
 	for (const cap of ['author', 'review', 'comment', 'admin'] as Capability[]) {
+		if (cap === 'admin' && revokingAdmin) continue; // already applied atomically
 		const want = opts.patch[cap];
 		if (want === undefined) continue;
 		const res = await setCapability(opts.blogId, opts.targetUserId, cap, want);
