@@ -1,69 +1,38 @@
 import { db, schema } from './client';
 import { and, eq, isNull } from 'drizzle-orm';
-import { generateVoteTokenKey } from '$lib/server/vote-token';
 import { isUniqueViolation } from '$lib/server/db-errors';
-import { log } from '$lib/server/log';
+import type {
+	IssuanceStore,
+	KeyStore,
+	IssuerKeyPair,
+	PublicKeySpki,
+	TokenScope
+} from '@ministryofmany/blind-token/server';
 
-// Fetch the blog's ACTIVE (non-retired) vote-token issuer key, creating one on
-// first use. Concurrency-safe: a unique partial index
-// (blog_vote_token_keys_blog_active_key) guarantees at most one active key per
-// blog, so a racing second insert hits the conflict and we re-read the winner.
-export async function getOrCreateVoteTokenKey(blogId: string): Promise<{
-	id: string;
-	publicKeySpki: Uint8Array;
-	privateKeyPkcs8: Uint8Array;
-}> {
-	const existing = await activeKey(blogId);
-	if (existing) return existing;
-
-	const generated = await generateVoteTokenKey();
-	try {
-		const [row] = await db
-			.insert(schema.blogVoteTokenKeys)
-			.values({
-				blogId,
-				publicKeySpki: generated.publicKeySpki,
-				privateKeyPkcs8: generated.privateKeyPkcs8
-			})
-			.returning({
-				id: schema.blogVoteTokenKeys.id,
-				publicKeySpki: schema.blogVoteTokenKeys.publicKeySpki,
-				privateKeyPkcs8: schema.blogVoteTokenKeys.privateKeyPkcs8
-			});
-		return row;
-	} catch (e) {
-		// Only a unique-violation means we lost the race to a concurrent insert
-		// (the partial unique index blog_vote_token_keys_blog_active_key allows one
-		// active key per blog) — in that case the winner's key is now active and we
-		// re-read it. Any other error (connection drop, serialization failure, etc.)
-		// is a real fault and must propagate, not be silently swallowed.
-		if (!isUniqueViolation(e)) throw e;
-		const winner = await activeKey(blogId);
-		if (winner) return winner;
-		throw new Error('failed to create or read vote-token key');
-	}
-}
-
-// Pre-generation (LOCAL mode): ensure a key exists for the blog WITHOUT blocking
-// the caller. Local safe-prime keygen is ~1s; this runs it off the request path
-// so a freshly-created under_review post (or a blog's 2nd reviewer) warms the key
-// before the first vote is attempted. Idempotent and concurrency-safe:
-// getOrCreateVoteTokenKey no-ops when a key already exists and loses-the-race
-// re-reads on a unique violation. A failure here is non-fatal (the on-demand
-// getOrCreateVoteTokenKey at issuance time is the hard guarantee) — we log it.
+// FreedInk's Drizzle implementations of @ministryofmany/blind-token's injectable
+// storage seams (the package holds NO ORM). Two contracts:
+//   - KeyStore over blog_vote_token_keys (LocalSigner only): the issuer key pair,
+//     one active per blog via the partial unique index; keygen is INJECTED by the
+//     LocalSigner (generateIssuerKey) rather than baked in here.
+//   - IssuanceStore over vote_token_issuances: the one-per-(blog, user, version)
+//     reservation guard the Issuer drives (reserve record-first / release on a
+//     failed sign). The timing-leak coarsening (truncateToHour) stays app-side.
 //
-// Concurrency note: a second in-flight keygen for the same blog can still race to
-// the insert and lose on the partial unique index; that path is handled inside
-// getOrCreateVoteTokenKey, which re-reads the winner. So at most one wasted ~1s
-// keygen, never a duplicate active key.
-export async function ensureLocalVoteTokenKey(blogId: string): Promise<void> {
-	try {
-		const existing = await getVoteTokenPublicKey(blogId);
-		if (existing) return;
-		await getOrCreateVoteTokenKey(blogId);
-	} catch (err) {
-		log.warn({ err, blogId }, 'local vote-token key pre-gen failed');
-	}
+// The (group, participant, actionKey) tuple maps to FreedInk as
+// (blogId, userId, postVersionId).
+
+// ─────────────────────────── KeyStore (blog_vote_token_keys) ───────────────────
+
+// Normalize a Postgres bytea value to a fresh, exact-length Uint8Array with its
+// own backing ArrayBuffer (byteOffset 0). postgres-js returns bytea as a Node
+// Buffer, which is a VIEW into a shared allocation pool; @ministryofmany/blind-token
+// imports keys via `bytes.slice().buffer`, and Buffer.prototype.slice returns a
+// pooled view, so `.buffer` would hand WebCrypto the whole pool (→ "asn1 wrong
+// tag"). `new Uint8Array(buf)` COPIES into an exact-length buffer so the package's
+// slice().buffer yields the real key bytes. (The bug is in the package's importKey;
+// this is the consumer-side guard until it lands there — see the migration notes.)
+function toKeyBytes(b: Uint8Array): Uint8Array {
+	return new Uint8Array(b);
 }
 
 async function activeKey(blogId: string) {
@@ -78,16 +47,113 @@ async function activeKey(blogId: string) {
 			and(eq(schema.blogVoteTokenKeys.blogId, blogId), isNull(schema.blogVoteTokenKeys.retiredAt))
 		)
 		.limit(1);
-	return rows[0] ?? null;
+	const row = rows[0];
+	if (!row) return null;
+	return {
+		id: row.id,
+		publicKeySpki: toKeyBytes(row.publicKeySpki),
+		privateKeyPkcs8: toKeyBytes(row.privateKeyPkcs8)
+	};
 }
 
 // Public key only — used by the redemption (vote) endpoint to verify a token.
-// Reads the active key. (Per-round rotation would verify against the round's key
-// id; v1 uses the single active key.)
-export async function getVoteTokenPublicKey(blogId: string): Promise<Uint8Array | null> {
+// Reads the active key. (KeyStore.getActivePublicKey.)
+export async function getVoteTokenPublicKey(blogId: string): Promise<PublicKeySpki | null> {
 	const k = await activeKey(blogId);
 	return k?.publicKeySpki ?? null;
 }
+
+// Fetch the blog's ACTIVE (non-retired) vote-token issuer key, creating one via
+// the injected `generate` on first use. Concurrency-safe: a unique partial index
+// (blog_vote_token_keys_blog_active_key) guarantees at most one active key per
+// blog, so a racing second insert hits the conflict and we re-read the winner.
+export async function getOrCreateVoteTokenKey(
+	blogId: string,
+	generate: () => Promise<IssuerKeyPair>
+): Promise<IssuerKeyPair & { id: string }> {
+	const existing = await activeKey(blogId);
+	if (existing) return existing;
+
+	const generated = await generate();
+	try {
+		const [row] = await db
+			.insert(schema.blogVoteTokenKeys)
+			.values({
+				blogId,
+				publicKeySpki: generated.publicKeySpki,
+				privateKeyPkcs8: generated.privateKeyPkcs8
+			})
+			.returning({
+				id: schema.blogVoteTokenKeys.id,
+				publicKeySpki: schema.blogVoteTokenKeys.publicKeySpki,
+				privateKeyPkcs8: schema.blogVoteTokenKeys.privateKeyPkcs8
+			});
+		return {
+			id: row.id,
+			publicKeySpki: toKeyBytes(row.publicKeySpki),
+			privateKeyPkcs8: toKeyBytes(row.privateKeyPkcs8)
+		};
+	} catch (e) {
+		// Only a unique-violation means we lost the race to a concurrent insert
+		// (the partial unique index blog_vote_token_keys_blog_active_key allows one
+		// active key per blog) — in that case the winner's key is now active and we
+		// re-read it. Any other error (connection drop, serialization failure, etc.)
+		// is a real fault and must propagate, not be silently swallowed.
+		if (!isUniqueViolation(e)) throw e;
+		const winner = await activeKey(blogId);
+		if (winner) return winner;
+		throw new Error('failed to create or read vote-token key');
+	}
+}
+
+// Retire the current active key and install a freshly generated one. Drives
+// blog_vote_token_keys.retiredAt: set it on the old active row, then insert the
+// new one as active (the partial unique index guarantees exactly one active key
+// per blog). Wired NOW so per-round rotation later is not a breaking change; the
+// LocalSigner's rotateKey() calls this. Runs in a transaction so the retire +
+// insert are atomic.
+export async function rotateVoteTokenKey(
+	blogId: string,
+	generate: () => Promise<IssuerKeyPair>
+): Promise<IssuerKeyPair & { id: string }> {
+	const generated = await generate();
+	return db.transaction(async (tx) => {
+		await tx
+			.update(schema.blogVoteTokenKeys)
+			.set({ retiredAt: new Date() })
+			.where(
+				and(eq(schema.blogVoteTokenKeys.blogId, blogId), isNull(schema.blogVoteTokenKeys.retiredAt))
+			);
+		const [row] = await tx
+			.insert(schema.blogVoteTokenKeys)
+			.values({
+				blogId,
+				publicKeySpki: generated.publicKeySpki,
+				privateKeyPkcs8: generated.privateKeyPkcs8
+			})
+			.returning({
+				id: schema.blogVoteTokenKeys.id,
+				publicKeySpki: schema.blogVoteTokenKeys.publicKeySpki,
+				privateKeyPkcs8: schema.blogVoteTokenKeys.privateKeyPkcs8
+			});
+		return {
+			id: row.id,
+			publicKeySpki: toKeyBytes(row.publicKeySpki),
+			privateKeyPkcs8: toKeyBytes(row.privateKeyPkcs8)
+		};
+	});
+}
+
+// The KeyStore the LocalSigner drives. `generate` is supplied by the signer on
+// each call (it carries the injected modulusLength + safe-prime generator), so
+// keygen never lives in this store.
+export const freedinkKeyStore: KeyStore = {
+	getActivePublicKey: (group) => getVoteTokenPublicKey(group),
+	getOrCreateKeyPair: (group, generate) => getOrCreateVoteTokenKey(group, generate),
+	rotateKeyPair: (group, generate) => rotateVoteTokenKey(group, generate)
+};
+
+// ─────────────────────────── IssuanceStore (vote_token_issuances) ──────────────
 
 // Coarsen a timestamp to the start of its UTC hour. We store issuance times at
 // hour resolution (not the default sub-millisecond now()) so an operator reading
@@ -135,10 +201,9 @@ export async function recordIssuance(opts: {
 // Roll back an issuance reservation. Called ONLY when signing fails AFTER a fresh
 // recordIssuance (e.g. the signer returned `pending`/`rate_limited`, or threw on a
 // transient transport error) — so the user's single one-per-(user,version) token
-// is not burned by a failure they did not cause and can retry. This mirrors
-// Signet's own "reservation rolled back if signing fails" behavior on the
-// FreedInk side. It is a no-op if the row is already gone. It must NEVER be called
-// after a successful sign: that would let a user re-issue.
+// is not burned by a failure they did not cause and can retry. It is a no-op if
+// the row is already gone. It must NEVER be called after a successful sign: that
+// would let a user re-issue.
 export async function releaseIssuance(opts: {
 	postVersionId: string;
 	userId: string;
@@ -152,3 +217,14 @@ export async function releaseIssuance(opts: {
 			)
 		);
 }
+
+// The IssuanceStore the Issuer drives. The (group, participant, actionKey) tuple
+// is FreedInk's (blogId, userId, postVersionId). reserve is record-first (the
+// UNIQUE index makes a concurrent double-issue lose the race); release is only
+// ever called by the Issuer on a FAILED sign, never after success.
+export const freedinkIssuanceStore: IssuanceStore = {
+	reserve: (key: TokenScope) =>
+		recordIssuance({ blogId: key.group, postVersionId: key.actionKey, userId: key.participant }),
+	release: (key: TokenScope) =>
+		releaseIssuance({ postVersionId: key.actionKey, userId: key.participant })
+};

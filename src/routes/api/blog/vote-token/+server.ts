@@ -5,8 +5,7 @@ import { db, schema } from '$lib/db/client';
 import { eq } from 'drizzle-orm';
 import { requireCapability } from '$lib/server/auth';
 import { enforce, RULES } from '$lib/server/rate-limit';
-import { recordIssuance, releaseIssuance } from '$lib/db/vote-tokens';
-import { getVoteSigner } from '$lib/server/vote-signer';
+import { getVoteIssuer, getVoteSigner, voteActionInfo } from '$lib/server/vote-signer';
 import { log } from '$lib/server/log';
 
 const Body = z.object({
@@ -27,17 +26,14 @@ function b64urlToBytes(s: string): Uint8Array {
 // issued a token for this version. The signer blind-signs over (version_id
 // metadata, blinded nonce) — it never sees the unblinded nonce, so it cannot
 // link this issuance to the eventual vote. One token per (user, version) is
-// enforced by the unique index on vote_token_issuances (defense in depth in BOTH
-// backends; in Signet mode the signer ALSO enforces the same cap independently).
+// enforced by the Issuer's IssuanceStore (the unique index on
+// vote_token_issuances; in Signet mode the signer ALSO enforces it independently).
 //
-// We record the issuance FIRST (atomic one-per-(user,version) guard) and only
-// sign if it was newly recorded, so two concurrent requests can never both
-// receive a token.
-//
-// PENDING path (async pre-gen): if the signer reports the key is still being
-// generated (Signet keygen in flight), we ROLL BACK the just-recorded issuance
-// and return 202 so the client shows "preparing voting…" and retries — the user
-// must not burn their single token on a not-ready key.
+// The record-first → sign → rollback-on-failure guard now lives in the package's
+// Issuer (@ministryofmany/blind-token): a token is issued IFF a fresh reservation
+// was made AND signing returned ok; every other outcome rolls the reservation
+// back so the user can retry without burning their single token. This route keeps
+// the FreedInk-specific auth, rate-limit, under_review gate, and HTTP mapping.
 export const POST: RequestHandler = async (event) => {
 	await enforce(RULES.reviewCast, event, { keyBy: 'user' });
 	const { request, locals } = event;
@@ -61,82 +57,52 @@ export const POST: RequestHandler = async (event) => {
 	// ineligible user). Kept in BOTH backends — defense in depth.
 	await requireCapability(row.post.blogId, locals.user.id, 'review');
 
-	// One token per (user, version): record FIRST. If already issued, refuse.
-	const fresh = await recordIssuance({
-		blogId: row.post.blogId,
-		postVersionId: parsed.data.post_version_id,
-		userId: locals.user.id
-	});
-	if (!fresh) throw error(409, 'a vote token has already been issued to you for this version');
-
-	const signer = getVoteSigner();
 	const blindedMessage = b64urlToBytes(parsed.data.blinded_message);
-
-	let outcome: Awaited<ReturnType<typeof signer.sign>>;
-	try {
-		outcome = await signer.sign({
-			blogId: row.post.blogId,
-			participantId: locals.user.id,
-			versionId: parsed.data.post_version_id,
-			blindedMessage
-		});
-	} catch (err) {
-		// A transport/transient failure (e.g. Signet unreachable) must not burn the
-		// user's single token. Roll back the reservation so they can retry. A
-		// malformed-blinded-message error from the signer is also rolled back: the
-		// client must resend a well-formed message, which it can only do with a
-		// fresh issuance attempt.
-		await releaseIssuance({
-			postVersionId: parsed.data.post_version_id,
-			userId: locals.user.id
-		});
-		// Local mode treats a thrown sign as a client error (bad blinded message);
-		// Signet transport errors are 502. We can't always distinguish, so surface a
-		// 400 for the local in-process signer (matches prior behavior) and 502 when
-		// the configured backend is Signet.
-		if (signer.backend === 'signet') {
-			log.warn({ err, blogId: row.post.blogId }, 'signet sign failed; issuance rolled back');
-			throw error(502, 'vote signer is unavailable, please try again');
-		}
-		throw error(400, 'invalid blinded message');
-	}
-
-	if (outcome.status === 'pending') {
-		// Key not ready yet. Roll back so the token isn't consumed, and tell the
-		// client to retry (the review page shows "preparing voting for this post…").
-		await releaseIssuance({
-			postVersionId: parsed.data.post_version_id,
-			userId: locals.user.id
-		});
-		// Trigger pre-gen as a side effect of the request (signer.sign already does
-		// for Signet); return 202 with a hint body the client polls on.
-		return json({ status: 'pending' }, { status: 202 });
-	}
-
-	if (outcome.status === 'rate_limited') {
-		// Signet's per-participant / global ceiling fired. Roll back so the user can
-		// retry after the window; surface 429.
-		await releaseIssuance({
-			postVersionId: parsed.data.post_version_id,
-			userId: locals.user.id
-		});
-		throw error(429, 'too many token requests, please slow down');
-	}
-
-	// Success. Return the blind signature unchanged + the public key so a fresh
-	// client can finalize without a second round-trip. The public key is sourced
-	// via the signer (local DB or Signet GET /key).
-	const pk = await signer.getPublicKey(row.post.blogId);
-	if (pk.status === 'pending') {
-		// Extremely unlikely (we just signed, so the key is ready), but stay safe:
-		// don't roll back a successful sign; just omit the key and let the client
-		// re-fetch it via the key preflight endpoint.
-		return json({
-			blind_signature: Buffer.from(outcome.blindSignature).toString('base64url')
-		});
-	}
-	return json({
-		blind_signature: Buffer.from(outcome.blindSignature).toString('base64url'),
-		public_key: Buffer.from(pk.publicKeySpki).toString('base64url')
+	const result = await getVoteIssuer().issue({
+		group: row.post.blogId,
+		participant: locals.user.id,
+		info: voteActionInfo(parsed.data.post_version_id),
+		blindedMessage
 	});
+
+	switch (result.status) {
+		case 'issued': {
+			// Return the blind signature unchanged + the public key (when available)
+			// so a fresh client can finalize without a second round-trip. A pending
+			// public key here is extremely unlikely (we just signed) — the Issuer
+			// omits it in that case and the client re-fetches via the key preflight.
+			const body: { blind_signature: string; public_key?: string } = {
+				blind_signature: Buffer.from(result.blindSignature).toString('base64url')
+			};
+			if (result.publicKeySpki) {
+				body.public_key = Buffer.from(result.publicKeySpki).toString('base64url');
+			}
+			return json(body);
+		}
+		case 'already_issued':
+			throw error(409, 'a vote token has already been issued to you for this version');
+		case 'pending':
+			// Key not ready yet (Signet keygen). The reservation was rolled back, so
+			// no token was consumed; the review page shows "preparing voting…".
+			return json({ status: 'pending' }, { status: 202 });
+		case 'rate_limited':
+			// Signet's per-participant / global ceiling fired; the reservation was
+			// rolled back so the user can retry after the window.
+			throw error(429, 'too many token requests, please slow down');
+		case 'signer_error':
+			// The Issuer rolled the reservation back. Local mode treats a thrown sign
+			// as a client error (bad blinded message → 400); a Signet transport
+			// failure is 502.
+			if (getVoteSigner().backend === 'remote') {
+				log.warn(
+					{ err: result.error, blogId: row.post.blogId },
+					'signet sign failed; issuance rolled back'
+				);
+				throw error(502, 'vote signer is unavailable, please try again');
+			}
+			throw error(400, 'invalid blinded message');
+		default:
+			// Exhaustiveness guard: a new IssueResult status must be handled above.
+			throw error(500, 'unexpected issuance result');
+	}
 };

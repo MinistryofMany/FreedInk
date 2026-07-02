@@ -1,160 +1,54 @@
-// SignetVoteSigner — pending / rate-limit / pre-gen handling, WITHOUT a live
-// Signet. The HTTP/mTLS layer (./signet) is mocked so this runs in the default
-// unit project (no network, no DB). The live end-to-end proof lives in
-// tests/integration/signet-vote-signer.test.ts (env-gated).
+// Vote-signer backend SELECTION (FreedInk-level), without a live Signet.
 //
-// What this locks down:
-//   - getPublicKey() returns `pending` while keygen runs, and enqueues POST /key
-//     AT MOST ONCE per process (no poll-loop thrash that wedged keygen);
-//   - once ready, the SPKI is cached and not re-fetched;
-//   - sign() maps Signet's 202 → pending and 429 → rate_limited, and enqueues at
-//     most once on pending;
-//   - ensureKey() enqueues and caches a ready key (the pre-gen path);
-//   - the abstraction selects the Signet backend when SIGNET_URL is configured.
+// Post-migration, the Signer implementations (LocalSigner / RemoteSigner) and
+// their pending / rate-limit / enqueue-once / pubkey-cache behavior live in
+// @ministryofmany/blind-token and are covered by that package's own suite. What
+// stays FreedInk's responsibility — and what this test locks down — is the
+// env-driven SELECTION: SIGNET_URL (+ mTLS certs) → the remote (Signet) backend,
+// else the local in-process backend, resolved via signetConfig(). The live
+// end-to-end Signet proof lives in tests/integration/signet-vote-signer.test.ts
+// (env-gated).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock env so signetConfig() sees a configured Signet (the cert values are PEM
-// inline so resolvePem doesn't touch the filesystem).
-vi.mock('$env/dynamic/private', () => ({
-	env: {
-		SIGNET_URL: 'https://signet.test:8443',
-		SIGNET_CLIENT_CERT: '-----BEGIN CERTIFICATE-----\nclient\n-----END CERTIFICATE-----',
-		SIGNET_CLIENT_KEY: '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----',
-		SIGNET_CA_CERT: '-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----'
-	}
-}));
+// vi.mock is hoisted; build the mutable env via vi.hoisted so a test can flip
+// SIGNET_URL between cases (matches signet.config.unit.test.ts).
+const { mockEnv } = vi.hoisted(() => ({ mockEnv: {} as Record<string, string | undefined> }));
+vi.mock('$env/dynamic/private', () => ({ env: mockEnv }));
 
-vi.mock('$app/environment', () => ({ browser: false, dev: true }));
-
-// Mock the Signet HTTP wrappers. These are what SignetVoteSigner calls.
-const signetGetKey = vi.fn();
-const signetCreateKey = vi.fn();
-const signetSign = vi.fn();
-vi.mock('./signet', () => ({
-	signetConfig: () => ({
-		baseUrl: 'https://signet.test:8443',
-		clientCert: 'c',
-		clientKey: 'k',
-		caCert: 'ca'
-	}),
-	signetGetKey: (...a: unknown[]) => signetGetKey(...a),
-	signetCreateKey: (...a: unknown[]) => signetCreateKey(...a),
-	signetSign: (...a: unknown[]) => signetSign(...a)
-}));
-
-// vote-signer imports these for the LOCAL path; stub them so the module loads.
-vi.mock('$lib/db/vote-tokens', () => ({
-	getOrCreateVoteTokenKey: vi.fn(),
-	getVoteTokenPublicKey: vi.fn(),
-	ensureLocalVoteTokenKey: vi.fn()
-}));
-vi.mock('./vote-token', () => ({ blindSignVoteToken: vi.fn() }));
+// The KeyStore/IssuanceStore are Drizzle impls over db/client; stub them so this
+// stays a pure unit test (no DB connection at module load).
+vi.mock('$lib/db/vote-tokens', () => ({ freedinkKeyStore: {}, freedinkIssuanceStore: {} }));
 vi.mock('./log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-import { getVoteSigner, _resetVoteSignerForTests } from './vote-signer';
+const CERT = '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----';
+const KEY = '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----';
 
-const SPKI = new Uint8Array([1, 2, 3, 4]);
-const SIG = new Uint8Array([9, 9, 9]);
+import { getVoteSigner, _resetVoteSignerForTests } from './vote-signer';
+import { _resetSignetConfigForTests } from './signet';
 
 beforeEach(() => {
+	for (const k of Object.keys(mockEnv)) delete mockEnv[k];
+	_resetSignetConfigForTests();
 	_resetVoteSignerForTests();
-	signetGetKey.mockReset();
-	signetCreateKey.mockReset();
-	signetSign.mockReset();
 });
 
-describe('SignetVoteSigner (mocked transport)', () => {
-	it('selects the signet backend when SIGNET_URL is set', () => {
-		expect(getVoteSigner().backend).toBe('signet');
+describe('vote signer backend selection', () => {
+	it('selects the LOCAL backend when SIGNET_URL is unset', () => {
+		expect(getVoteSigner().backend).toBe('local');
 	});
 
-	it('getPublicKey returns pending while keygen runs and enqueues POST /key at most once', async () => {
-		signetGetKey.mockResolvedValue({ status: 'pending' });
-		signetCreateKey.mockResolvedValue({ status: 'pending' });
-		const signer = getVoteSigner();
-
-		// Three pending polls in a row …
-		expect(await signer.getPublicKey('blog-1')).toEqual({ status: 'pending' });
-		expect(await signer.getPublicKey('blog-1')).toEqual({ status: 'pending' });
-		expect(await signer.getPublicKey('blog-1')).toEqual({ status: 'pending' });
-
-		// … must NOT spam POST /key (that thrashes Signet's keygen worker). Enqueue
-		// exactly once for this group.
-		expect(signetCreateKey).toHaveBeenCalledTimes(1);
-		expect(signetCreateKey).toHaveBeenCalledWith(expect.anything(), 'blog-1');
+	it('selects the REMOTE (Signet) backend when SIGNET_URL + inline mTLS certs are set', () => {
+		mockEnv.SIGNET_URL = 'https://signet.test:8443';
+		mockEnv.SIGNET_CLIENT_CERT = CERT;
+		mockEnv.SIGNET_CLIENT_KEY = KEY;
+		mockEnv.SIGNET_CA_CERT = CERT;
+		expect(getVoteSigner().backend).toBe('remote');
 	});
 
-	it('getPublicKey caches a ready key and does not re-fetch', async () => {
-		signetGetKey.mockResolvedValue({ status: 'ready', publicKeySpki: SPKI, keyId: 'k1' });
-		const signer = getVoteSigner();
-
-		const a = await signer.getPublicKey('blog-2');
-		const b = await signer.getPublicKey('blog-2');
-		expect(a).toEqual({ status: 'ready', publicKeySpki: SPKI });
-		expect(b).toEqual({ status: 'ready', publicKeySpki: SPKI });
-		// Fetched once; the second call hit the cache.
-		expect(signetGetKey).toHaveBeenCalledTimes(1);
-	});
-
-	it('sign maps ok / pending / rate_limited correctly', async () => {
-		const signer = getVoteSigner();
-		const args = {
-			blogId: 'blog-3',
-			participantId: 'u1',
-			versionId: 'v1',
-			blindedMessage: new Uint8Array([7])
-		};
-
-		signetSign.mockResolvedValueOnce({ status: 'pending' });
-		expect(await signer.sign(args)).toEqual({ status: 'pending' });
-
-		signetSign.mockResolvedValueOnce({ status: 'rate_limited' });
-		expect(await signer.sign(args)).toEqual({ status: 'rate_limited' });
-
-		signetSign.mockResolvedValueOnce({ status: 'ok', blindSignature: SIG });
-		expect(await signer.sign(args)).toEqual({ status: 'ok', blindSignature: SIG });
-	});
-
-	it('sign enqueues POST /key at most once across repeated pending results', async () => {
-		signetCreateKey.mockResolvedValue({ status: 'pending' });
-		signetSign.mockResolvedValue({ status: 'pending' });
-		const signer = getVoteSigner();
-		const args = {
-			blogId: 'blog-4',
-			participantId: 'u1',
-			versionId: 'v1',
-			blindedMessage: new Uint8Array([7])
-		};
-		await signer.sign(args);
-		await signer.sign(args);
-		await signer.sign(args);
-		expect(signetCreateKey).toHaveBeenCalledTimes(1);
-	});
-
-	it('ensureKey enqueues and caches a ready key (pre-gen path)', async () => {
-		signetCreateKey.mockResolvedValue({ status: 'ready', publicKeySpki: SPKI, keyId: 'k1' });
-		const signer = getVoteSigner();
-
-		await signer.ensureKey('blog-5');
-		expect(signetCreateKey).toHaveBeenCalledWith(expect.anything(), 'blog-5');
-
-		// After a ready ensureKey, getPublicKey is served from cache (no GET /key).
-		const pk = await signer.getPublicKey('blog-5');
-		expect(pk).toEqual({ status: 'ready', publicKeySpki: SPKI });
-		expect(signetGetKey).not.toHaveBeenCalled();
-	});
-
-	it('ensureKey failure is swallowed and lets a later enqueue retry', async () => {
-		signetCreateKey.mockRejectedValueOnce(new Error('signet down'));
-		const signer = getVoteSigner();
-		// Does not throw.
-		await expect(signer.ensureKey('blog-6')).resolves.toBeUndefined();
-
-		// A subsequent pending getPublicKey can re-enqueue (the marker was cleared).
-		signetGetKey.mockResolvedValue({ status: 'pending' });
-		signetCreateKey.mockResolvedValue({ status: 'pending' });
-		await signer.getPublicKey('blog-6');
-		expect(signetCreateKey).toHaveBeenCalledTimes(2); // failed attempt + retry
+	it('memoizes the signer once selected (single process-wide backend)', () => {
+		const a = getVoteSigner();
+		const b = getVoteSigner();
+		expect(a).toBe(b);
 	});
 });

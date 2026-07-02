@@ -1,21 +1,16 @@
 // Local-mode vote-key pre-generation + issuance rollback.
 //
-// LOCAL backend (SIGNET_URL unset, the default): ensureLocalVoteTokenKey warms a
-// blog's issuer key off the request path, and the VoteSigner ensureKey() routes
-// to it. releaseIssuance rolls back a reservation when signing fails so a user's
-// single one-per-(user,version) token is not burned by a failure they didn't
-// cause. These are the local equivalents of Signet's async POST /key and its
+// LOCAL backend (SIGNET_URL unset, the default): the LocalSigner's ensureKey()
+// warms a blog's issuer key off the request path (in-process safe-prime keygen).
+// releaseIssuance rolls back a reservation when signing fails so a user's single
+// one-per-(user,version) token is not burned by a failure they didn't cause.
+// These are the local equivalents of Signet's async POST /key and its
 // "reservation rolled back if signing fails" behavior.
 
 import { describe, it, expect } from 'vitest';
 import { db, schema } from '$lib/db/client';
 import { and, eq } from 'drizzle-orm';
-import {
-	ensureLocalVoteTokenKey,
-	getVoteTokenPublicKey,
-	recordIssuance,
-	releaseIssuance
-} from '$lib/db/vote-tokens';
+import { getVoteTokenPublicKey, recordIssuance, releaseIssuance } from '$lib/db/vote-tokens';
 import { getVoteSigner } from '$lib/server/vote-signer';
 import { createPost } from '$lib/db/posts';
 import { makeUser, makeBlogWith } from '../setup/factories';
@@ -36,30 +31,23 @@ describe('local vote-key pre-gen', () => {
 		expect(getVoteSigner().backend).toBe('local');
 	});
 
-	it('ensureLocalVoteTokenKey creates an active key when none exists', async () => {
+	it('the local signer ensureKey creates an active key when none exists (idempotent)', async () => {
 		const { blog } = await soloBlog('ensure');
 		expect(await getVoteTokenPublicKey(blog.id)).toBeNull();
 
-		await ensureLocalVoteTokenKey(blog.id);
+		await getVoteSigner().ensureKey(blog.id);
 
 		const pk = await getVoteTokenPublicKey(blog.id);
 		expect(pk).not.toBeNull();
 		expect(pk!.length).toBeGreaterThan(0);
 
 		// Idempotent: a second call does not create a second active key.
-		await ensureLocalVoteTokenKey(blog.id);
+		await getVoteSigner().ensureKey(blog.id);
 		const rows = await db
 			.select({ id: schema.blogVoteTokenKeys.id })
 			.from(schema.blogVoteTokenKeys)
 			.where(eq(schema.blogVoteTokenKeys.blogId, blog.id));
 		expect(rows).toHaveLength(1);
-	}, 30_000);
-
-	it('VoteSigner.ensureKey (local) warms the key', async () => {
-		const { blog } = await soloBlog('signer');
-		expect(await getVoteTokenPublicKey(blog.id)).toBeNull();
-		await getVoteSigner().ensureKey(blog.id);
-		expect(await getVoteTokenPublicKey(blog.id)).not.toBeNull();
 	}, 30_000);
 
 	it('creating a post straight into under_review pre-gens the key (event trigger b)', async () => {

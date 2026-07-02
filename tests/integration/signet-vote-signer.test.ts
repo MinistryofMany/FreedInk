@@ -31,9 +31,9 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { RSAPBSSA } from '@cloudflare/blindrsa-ts';
-import { verifyVoteToken } from '$lib/server/vote-token';
-import { getVoteSigner } from '$lib/server/vote-signer';
-import type { VoteSigner } from '$lib/server/vote-signer';
+import { verifyToken } from '@ministryofmany/blind-token/server';
+import { getVoteSigner, voteActionInfo } from '$lib/server/vote-signer';
+import type { Signer } from '$lib/server/vote-signer';
 
 // Gate on the SAME production env the runtime selection uses, so a configured
 // SIGNET_URL both runs this suite AND drives getVoteSigner() to the Signet path.
@@ -59,7 +59,7 @@ async function importPub(spki: Uint8Array): Promise<CryptoKey> {
 // the read budget and self-throttle. 5s keeps us within budget while keygen
 // (~10-20s) completes.
 const KEY_POLL_MS = 5000;
-async function waitForKey(signer: VoteSigner, blogId: string): Promise<Uint8Array> {
+async function waitForKey(signer: Signer, blogId: string): Promise<Uint8Array> {
 	for (let i = 0; i < 24; i++) {
 		const pk = await signer.getPublicKey(blogId);
 		if (pk.status === 'ready') return pk.publicKeySpki;
@@ -68,14 +68,14 @@ async function waitForKey(signer: VoteSigner, blogId: string): Promise<Uint8Arra
 	throw new Error('Signet key never became ready within ~120s');
 }
 
-run('SignetVoteSigner (live Signet, mTLS)', () => {
-	let signer: VoteSigner;
+run('RemoteSigner (live Signet, mTLS)', () => {
+	let signer: Signer;
 
 	beforeAll(() => {
 		// The abstraction selects Signet purely from env (set in the shell before
 		// import). This asserts the real selection path, not a hand-built signer.
 		signer = getVoteSigner();
-		expect(signer.backend).toBe('signet');
+		expect(signer.backend).toBe('remote');
 	});
 
 	it('mints a token through Signet that verifies under the Signet-served key (wire scheme unchanged)', async () => {
@@ -99,9 +99,9 @@ run('SignetVoteSigner (live Signet, mTLS)', () => {
 		let blindSig: Uint8Array | null = null;
 		for (let i = 0; i < 30; i++) {
 			const out = await signer.sign({
-				blogId,
-				participantId,
-				versionId,
+				group: blogId,
+				participant: participantId,
+				info: voteActionInfo(versionId),
 				blindedMessage: blindedMsg
 			});
 			if (out.status === 'ok') {
@@ -121,11 +121,11 @@ run('SignetVoteSigner (live Signet, mTLS)', () => {
 
 		// REDEMPTION verify path — FreedInk's own verifier, unchanged, under the
 		// Signet-served public key. This is the byte-identical-token proof.
-		const ok = await verifyVoteToken({
+		const ok = await verifyToken({
 			publicKeySpki: spki,
 			signature,
 			preparedNonce: prepared,
-			versionId
+			info: voteActionInfo(versionId)
 		});
 		expect(ok).toBe(true);
 	}, 180_000);
@@ -146,9 +146,9 @@ run('SignetVoteSigner (live Signet, mTLS)', () => {
 		let blindSig: Uint8Array | null = null;
 		for (let i = 0; i < 30; i++) {
 			const out = await signer.sign({
-				blogId,
-				participantId: 'user-bob',
-				versionId: v1,
+				group: blogId,
+				participant: 'user-bob',
+				info: voteActionInfo(v1),
 				blindedMessage: blindedMsg
 			});
 			if (out.status === 'ok') {
@@ -162,20 +162,20 @@ run('SignetVoteSigner (live Signet, mTLS)', () => {
 
 		// Verifies under v1 …
 		expect(
-			await verifyVoteToken({
+			await verifyToken({
 				publicKeySpki: spki,
 				signature,
 				preparedNonce: prepared,
-				versionId: v1
+				info: voteActionInfo(v1)
 			})
 		).toBe(true);
 		// … but NOT under v2 (the public metadata binds the signature to the version).
 		expect(
-			await verifyVoteToken({
+			await verifyToken({
 				publicKeySpki: spki,
 				signature,
 				preparedNonce: prepared,
-				versionId: v2
+				info: voteActionInfo(v2)
 			})
 		).toBe(false);
 	}, 180_000);
@@ -195,9 +195,9 @@ run('SignetVoteSigner (live Signet, mTLS)', () => {
 			const { blindedMsg } = await suite.blind(pub, prepared, info(versionId));
 			for (let i = 0; i < 30; i++) {
 				const out = await signer.sign({
-					blogId,
-					participantId,
-					versionId,
+					group: blogId,
+					participant: participantId,
+					info: voteActionInfo(versionId),
 					blindedMessage: blindedMsg
 				});
 				if (out.status === 'ok') return { ok: true as const };
@@ -218,7 +218,12 @@ run('SignetVoteSigner (live Signet, mTLS)', () => {
 		const prepared2 = suite.prepare(nonce2);
 		const { blindedMsg: blinded2 } = await suite.blind(pub, prepared2, info(versionId));
 		await expect(
-			signer.sign({ blogId, participantId, versionId, blindedMessage: blinded2 })
+			signer.sign({
+				group: blogId,
+				participant: participantId,
+				info: voteActionInfo(versionId),
+				blindedMessage: blinded2
+			})
 		).rejects.toThrow();
 	}, 180_000);
 });

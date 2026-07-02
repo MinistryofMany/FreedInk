@@ -9,8 +9,8 @@ import { enforce, RULES } from '$lib/server/rate-limit';
 import { audit } from '$lib/server/audit';
 import { notifyMembersOfNewPublishedPost } from '$lib/server/notifications';
 import { isValidRejectionReason } from '$lib/rejection-reasons';
-import { verifyVoteToken } from '$lib/server/vote-token';
-import { getVoteSigner } from '$lib/server/vote-signer';
+import { verifyToken } from '@ministryofmany/blind-token/server';
+import { getVoteSigner, voteActionInfo } from '$lib/server/vote-signer';
 import { isUniqueViolation } from '$lib/server/db-errors';
 
 const Body = z
@@ -79,11 +79,11 @@ export const POST: RequestHandler = async (event) => {
 	const publicKeySpki = pk.publicKeySpki;
 	const signature = b64urlToBytes(parsed.data.signature);
 	const preparedNonce = b64urlToBytes(parsed.data.prepared_nonce);
-	const ok = await verifyVoteToken({
+	const ok = await verifyToken({
 		publicKeySpki,
 		signature,
 		preparedNonce,
-		versionId: parsed.data.post_version_id
+		info: voteActionInfo(parsed.data.post_version_id)
 	});
 	if (!ok) throw error(400, 'invalid vote token');
 
