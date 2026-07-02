@@ -1,9 +1,24 @@
 /// <reference types="vitest/config" />
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	resolve: {
+		alias: [
+			// FreedInk is Semaphore-only and does NOT install the optional peer
+			// @ministryofmany/rln. @ministryofmany/membership keeps its RLN engine behind
+			// a lazy dynamic import (never loaded at runtime here), but the bundler still
+			// resolves that lazy chunk's named imports from @ministryofmany/rln at build
+			// time. Alias the absent peer to a stub that provides those names so the build
+			// resolves; the chunk is never executed. See src/lib/rln-absent-stub.ts.
+			{
+				find: /^@ministryofmany\/rln$/,
+				replacement: fileURLToPath(new URL('./src/lib/rln-absent-stub.ts', import.meta.url))
+			}
+		]
+	},
 	ssr: {
 		// Semaphore packages load WASM at runtime — let the SSR pipeline import
 		// them through Node's resolver instead of trying to bundle them.
