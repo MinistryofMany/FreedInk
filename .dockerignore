@@ -1,0 +1,15 @@
+# Keep host installs and junk out of the build context. Without this, a local
+# node_modules would be COPYed over the image's own install in the build stage.
+node_modules
+build
+.svelte-kit
+test-results
+e2e
+data
+backups
+.git
+.env
+.env.*
+*.log
+.DS_Store
+.claude

@@ -9,10 +9,19 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# SvelteKit's postbuild analyse step imports the server chunks, and the db
+# client asserts DATABASE_URL at module scope. postgres-js connects lazily, so
+# a placeholder satisfies the assert without any connection attempt. Build-
+# stage only — the runtime stage below starts from a fresh base image.
+ENV DATABASE_URL=postgres://build:build@localhost:5432/build
 # prebuild downloads Semaphore artifacts from snark-artifacts.pse.dev into
 # static/ so the running app can serve them same-origin.
 RUN npm run build
-RUN npm prune --omit=dev
+# --force: @cloudflare/blindrsa-ts declares engines.node >=24, which makes
+# `npm prune` hard-fail on node 22. The dep is only ever bundled into the
+# BROWSER build (src/lib/client/vote-token.ts); nothing server-side imports
+# it, so the engine gate is irrelevant to this runtime.
+RUN npm prune --omit=dev --force
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
