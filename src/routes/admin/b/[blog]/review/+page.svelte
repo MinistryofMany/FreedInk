@@ -212,8 +212,8 @@
 									p.tally.threshold - p.tally.approves
 								)} more to publish
 								<span class="threshold-detail">
-									(publishes when {p.tally.approvalNumerator} of every {p.tally
-										.approvalDenominator} of the {p.tally.eligibleCount} eligible reviewers approve)
+									(publishes when {p.tally.approvalNumerator} of every {p.tally.approvalDenominator} of
+									the {p.tally.eligibleCount} eligible reviewers approve)
 								</span>
 							</p>
 						</div>

@@ -216,12 +216,12 @@
 		<h2 class="page-heading">{data.blog.title}</h2>
 
 		<form on:submit|preventDefault={submit}>
-		<div class="title-wrapper">
-			<Field label="Post Title" id="post-title" bind:value={title} required />
-		</div>
-		<div class="field-native">
-			<span class="native-label">Content</span>
-			<!--
+			<div class="title-wrapper">
+				<Field label="Post Title" id="post-title" bind:value={title} required />
+			</div>
+			<div class="field-native">
+				<span class="native-label">Content</span>
+				<!--
 				MarkdownEditor exports markdown via bind:value so storage stays a
 				markdown string (same shape the server-side renderMarkdown helper
 				expects). It's the live preview AND the editor in one — we dropped
@@ -230,33 +230,33 @@
 				because users editing legacy markdown sometimes want a sanity check
 				against the rendered output.
 			-->
-			<MarkdownEditor
-				bind:value={content}
-				placeholder="Write your post — formatting saves as markdown."
-			/>
-		</div>
-		<div class="field-native">
-			<label class="native-label" for="post-language">Language</label>
-			<select id="post-language" class="native-select" bind:value={language}>
-				{#each POST_LANGUAGES as l}
-					<option value={l.code}>{l.name}</option>
-				{/each}
-			</select>
-		</div>
-		<label class="checkbox-row">
-			<input type="checkbox" bind:checked={submitForReview} />
-			<span>Submit for review immediately (uncheck to save as draft)</span>
-		</label>
-		{#if error}
-			<p class="error-text" role="alert">{error}</p>
-		{/if}
-		<div class="form-actions">
-			<Button type="submit" disabled={busy} loading={busy}>
-				{busy ? 'Submitting…' : 'Create Post'}
-			</Button>
-		</div>
-	</form>
-</Card>
+				<MarkdownEditor
+					bind:value={content}
+					placeholder="Write your post — formatting saves as markdown."
+				/>
+			</div>
+			<div class="field-native">
+				<label class="native-label" for="post-language">Language</label>
+				<select id="post-language" class="native-select" bind:value={language}>
+					{#each POST_LANGUAGES as l}
+						<option value={l.code}>{l.name}</option>
+					{/each}
+				</select>
+			</div>
+			<label class="checkbox-row">
+				<input type="checkbox" bind:checked={submitForReview} />
+				<span>Submit for review immediately (uncheck to save as draft)</span>
+			</label>
+			{#if error}
+				<p class="error-text" role="alert">{error}</p>
+			{/if}
+			<div class="form-actions">
+				<Button type="submit" disabled={busy} loading={busy}>
+					{busy ? 'Submitting…' : 'Create Post'}
+				</Button>
+			</div>
+		</form>
+	</Card>
 {/if}
 
 <style>
@@ -314,7 +314,6 @@
 		border-radius: var(--radius-md);
 		padding: var(--space-2) var(--space-3);
 	}
-
 
 	.native-select {
 		max-width: 32ch;

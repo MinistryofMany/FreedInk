@@ -51,7 +51,9 @@
 	<header class="head">
 		<Kicker>Posts</Kicker>
 		<h1 class="heading">{data.blog.title}</h1>
-		<p class="note">Every post in this blog. Open one to view its versions, comments, and moderation actions.</p>
+		<p class="note">
+			Every post in this blog. Open one to view its versions, comments, and moderation actions.
+		</p>
 	</header>
 
 	{#if posts.length === 0}

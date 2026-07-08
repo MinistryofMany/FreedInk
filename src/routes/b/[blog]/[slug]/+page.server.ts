@@ -16,9 +16,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	// The composer gates on this so a non-member sees "only members can comment"
 	// up front instead of building a proof that the server would reject. A guest
 	// is never a member.
-	const canComment = locals.user
-		? await hasCapability(blog.id, locals.user.id, 'comment')
-		: false;
+	const canComment = locals.user ? await hasCapability(blog.id, locals.user.id, 'comment') : false;
 
 	// Comments use a dedicated `commentsCursor` query param so they don't
 	// collide with anything else that might land on this URL later.

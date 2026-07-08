@@ -340,35 +340,35 @@
 	<details class="advanced">
 		<summary>Advanced: per-capability permissions</summary>
 		<p class="section-note">
-			A role (above) is a preset for these capabilities. Use this grid only to diverge from a
-			preset — grant or revoke a single capability without changing the role. Authors write posts;
+			A role (above) is a preset for these capabilities. Use this grid only to diverge from a preset
+			— grant or revoke a single capability without changing the role. Authors write posts;
 			reviewers cast publish votes; commenters comment; admins manage the blog. Changes are recorded
 			and shown to all members below.
 		</p>
 		<div class="perm-grid" role="table" aria-label="Member permissions">
-		<div class="perm-row perm-head" role="row">
-			<span role="columnheader">Member</span>
-			{#each CAPABILITIES as cap}
-				<span role="columnheader" class="perm-cap">{cap}</span>
-			{/each}
-		</div>
-		{#each members as member (member.user_id)}
-			<div class="perm-row" role="row">
-				<span class="perm-name">{member.displayName?.trim() || member.username}</span>
+			<div class="perm-row perm-head" role="row">
+				<span role="columnheader">Member</span>
 				{#each CAPABILITIES as cap}
-					<span class="perm-cell">
-						<input
-							type="checkbox"
-							checked={member.caps[cap]}
-							disabled={busy || member.user_id === data.currentUserId}
-							on:change={(e) => onCapToggle(member, cap, e)}
-							aria-label="{cap} for {member.username}"
-						/>
-					</span>
+					<span role="columnheader" class="perm-cap">{cap}</span>
 				{/each}
 			</div>
-		{/each}
-	</div>
+			{#each members as member (member.user_id)}
+				<div class="perm-row" role="row">
+					<span class="perm-name">{member.displayName?.trim() || member.username}</span>
+					{#each CAPABILITIES as cap}
+						<span class="perm-cell">
+							<input
+								type="checkbox"
+								checked={member.caps[cap]}
+								disabled={busy || member.user_id === data.currentUserId}
+								on:change={(e) => onCapToggle(member, cap, e)}
+								aria-label="{cap} for {member.username}"
+							/>
+						</span>
+					{/each}
+				</div>
+			{/each}
+		</div>
 	</details>
 </section>
 

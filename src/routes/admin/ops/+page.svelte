@@ -36,8 +36,8 @@
 			</p>
 		{:else}
 			<p class="note">
-				This is the value to put in <code>FREEDINK_OPERATOR_SUBS</code> (comma-separated) to grant
-				operator access. It never changes for your account.
+				This is the value to put in <code>FREEDINK_OPERATOR_SUBS</code> (comma-separated) to grant operator
+				access. It never changes for your account.
 			</p>
 			<ul class="sub-list">
 				{#each subjects as s (s.subject)}
@@ -93,7 +93,9 @@
 							<Button href="/admin/b/{blog.slug}/manage" variant="ghost" size="sm">Manage</Button>
 							<Button href="/admin/b/{blog.slug}/posts" variant="ghost" size="sm">Posts</Button>
 							<Button href="/admin/b/{blog.slug}/review" variant="ghost" size="sm">Review</Button>
-							<Button href="/admin/b/{blog.slug}/settings" variant="ghost" size="sm">Settings</Button>
+							<Button href="/admin/b/{blog.slug}/settings" variant="ghost" size="sm"
+								>Settings</Button
+							>
 						</div>
 					</li>
 				{/each}

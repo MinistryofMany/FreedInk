@@ -310,7 +310,6 @@
 		padding: var(--space-2) var(--space-3);
 	}
 
-
 	.native-select {
 		max-width: 32ch;
 	}

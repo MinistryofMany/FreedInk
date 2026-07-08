@@ -48,8 +48,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			.innerJoin(schema.blogPosts, eq(schema.blogPosts.id, schema.blogPostVersions.postId))
 			.innerJoin(schema.blogs, eq(schema.blogs.id, schema.blogPosts.blogId))
 			.where(inArray(schema.postComments.id, commentIds));
-		for (const r of rows)
-			commentLink.set(r.commentId, `/admin/b/${r.slug}/posts/${r.postId}`);
+		for (const r of rows) commentLink.set(r.commentId, `/admin/b/${r.slug}/posts/${r.postId}`);
 	}
 
 	return {

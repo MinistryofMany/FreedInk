@@ -130,7 +130,9 @@
 				<div class="recovery">
 					<h2 class="recovery-heading">{$_('identity.recovery_heading')}</h2>
 					<p class="body-text">{$_('identity.recovery_blurb')}</p>
-					<pre class="recovery-phrase" aria-label={$_('identity.recovery_heading')}>{recoveryPhrase}</pre>
+					<pre
+						class="recovery-phrase"
+						aria-label={$_('identity.recovery_heading')}>{recoveryPhrase}</pre>
 					<div class="recovery-actions">
 						<Button variant="ghost" onclick={copyRecovery}>
 							{recoveryCopied ? $_('identity.recovery_copied') : $_('identity.recovery_copy')}
