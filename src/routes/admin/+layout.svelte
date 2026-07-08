@@ -17,7 +17,9 @@
 			<Kicker>Admin</Kicker>
 		</div>
 		<p class="admin-header__greeting">
-			{$_('admin.welcome', { values: { name: data.user.displayName ?? data.user.username } })}
+			{$_('admin.welcome', {
+				values: { name: data.user.displayName?.trim() || data.user.username }
+			})}
 		</p>
 	</div>
 	<nav class="admin-nav">

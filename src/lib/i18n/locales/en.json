@@ -103,7 +103,14 @@
 		"create_button": "Create identity",
 		"generating": "Generating…",
 		"error_min_length": "password must be at least 12 characters",
-		"error_mismatch": "passwords do not match"
+		"error_mismatch": "passwords do not match",
+		"recovery_heading": "Save your recovery phrase",
+		"recovery_blurb": "These 24 words regenerate your identity if you ever forget your password or lose this device. Write them down and store them offline. Anyone with this phrase can act as you.",
+		"recovery_warning": "FreedInk cannot show this phrase again and cannot recover it for you.",
+		"recovery_copy": "Copy phrase",
+		"recovery_copied": "Copied",
+		"recovery_ack": "I have saved my recovery phrase somewhere safe.",
+		"recovery_continue": "Continue"
 	},
 	"admin": {
 		"welcome": "Welcome {name}",
@@ -173,7 +180,14 @@
 		"identity_rotated": "identity rotated; snapshots updated for every blog you belong to",
 		"rotate_password_error": "pick a password ≥12 chars and confirm it",
 		"rotate_confirm_prompt": "Rotate identity? Past posts stay attributed to the old identity.",
-		"session_revoked": "session revoked"
+		"session_revoked": "session revoked",
+		"restore_summary": "Restore from recovery phrase",
+		"restore_blurb": "Forgot your password? Paste your 24-word recovery phrase to unlock your identity for this session. This does not change your password — set a new one afterward with \"Rotate this device’s password\" if you like.",
+		"restore_phrase_label": "Recovery phrase (24 words)",
+		"restore_button": "Restore identity",
+		"restore_ok": "Identity unlocked for this session.",
+		"restore_mismatch": "That recovery phrase does not match any identity on this account.",
+		"restore_invalid": "That does not look like a valid 24-word recovery phrase."
 	},
 	"errors": {
 		"page_not_found_heading": "Page not found?",

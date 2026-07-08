@@ -337,11 +337,15 @@
      can't be demoted (server-enforced). A member can't toggle their own caps. -->
 <section class="section">
 	<Kicker>Permissions</Kicker>
-	<p class="section-note">
-		Toggle each member's capabilities. Authors write posts; reviewers cast publish votes; commenters
-		comment; admins manage the blog. Changes are recorded and shown to all members below.
-	</p>
-	<div class="perm-grid" role="table" aria-label="Member permissions">
+	<details class="advanced">
+		<summary>Advanced: per-capability permissions</summary>
+		<p class="section-note">
+			A role (above) is a preset for these capabilities. Use this grid only to diverge from a
+			preset — grant or revoke a single capability without changing the role. Authors write posts;
+			reviewers cast publish votes; commenters comment; admins manage the blog. Changes are recorded
+			and shown to all members below.
+		</p>
+		<div class="perm-grid" role="table" aria-label="Member permissions">
 		<div class="perm-row perm-head" role="row">
 			<span role="columnheader">Member</span>
 			{#each CAPABILITIES as cap}
@@ -365,6 +369,7 @@
 			</div>
 		{/each}
 	</div>
+	</details>
 </section>
 
 <!-- Member-visible attributed permission change log (never IP/UA). -->
@@ -491,6 +496,15 @@
 		color: var(--color-text-muted);
 		max-width: 64ch;
 		margin: 0 0 var(--space-3);
+	}
+
+	.advanced > summary {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
+		cursor: pointer;
+		padding: var(--space-2) 0;
 	}
 
 	.perm-grid {

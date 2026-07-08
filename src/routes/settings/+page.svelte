@@ -5,7 +5,8 @@
 		generateIdentity,
 		encodeForWire,
 		cacheUnlockedIdentity,
-		clearCachedIdentity
+		clearCachedIdentity,
+		identityFromMnemonic
 	} from '$lib/client/vault';
 	import {
 		isPushSupported,
@@ -141,6 +142,43 @@
 	let rotateConfirm = '';
 	let identities = data.identities;
 	let sessions = data.sessions;
+
+	// Restore-from-recovery-phrase (forgot-password path). Derives the identity
+	// from the 24-word mnemonic and, if its commitment matches one of this
+	// account's enrolled identities, unlocks it for the current session. This does
+	// not re-encrypt the stored blob (the password stays whatever it was); it just
+	// gets the user working again without their password.
+	let restorePhrase = '';
+	let restoreBusy = false;
+	let restoreMsg = '';
+
+	async function restoreFromPhrase() {
+		const t = get(_);
+		restoreBusy = true;
+		restoreMsg = '';
+		try {
+			let identity;
+			try {
+				identity = await identityFromMnemonic(restorePhrase);
+			} catch {
+				restoreMsg = t('settings.restore_invalid');
+				return;
+			}
+			const commitment = identity.commitment.toString();
+			const match = identities.some((id) => id.idc === commitment && id.status === 'active');
+			if (!match) {
+				restoreMsg = t('settings.restore_mismatch');
+				return;
+			}
+			cacheUnlockedIdentity(identity);
+			restorePhrase = '';
+			restoreMsg = t('settings.restore_ok');
+		} catch (e) {
+			restoreMsg = (e as Error).message;
+		} finally {
+			restoreBusy = false;
+		}
+	}
 
 	// Data rights state — export & delete-account flows.
 	let deleteOpen = false;
@@ -391,6 +429,34 @@
 								<Button type="submit" disabled={busy}>{$_('settings.rotate_button')}</Button>
 							</div>
 						</form>
+					</div>
+				</details>
+				<details class="disclosure">
+					<summary>{$_('settings.restore_summary')}</summary>
+					<div class="stack disclosure-body">
+						<p class="muted">{$_('settings.restore_blurb')}</p>
+						<form
+							onsubmit={(e) => {
+								e.preventDefault();
+								restoreFromPhrase();
+							}}
+							class="stack-form"
+						>
+							<Field
+								label={$_('settings.restore_phrase_label')}
+								multiline
+								rows={3}
+								bind:value={restorePhrase}
+								required
+								autocomplete="off"
+							/>
+							<div>
+								<Button type="submit" disabled={restoreBusy || !restorePhrase.trim()}>
+									{$_('settings.restore_button')}
+								</Button>
+							</div>
+						</form>
+						{#if restoreMsg}<p class="status">{restoreMsg}</p>{/if}
 					</div>
 				</details>
 			</div>
