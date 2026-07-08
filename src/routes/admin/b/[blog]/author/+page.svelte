@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		getCachedIdentity,
 		cacheUnlockedIdentity,
@@ -26,6 +27,51 @@
 	let done = false;
 	let doneMessage = '';
 
+	// A user who signs in but hasn't set up an identity gets bounced to
+	// /signup/identity mid-compose. Stash the in-progress draft so it survives that
+	// detour (identity setup returns here via ?next=) instead of being lost.
+	const DRAFT_KEY = `freedink.draft.${data.blog.id}`;
+
+	function stashDraft() {
+		try {
+			sessionStorage.setItem(
+				DRAFT_KEY,
+				JSON.stringify({ title, content, submitForReview, language })
+			);
+		} catch {
+			// sessionStorage can be unavailable (private mode / quota). Draft
+			// persistence is a best-effort convenience, not correctness-critical.
+		}
+	}
+
+	function clearDraft() {
+		try {
+			sessionStorage.removeItem(DRAFT_KEY);
+		} catch {
+			// Best-effort; see stashDraft.
+		}
+	}
+
+	onMount(() => {
+		try {
+			const raw = sessionStorage.getItem(DRAFT_KEY);
+			if (!raw) return;
+			const d = JSON.parse(raw) as Partial<{
+				title: string;
+				content: string;
+				submitForReview: boolean;
+				language: string;
+			}>;
+			if (typeof d.title === 'string') title = d.title;
+			if (typeof d.content === 'string') content = d.content;
+			if (typeof d.submitForReview === 'boolean') submitForReview = d.submitForReview;
+			if (typeof d.language === 'string') language = d.language;
+			clearDraft();
+		} catch {
+			// Corrupt/blocked storage — start with an empty composer.
+		}
+	});
+
 	function writeAnother() {
 		title = '';
 		content = '';
@@ -39,7 +85,10 @@
 		const res = await fetch('/api/identity');
 		const json = await res.json();
 		if (!json.identity) {
-			window.location.href = '/signup/identity';
+			// Preserve the draft across the identity-setup detour and come back here.
+			stashDraft();
+			const next = encodeURIComponent(`/admin/b/${data.blog.slug}/author`);
+			window.location.href = `/signup/identity?next=${next}`;
 			return null;
 		}
 		const blob = decodeFromWire(json.identity);
@@ -116,6 +165,7 @@
 				error = await res.text();
 				return;
 			}
+			clearDraft();
 			doneMessage = submitForReview
 				? 'Submitted for review. Reviewers will vote before it publishes.'
 				: 'Saved as a draft. It stays private until you submit it for review.';
