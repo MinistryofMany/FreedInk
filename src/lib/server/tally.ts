@@ -112,3 +112,82 @@ export async function getReviewSummary(postVersionId: string) {
 		rejects: rows.filter((r) => r.vote === 'reject').length
 	};
 }
+
+// Read-only review progress for display on the review queue. Computes the same
+// approves/rejects tally AND the publish threshold that evaluatePostReview uses,
+// but never mutates status (no setPostStatus). This is what powers the
+// "X of Y approvals · N more to publish" line on each review card.
+//
+// Anonymity note: this returns ONLY aggregate counts + the threshold and the
+// frozen eligible-reviewer denominator. It never reveals which member cast which
+// vote (that linkage does not exist — votes are blind-token redemptions).
+export async function getReviewProgress(postVersionId: string): Promise<{
+	approves: number;
+	rejects: number;
+	threshold: number;
+	eligibleCount: number;
+	approvalNumerator: number;
+	approvalDenominator: number;
+}> {
+	const versionRows = await db
+		.select({
+			version: schema.blogPostVersions,
+			post: schema.blogPosts,
+			blog: schema.blogs
+		})
+		.from(schema.blogPostVersions)
+		.innerJoin(schema.blogPosts, eq(schema.blogPosts.id, schema.blogPostVersions.postId))
+		.innerJoin(schema.blogs, eq(schema.blogs.id, schema.blogPosts.blogId))
+		.where(eq(schema.blogPostVersions.id, postVersionId))
+		.limit(1);
+	const row = versionRows[0];
+	if (!row) throw new Error('post version not found');
+
+	// FROZEN eligible-reviewer count (legacy rows fall back to the live count).
+	let denominatorPop = row.version.eligibleReviewersAtReview;
+	if (denominatorPop == null) {
+		const eligibleRows = await db
+			.select({ id: schema.blogMembers.id })
+			.from(schema.blogMembers)
+			.where(
+				and(
+					eq(schema.blogMembers.blogId, row.post.blogId),
+					isNull(schema.blogMembers.removedAt),
+					eq(schema.blogMembers.canReview, true)
+				)
+			);
+		denominatorPop = eligibleRows.length;
+	}
+
+	// Floor at outstanding issued tokens (bare count; never joined to votes).
+	const issuedRows = await db
+		.select({ id: schema.voteTokenIssuances.id })
+		.from(schema.voteTokenIssuances)
+		.where(eq(schema.voteTokenIssuances.postVersionId, postVersionId));
+	const eligibleCount = Math.max(denominatorPop, issuedRows.length);
+
+	const reviewRows = await db
+		.select({ vote: schema.postReviews.vote })
+		.from(schema.postReviews)
+		.where(
+			and(
+				eq(schema.postReviews.postVersionId, postVersionId),
+				isNotNull(schema.postReviews.tokenNonce)
+			)
+		);
+	const approves = reviewRows.filter((r) => r.vote === 'approve').length;
+	const rejects = reviewRows.filter((r) => r.vote === 'reject').length;
+
+	const num = row.blog.approvalNumerator;
+	const den = row.blog.approvalDenominator;
+	const threshold = Math.ceil((eligibleCount * num) / den);
+
+	return {
+		approves,
+		rejects,
+		threshold,
+		eligibleCount,
+		approvalNumerator: num,
+		approvalDenominator: den
+	};
+}

@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { sluggify } from '$lib/utils';
 	import {
 		getCachedIdentity,
 		cacheUnlockedIdentity,
@@ -16,7 +14,6 @@
 
 	export let data;
 	let title = '';
-	$: titleSlug = sluggify(title);
 	let content = '';
 	let submitForReview = true;
 	// Default to the blog's default language (server-injected via the load).
@@ -25,6 +22,18 @@
 	let error = '';
 	let password = '';
 	let needsPassword = false;
+	// Post-submit confirmation state (replaces the old silent goto('/admin')).
+	let done = false;
+	let doneMessage = '';
+
+	function writeAnother() {
+		title = '';
+		content = '';
+		submitForReview = true;
+		error = '';
+		done = false;
+		doneMessage = '';
+	}
 
 	async function unlock() {
 		const res = await fetch('/api/identity');
@@ -60,7 +69,17 @@
 				return;
 			}
 			let identity = getCachedIdentity();
-			if (!identity) identity = await unlock();
+			if (!identity) {
+				// No identity cached in this tab. Never call unlock() with an empty
+				// password (it would fail decrypt and surface a bogus "wrong
+				// password"). Render the unlock form first; once a password has been
+				// entered, unlock and continue.
+				if (!password) {
+					needsPassword = true;
+					return;
+				}
+				identity = await unlock();
+			}
 			if (!identity) return;
 
 			const group = await fetchGroup(data.blog.slug, 'author');
@@ -97,7 +116,10 @@
 				error = await res.text();
 				return;
 			}
-			goto('/admin');
+			doneMessage = submitForReview
+				? 'Submitted for review. Reviewers will vote before it publishes.'
+				: 'Saved as a draft. It stays private until you submit it for review.';
+			done = true;
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -106,36 +128,42 @@
 	}
 </script>
 
-{#if needsPassword}
-	<Card class="unlock-card">
-		<Kicker>Locked identity</Kicker>
-		<h2 class="page-heading">Unlock your identity</h2>
-		<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
-			<Field
-				label="Identity password"
-				type="password"
-				bind:value={password}
-				required
-				autocomplete="current-password"
-			/>
-			<div class="form-actions">
-				<Button type="submit">Unlock</Button>
-			</div>
-		</form>
+{#if done}
+	<Card class="success-card">
+		<Kicker>Done</Kicker>
+		<h2 class="page-heading">{doneMessage}</h2>
+		<div class="form-actions success-actions">
+			<Button onclick={writeAnother}>Write another post</Button>
+			<Button href="/admin/b/{data.blog.slug}/manage" variant="ghost">Back to blog</Button>
+		</div>
 	</Card>
-{/if}
+{:else}
+	{#if needsPassword}
+		<Card class="unlock-card">
+			<Kicker>Locked identity</Kicker>
+			<h2 class="page-heading">Unlock your identity</h2>
+			<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
+				<Field
+					label="Identity password"
+					type="password"
+					bind:value={password}
+					required
+					autocomplete="current-password"
+				/>
+				<div class="form-actions">
+					<Button type="submit">Unlock</Button>
+				</div>
+			</form>
+		</Card>
+	{/if}
 
-<Card>
-	<Kicker>New post</Kicker>
-	<h2 class="page-heading">{data.blog.title}</h2>
+	<Card>
+		<Kicker>New post</Kicker>
+		<h2 class="page-heading">{data.blog.title}</h2>
 
-	<form on:submit|preventDefault={submit}>
+		<form on:submit|preventDefault={submit}>
 		<div class="title-wrapper">
 			<Field label="Post Title" id="post-title" bind:value={title} required />
-			<div class="field-native">
-				<label class="native-label" for="post-slug">Mock URL</label>
-				<input type="text" id="post-slug" class="native-input" value={titleSlug} disabled />
-			</div>
 		</div>
 		<div class="field-native">
 			<span class="native-label">Content</span>
@@ -175,6 +203,7 @@
 		</div>
 	</form>
 </Card>
+{/if}
 
 <style>
 	.page-heading {
@@ -205,8 +234,7 @@
 		flex-wrap: wrap;
 	}
 
-	.title-wrapper :global(.field),
-	.title-wrapper .field-native {
+	.title-wrapper :global(.field) {
 		flex: 1 1 16rem;
 	}
 
@@ -223,7 +251,6 @@
 		color: var(--color-text);
 	}
 
-	.native-input,
 	.native-select {
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
@@ -234,10 +261,6 @@
 		padding: var(--space-2) var(--space-3);
 	}
 
-	.native-input:disabled {
-		color: var(--color-text-muted);
-		background: var(--color-surface-alt);
-	}
 
 	.native-select {
 		max-width: 32ch;
@@ -264,5 +287,9 @@
 
 	.form-actions {
 		display: flex;
+	}
+
+	.success-actions {
+		gap: var(--space-3);
 	}
 </style>
