@@ -8,7 +8,8 @@
 // compromised DB write from elevating to operator.
 import { env } from '$env/dynamic/private';
 import { db, schema } from '$lib/db/client';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { oidcConfig } from '$lib/server/oidc';
 import type { User } from '$lib/db/schema';
 
 function parseList(): Set<string> {
@@ -66,18 +67,29 @@ export function operatorAllowlistConfigured(): boolean {
 	return parseFreedinkOperatorSubs().size > 0;
 }
 
-// True iff the given user holds at least one OIDC subject in the operator
-// allowlist. Fails closed when the allowlist is empty/unset. The subject match
-// is issuer-agnostic: Minister is the only configured OIDC issuer and pairwise
-// subjects are high-entropy opaque strings, so a collision with any other
-// issuer's subject is not a practical concern.
+// True iff the given user holds an OIDC subject in the operator allowlist under
+// Minister's configured issuer. Fails closed when the allowlist is empty/unset.
+//
+// The match is pinned to Minister's issuer (`OIDC_MINISTER_ISSUER`, via
+// `oidcConfig().issuer`) because the rest of the codebase keys OIDC identities
+// on (issuer, subject) — matching a bare subject would let a subject minted by
+// some other or future issuer that happens to collide with an allowlisted value
+// elevate to operator. Compare (issuer, subject). If Minister OIDC isn't
+// configured there can be no operator, so fail closed there too.
 export async function isFreedinkOperator(userId: string | null | undefined): Promise<boolean> {
 	if (!userId) return false;
 	const set = parseFreedinkOperatorSubs();
 	if (set.size === 0) return false; // fail closed
+	const cfg = oidcConfig();
+	if (!cfg) return false; // Minister OIDC not configured → no operators
 	const rows = await db
 		.select({ subject: schema.oidcIdentities.subject })
 		.from(schema.oidcIdentities)
-		.where(eq(schema.oidcIdentities.userId, userId));
+		.where(
+			and(
+				eq(schema.oidcIdentities.userId, userId),
+				eq(schema.oidcIdentities.issuer, cfg.issuer)
+			)
+		);
 	return rows.some((r) => set.has(r.subject));
 }
