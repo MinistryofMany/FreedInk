@@ -4,12 +4,21 @@ import { getBlogBySlug } from '$lib/db/blogs';
 import { getPostBySlug, listCommentsPage } from '$lib/db/posts';
 import { renderMarkdown } from '$lib/server/markdown';
 import { parseLimit } from '$lib/pagination';
+import { hasCapability } from '$lib/db/members';
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const blog = await getBlogBySlug(params.blog);
 	if (!blog) throw error(404, 'blog not found');
 	const post = await getPostBySlug(blog.id, params.slug);
 	if (!post) throw error(404, 'post not found');
+
+	// Whether the signed-in viewer may comment (holds can_comment on this blog).
+	// The composer gates on this so a non-member sees "only members can comment"
+	// up front instead of building a proof that the server would reject. A guest
+	// is never a member.
+	const canComment = locals.user
+		? await hasCapability(blog.id, locals.user.id, 'comment')
+		: false;
 
 	// Comments use a dedicated `commentsCursor` query param so they don't
 	// collide with anything else that might land on this URL later.
@@ -37,6 +46,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 			language: post.version.language ?? blog.defaultLanguage ?? 'en'
 		},
 		Comments: page.items,
-		commentsNextCursor: page.nextCursor
+		commentsNextCursor: page.nextCursor,
+		canComment
 	};
 };

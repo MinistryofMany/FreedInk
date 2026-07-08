@@ -178,6 +178,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>New post — {data.blog.title}</title>
+</svelte:head>
+
 {#if done}
 	<Card class="success-card">
 		<Kicker>Done</Kicker>

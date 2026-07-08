@@ -40,6 +40,10 @@
 	] as const;
 </script>
 
+<svelte:head>
+	<title>{$_('admin.dashboard')} — FreedInk</title>
+</svelte:head>
+
 <div class="dashboard">
 	{#each groups as group (group.key)}
 		<Card>

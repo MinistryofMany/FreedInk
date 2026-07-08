@@ -249,6 +249,10 @@
 	];
 </script>
 
+<svelte:head>
+	<title>Manage — {blog.title}</title>
+</svelte:head>
+
 <header class="page-header">
 	<div class="header-row">
 		<h3 class="page-title">{blog.title}</h3>

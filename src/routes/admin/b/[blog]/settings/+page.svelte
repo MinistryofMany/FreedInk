@@ -65,6 +65,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Settings — {data.blog.title}</title>
+</svelte:head>
+
 <Card>
 	<h3 class="page-heading">Settings — {data.blog.title}</h3>
 

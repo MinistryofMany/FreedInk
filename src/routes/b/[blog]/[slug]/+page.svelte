@@ -329,7 +329,7 @@
 		{/if}
 	{/if}
 
-	{#if signedIn}
+	{#if signedIn && data.canComment}
 		<h3 class="leave-heading">{$_('comments.leave_heading')}</h3>
 		{#if needsPassword}
 			<form class="comment-form" on:submit|preventDefault={unlockFromForm}>
@@ -361,6 +361,8 @@
 		</form>
 		{#if error}<p class="form-error" role="alert">{error}</p>{/if}
 		<p class="hint">{$_('comments.anonymous_hint')}</p>
+	{:else if signedIn}
+		<p class="signin-prompt">{$_('comments.only_members')}</p>
 	{:else}
 		<p class="signin-prompt">
 			<a href="/signup">{$_('comments.sign_in_to_comment_prefix')}</a>

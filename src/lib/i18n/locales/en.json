@@ -67,7 +67,8 @@
 		"unlock_button": "Unlock",
 		"anonymous_hint": "Comments are anonymous: posting proves you're a member of this blog without revealing which one.",
 		"sign_in_to_comment_prefix": "Sign in",
-		"sign_in_to_comment_suffix": "to comment as a blog member."
+		"sign_in_to_comment_suffix": "to comment as a blog member.",
+		"only_members": "Only members of this blog can comment."
 	},
 	"search": {
 		"heading": "Search",
@@ -176,7 +177,8 @@
 	},
 	"errors": {
 		"page_not_found_heading": "Page not found?",
-		"page_not_found_hint": "Are you lost?"
+		"page_not_found_hint": "Are you lost?",
+		"back_home": "Back to home"
 	},
 	"report": {
 		"heading": "Report {type}",

@@ -126,6 +126,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Edit post — {data.blog.title}</title>
+</svelte:head>
+
 {#if data.feedback && (data.feedback.reasonCounts.length > 0 || data.feedback.comments.length > 0)}
 	<Card class="feedback-card">
 		<Kicker>Anonymous reviewer feedback</Kicker>
