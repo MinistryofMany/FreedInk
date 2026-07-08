@@ -6,6 +6,27 @@
 
 	let busy = false;
 	let error = '';
+	// One-time "you joined" banner shown after a successful accept, before we send
+	// the new member to the surface their role can actually use.
+	let joined: { role: string; dest: string } | null = null;
+
+	// Land each role where it can do something, instead of always /manage (which
+	// bounces a non-admin straight back to a bare /admin):
+	//   owner        → Manage    reviewer/editor → Review
+	//   author       → Write     commenter       → the public blog
+	function destFor(slug: string, role: string): string {
+		switch (role) {
+			case 'owner':
+				return `/admin/b/${slug}/manage`;
+			case 'editor':
+			case 'reviewer':
+				return `/admin/b/${slug}/review`;
+			case 'author':
+				return `/admin/b/${slug}/author`;
+			default:
+				return `/b/${slug}`;
+		}
+	}
 
 	async function accept() {
 		busy = true;
@@ -17,7 +38,10 @@
 				return;
 			}
 			const json = await res.json();
-			goto(`/admin/b/${json.blog_slug}/manage`);
+			const dest = destFor(json.blog_slug, json.role);
+			joined = { role: json.role, dest };
+			// Let the banner render, then continue to the role's surface.
+			setTimeout(() => goto(dest), 1400);
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -46,7 +70,13 @@
 			</p>
 			<p class="meta">Expires {new Date(data.invitation.expiresAt).toLocaleString()}.</p>
 
-			{#if data.signedIn}
+			{#if joined}
+				<p class="joined" role="status" aria-live="polite">
+					You joined <strong>{data.invitation.blogTitle}</strong> as a
+					<strong>{joined.role}</strong>.
+				</p>
+				<Button href={joined.dest}>Continue</Button>
+			{:else if data.signedIn}
 				<p>You're signed in as <strong>{data.username}</strong>.</p>
 				<Button onclick={accept} loading={busy}>
 					{busy ? 'Accepting…' : 'Accept invitation'}
@@ -83,5 +113,9 @@
 	.error {
 		margin-top: var(--space-3);
 		color: var(--color-danger);
+	}
+	.joined {
+		color: var(--color-accent);
+		font-weight: 600;
 	}
 </style>

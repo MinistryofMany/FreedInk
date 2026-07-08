@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { sluggify } from '$lib/utils';
 	import {
 		getCachedIdentity,
 		cacheUnlockedIdentity,
@@ -17,12 +15,12 @@
 	// Pre-fill from the current version. The author starts where the live post
 	// left off; saving creates a new version row with version = current+1.
 	let title = data.post.title;
-	$: titleSlug = sluggify(title);
 	let content = data.post.content;
 	let language = data.post.language;
 	let submitForReview = true;
 	let busy = false;
 	let error = '';
+	let notice = '';
 	let password = '';
 	let needsPassword = false;
 
@@ -59,6 +57,7 @@
 	async function submit() {
 		busy = true;
 		error = '';
+		notice = '';
 		try {
 			// Used to be enforced by the textarea's required attribute.
 			if (!content.trim()) {
@@ -66,7 +65,17 @@
 				return;
 			}
 			let identity = getCachedIdentity();
-			if (!identity) identity = await unlock();
+			if (!identity) {
+				// No identity cached in this tab. Never call unlock() with an empty
+				// password (it would fail decrypt and surface a bogus "wrong
+				// password"). Render the unlock form first; once a password has been
+				// entered, unlock and continue.
+				if (!password) {
+					needsPassword = true;
+					return;
+				}
+				identity = await unlock();
+			}
 			if (!identity) return;
 
 			const group = await fetchGroup(data.blog.slug, 'author');
@@ -106,7 +115,9 @@
 				error = await res.text();
 				return;
 			}
-			goto('/admin');
+			notice = submitForReview
+				? `Version ${nextVersion} saved and submitted for review.`
+				: `Version ${nextVersion} saved as a draft.`;
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -114,6 +125,10 @@
 		}
 	}
 </script>
+
+<svelte:head>
+	<title>Edit post — {data.blog.title}</title>
+</svelte:head>
 
 {#if data.feedback && (data.feedback.reasonCounts.length > 0 || data.feedback.comments.length > 0)}
 	<Card class="feedback-card">
@@ -183,10 +198,6 @@
 	<form on:submit|preventDefault={submit}>
 		<div class="title-wrapper">
 			<Field label="Post Title" id="post-title" bind:value={title} required />
-			<div class="field-native">
-				<label class="native-label" for="post-slug">Mock URL</label>
-				<input type="text" id="post-slug" class="native-input" value={titleSlug} disabled />
-			</div>
 		</div>
 		<div class="field-native">
 			<span class="native-label">Content</span>
@@ -221,6 +232,9 @@
 		</label>
 		{#if error}
 			<p class="error-text" role="alert">{error}</p>
+		{/if}
+		{#if notice}
+			<p class="notice-text" role="status" aria-live="polite">{notice}</p>
 		{/if}
 		<div class="form-actions">
 			<Button type="submit" disabled={busy} loading={busy}>
@@ -269,8 +283,7 @@
 		flex-wrap: wrap;
 	}
 
-	.title-wrapper :global(.field),
-	.title-wrapper .field-native {
+	.title-wrapper :global(.field) {
 		flex: 1 1 16rem;
 	}
 
@@ -287,7 +300,6 @@
 		color: var(--color-text);
 	}
 
-	.native-input,
 	.native-select {
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
@@ -296,11 +308,6 @@
 		border: var(--border-1) solid var(--color-border);
 		border-radius: var(--radius-md);
 		padding: var(--space-2) var(--space-3);
-	}
-
-	.native-input:disabled {
-		color: var(--color-text-muted);
-		background: var(--color-surface-alt);
 	}
 
 	.native-select {
@@ -324,6 +331,12 @@
 		margin: 0;
 		font-size: var(--text-sm);
 		color: var(--color-danger);
+	}
+
+	.notice-text {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-accent);
 	}
 
 	.form-actions {

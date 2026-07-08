@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { generateIdentity, encodeForWire, cacheUnlockedIdentity } from '$lib/client/vault';
+	import {
+		generateIdentity,
+		encodeForWire,
+		cacheUnlockedIdentity,
+		exportMnemonic
+	} from '$lib/client/vault';
 	import { _ } from '$lib/i18n';
 	import { get } from 'svelte/store';
 	import { Card, Field, Button, Kicker } from '$lib/components/ui';
@@ -21,6 +26,29 @@
 	let displayName = data.displayName ?? '';
 	let busy = false;
 	let error = '';
+
+	// Recovery-phrase step: after the identity is created and stored, we show the
+	// 24-word mnemonic once and make the user acknowledge saving it before leaving.
+	let recoveryPhrase: string | null = null;
+	let recoveryAck = false;
+	let recoveryCopied = false;
+	let pendingNext = '/admin';
+
+	async function copyRecovery() {
+		if (!recoveryPhrase) return;
+		try {
+			await navigator.clipboard.writeText(recoveryPhrase);
+			recoveryCopied = true;
+			setTimeout(() => (recoveryCopied = false), 1500);
+		} catch {
+			// Clipboard may be blocked; the phrase stays visible for manual copy.
+			recoveryCopied = false;
+		}
+	}
+
+	function finishSetup() {
+		goto(pendingNext);
+	}
 
 	function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -66,7 +94,15 @@
 				}
 			}
 			cacheUnlockedIdentity(identity);
-			goto(safeNext($page.url.searchParams.get('next')));
+			// Show the one-time recovery phrase before leaving. Generating the
+			// mnemonic can't fail for a fresh 32-byte identity, but if it somehow
+			// does, don't strand the user — fall through to the normal redirect.
+			pendingNext = safeNext($page.url.searchParams.get('next'));
+			try {
+				recoveryPhrase = await exportMnemonic(identity);
+			} catch {
+				goto(pendingNext);
+			}
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -90,7 +126,28 @@
 				{$_('identity.forgot_warning')}
 			</p>
 
-			{#if data.hasIdentity}
+			{#if recoveryPhrase}
+				<div class="recovery">
+					<h2 class="recovery-heading">{$_('identity.recovery_heading')}</h2>
+					<p class="body-text">{$_('identity.recovery_blurb')}</p>
+					<pre
+						class="recovery-phrase"
+						aria-label={$_('identity.recovery_heading')}>{recoveryPhrase}</pre>
+					<div class="recovery-actions">
+						<Button variant="ghost" onclick={copyRecovery}>
+							{recoveryCopied ? $_('identity.recovery_copied') : $_('identity.recovery_copy')}
+						</Button>
+					</div>
+					<p class="banner banner--danger">{$_('identity.recovery_warning')}</p>
+					<label class="recovery-ack">
+						<input type="checkbox" bind:checked={recoveryAck} />
+						<span>{$_('identity.recovery_ack')}</span>
+					</label>
+					<Button variant="primary" disabled={!recoveryAck} onclick={finishSetup}>
+						{$_('identity.recovery_continue')}
+					</Button>
+				</div>
+			{:else if data.hasIdentity}
 				<div class="banner banner--danger">
 					<p>{$_('identity.already_have')}</p>
 				</div>
@@ -223,5 +280,46 @@
 		margin: 0;
 		font-size: var(--text-sm);
 		color: var(--color-danger);
+	}
+
+	.recovery {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.recovery-heading {
+		font-family: var(--font-display);
+		font-size: var(--text-lg);
+		color: var(--color-text);
+		margin: 0;
+	}
+
+	.recovery-phrase {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-base);
+		line-height: 1.8;
+		color: var(--color-text);
+		background: var(--color-surface-alt);
+		border: var(--border-1) solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		margin: 0;
+		white-space: pre-wrap;
+		word-spacing: 0.3em;
+	}
+
+	.recovery-actions {
+		display: flex;
+		gap: var(--space-3);
+	}
+
+	.recovery-ack {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
 	}
 </style>

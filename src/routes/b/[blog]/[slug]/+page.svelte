@@ -168,12 +168,30 @@
 		try {
 			let identity: Identity | null = cached;
 			if (!identity) {
+				// Pick up an identity already unlocked elsewhere in this tab.
+				const vault = await loadVault();
+				identity = vault.getCachedIdentity();
+				if (identity) cached = identity;
+			}
+			if (!identity) {
+				// Nothing cached. Never decrypt with an empty password — show the
+				// unlock field first. A wrong password on a real attempt keeps the
+				// field visible so the user can retry; only genuinely non-password
+				// errors (not signed in, no identity) propagate.
+				if (!password) {
+					needsPassword = true;
+					return;
+				}
 				try {
 					identity = await unlock();
 				} catch (e) {
-					if ((e as Error).message === 'wrong password') throw e;
-					needsPassword = true;
-					return;
+					const msg = (e as Error).message;
+					if (msg === 'wrong password') {
+						needsPassword = true;
+						error = msg;
+						return;
+					}
+					throw e;
 				}
 			}
 			const sem = await import('$lib/client/semaphore');
@@ -311,7 +329,7 @@
 		{/if}
 	{/if}
 
-	{#if signedIn}
+	{#if signedIn && data.canComment}
 		<h3 class="leave-heading">{$_('comments.leave_heading')}</h3>
 		{#if needsPassword}
 			<form class="comment-form" on:submit|preventDefault={unlockFromForm}>
@@ -343,6 +361,8 @@
 		</form>
 		{#if error}<p class="form-error" role="alert">{error}</p>{/if}
 		<p class="hint">{$_('comments.anonymous_hint')}</p>
+	{:else if signedIn}
+		<p class="signin-prompt">{$_('comments.only_members')}</p>
 	{:else}
 		<p class="signin-prompt">
 			<a href="/signup">{$_('comments.sign_in_to_comment_prefix')}</a>

@@ -43,6 +43,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
+		/* Anchor the stretched-link overlay below. */
+		position: relative;
 	}
 
 	.post-title {
@@ -52,6 +54,14 @@
 		text-decoration: none;
 		line-height: 1.3;
 		transition: color var(--transition-fast) var(--ease);
+	}
+
+	/* Stretched link: the whole card is clickable via the title anchor, keeping a
+	   single accessible link rather than nesting the card in an <a>. */
+	.post-title::after {
+		content: '';
+		position: absolute;
+		inset: 0;
 	}
 
 	.post-title:hover {

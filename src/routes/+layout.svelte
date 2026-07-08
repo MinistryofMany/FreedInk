@@ -157,9 +157,19 @@
 		}
 	}
 
+	let signingOut = false;
 	async function signOut() {
-		await fetch('/api/signout', { method: 'POST' });
-		window.location.href = '/';
+		if (signingOut) return;
+		signingOut = true;
+		try {
+			await fetch('/api/signout', { method: 'POST' });
+			window.location.href = '/';
+		} catch (e) {
+			// Network failure: re-enable the button so the user can retry rather than
+			// being stuck on a spinner.
+			signingOut = false;
+			throw e;
+		}
 	}
 </script>
 
@@ -188,7 +198,9 @@
 				<a href="/settings" class="nav-link" aria-current={isCurrent('/settings')}
 					>{data.user?.displayName?.trim() || data.user?.username}</a
 				>
-				<Button variant="ghost" onclick={signOut}>{$_('nav.sign_out')}</Button>
+				<Button variant="ghost" onclick={signOut} loading={signingOut} disabled={signingOut}>
+					{$_('nav.sign_out')}
+				</Button>
 			{:else}
 				<Button href="/signup">{$_('nav.sign_in_up')}</Button>
 			{/if}
@@ -257,7 +269,13 @@
 		{#if signedIn}
 			<a href="/admin" aria-current={isCurrent('/admin')}>{$_('nav.dashboard')}</a>
 			<a href="/settings" aria-current={isCurrent('/settings')}>{data.user?.username}</a>
-			<Button variant="ghost" class="drawer-action" onclick={signOut}>{$_('nav.sign_out')}</Button>
+			<Button
+				variant="ghost"
+				class="drawer-action"
+				onclick={signOut}
+				loading={signingOut}
+				disabled={signingOut}>{$_('nav.sign_out')}</Button
+			>
 		{:else}
 			<Button href="/signup" class="drawer-action">{$_('nav.sign_in_up')}</Button>
 		{/if}

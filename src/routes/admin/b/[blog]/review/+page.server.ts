@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import { getBlogBySlug } from '$lib/db/blogs';
 import { hasRole, ROLES_REVIEWING } from '$lib/server/auth';
 import { getPostsUnderReviewPage } from '$lib/db/posts';
-import { getReviewSummary } from '$lib/server/tally';
+import { getReviewProgress } from '$lib/server/tally';
 import { parseLimit } from '$lib/pagination';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const enriched = await Promise.all(
 		page.items.map(async (p) => ({
 			...p,
-			tally: await getReviewSummary(p.version.id)
+			tally: await getReviewProgress(p.version.id)
 		}))
 	);
 	return {

@@ -11,6 +11,7 @@
 	export let data;
 	let busy = false;
 	let error = '';
+	let notice = '';
 	// Per-version "preparing voting for this post…" flag. Set while we wait for the
 	// issuer key to finish generating (async pre-gen / Signet keygen) and poll. The
 	// vote button stays disabled and a hint shows instead of an error.
@@ -105,6 +106,7 @@
 	async function vote(post_version_id: string, choice: 'approve' | 'reject') {
 		busy = true;
 		error = '';
+		notice = '';
 		try {
 			// Reject requires at least one reason — server enforces too, but catch
 			// the obvious case here before spending a token.
@@ -139,6 +141,22 @@
 				error = await res.text();
 				return;
 			}
+			// The redeem endpoint returns the resulting post status so we can confirm
+			// the outcome instead of silently refreshing.
+			let outcome: { status?: string } = {};
+			try {
+				outcome = await res.clone().json();
+			} catch {
+				outcome = {};
+			}
+			if (outcome.status === 'published') {
+				notice = 'Approved — the post reached its threshold and is now published.';
+			} else if (outcome.status === 'rejected') {
+				notice = 'Rejected — the post reached its rejection threshold and left the queue.';
+			} else {
+				notice =
+					choice === 'approve' ? 'Your approval was recorded.' : 'Your rejection was recorded.';
+			}
 			commentByPost[post_version_id] = '';
 			reasonsByPost[post_version_id] = {};
 			rejectOpenByPost[post_version_id] = false;
@@ -170,6 +188,7 @@
 	</header>
 
 	{#if error}<p class="error" role="alert">{error}</p>{/if}
+	{#if notice}<p class="notice" role="status" aria-live="polite">{notice}</p>{/if}
 
 	{#if posts.length === 0}
 		<EmptyState title="Nothing under review right now." />
@@ -187,6 +206,16 @@
 								<Badge tone="success">approves {p.tally.approves}</Badge>
 								<Badge tone="danger">rejects {p.tally.rejects}</Badge>
 							</div>
+							<p class="threshold-line">
+								{p.tally.approves} of {p.tally.threshold} approvals · {Math.max(
+									0,
+									p.tally.threshold - p.tally.approves
+								)} more to publish
+								<span class="threshold-detail">
+									(publishes when {p.tally.approvalNumerator} of every {p.tally.approvalDenominator} of
+									the {p.tally.eligibleCount} eligible reviewers approve)
+								</span>
+							</p>
 						</div>
 
 						<pre class="body">{p.version.content}</pre>
@@ -291,6 +320,13 @@
 		margin: 0 0 var(--space-4);
 	}
 
+	.notice {
+		color: var(--color-accent);
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		margin: 0 0 var(--space-4);
+	}
+
 	.preparing {
 		color: var(--color-text-muted);
 		font-family: var(--font-ui);
@@ -335,6 +371,19 @@
 	.tally {
 		display: flex;
 		gap: var(--space-2);
+	}
+
+	.threshold-line {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		margin: var(--space-1) 0 0;
+	}
+
+	.threshold-detail {
+		display: block;
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
 	}
 
 	.body {

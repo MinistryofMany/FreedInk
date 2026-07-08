@@ -67,7 +67,8 @@
 		"unlock_button": "Unlock",
 		"anonymous_hint": "Comments are anonymous: posting proves you're a member of this blog without revealing which one.",
 		"sign_in_to_comment_prefix": "Sign in",
-		"sign_in_to_comment_suffix": "to comment as a blog member."
+		"sign_in_to_comment_suffix": "to comment as a blog member.",
+		"only_members": "Only members of this blog can comment."
 	},
 	"search": {
 		"heading": "Search",
@@ -102,7 +103,14 @@
 		"create_button": "Create identity",
 		"generating": "Generating…",
 		"error_min_length": "password must be at least 12 characters",
-		"error_mismatch": "passwords do not match"
+		"error_mismatch": "passwords do not match",
+		"recovery_heading": "Save your recovery phrase",
+		"recovery_blurb": "These 24 words regenerate your identity if you ever forget your password or lose this device. Write them down and store them offline. Anyone with this phrase can act as you.",
+		"recovery_warning": "FreedInk cannot show this phrase again and cannot recover it for you.",
+		"recovery_copy": "Copy phrase",
+		"recovery_copied": "Copied",
+		"recovery_ack": "I have saved my recovery phrase somewhere safe.",
+		"recovery_continue": "Continue"
 	},
 	"admin": {
 		"welcome": "Welcome {name}",
@@ -172,11 +180,25 @@
 		"identity_rotated": "identity rotated; snapshots updated for every blog you belong to",
 		"rotate_password_error": "pick a password ≥12 chars and confirm it",
 		"rotate_confirm_prompt": "Rotate identity? Past posts stay attributed to the old identity.",
-		"session_revoked": "session revoked"
+		"session_revoked": "session revoked",
+		"restore_summary": "Restore from recovery phrase",
+		"restore_blurb": "Forgot your password? Paste your 24-word recovery phrase to unlock your identity for this session, then set a new password below to make it permanent. Your identity and every blog membership stay the same.",
+		"restore_phrase_label": "Recovery phrase (24 words)",
+		"restore_button": "Restore identity",
+		"restore_ok": "Identity unlocked for this session. Set a new password below to make it permanent.",
+		"restore_mismatch": "That recovery phrase does not match any identity on this account.",
+		"restore_invalid": "That does not look like a valid 24-word recovery phrase.",
+		"restore_set_password_heading": "Set a new password",
+		"restore_set_password_blurb": "Re-encrypts your restored identity under a new password. Same identity, same memberships — only the password changes.",
+		"restore_set_password_button": "Set new password",
+		"restore_password_saved": "New password set. Use it next time you unlock this identity.",
+		"restore_password_error": "pick a password ≥12 chars and confirm it",
+		"restore_password_failed": "Could not set the new password. Try restoring again."
 	},
 	"errors": {
 		"page_not_found_heading": "Page not found?",
-		"page_not_found_hint": "Are you lost?"
+		"page_not_found_hint": "Are you lost?",
+		"back_home": "Back to home"
 	},
 	"report": {
 		"heading": "Report {type}",

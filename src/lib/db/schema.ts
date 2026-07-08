@@ -62,6 +62,7 @@ export const auditEvent = pgEnum('audit_event', [
 	'identity.created',
 	'identity.rotated',
 	'identity.device_revoked',
+	'identity.password_reset',
 	'blog.created',
 	'blog.archived',
 	'blog.unarchived',

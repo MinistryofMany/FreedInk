@@ -5,8 +5,11 @@
 		generateIdentity,
 		encodeForWire,
 		cacheUnlockedIdentity,
-		clearCachedIdentity
+		clearCachedIdentity,
+		identityFromMnemonic,
+		reEncryptIdentity
 	} from '$lib/client/vault';
+	import type { Identity } from '@semaphore-protocol/identity';
 	import {
 		isPushSupported,
 		getSubscriptionStatus,
@@ -25,7 +28,8 @@
 		SegmentedControl,
 		AlertDialog,
 		Badge,
-		Tag
+		Tag,
+		Rule
 	} from '$lib/components/ui';
 
 	export let data;
@@ -141,6 +145,92 @@
 	let rotateConfirm = '';
 	let identities = data.identities;
 	let sessions = data.sessions;
+
+	// Restore-from-recovery-phrase (forgot-password path). Derives the identity
+	// from the 24-word mnemonic and, if its commitment matches one of this
+	// account's enrolled identities, unlocks it for the current session. On a
+	// successful restore we keep the derived identity + its commitment around so
+	// the user can PERSIST a new password below (re-encrypt the stored vault blob
+	// in place) without changing the identity/commitment.
+	let restorePhrase = '';
+	let restoreBusy = false;
+	let restoreMsg = '';
+	// The identity proven via the recovery phrase this session, and its
+	// commitment — set only after a successful restore, gating the set-new-password
+	// sub-form so we can only re-encrypt a commitment we've actually derived.
+	let restoredIdentity: Identity | null = null;
+	let restoredIdc = '';
+	let newVaultPassword = '';
+	let newVaultConfirm = '';
+
+	async function restoreFromPhrase() {
+		const t = get(_);
+		restoreBusy = true;
+		restoreMsg = '';
+		try {
+			let identity;
+			try {
+				identity = await identityFromMnemonic(restorePhrase);
+			} catch {
+				restoreMsg = t('settings.restore_invalid');
+				return;
+			}
+			const commitment = identity.commitment.toString();
+			const match = identities.some((id) => id.idc === commitment && id.status === 'active');
+			if (!match) {
+				restoreMsg = t('settings.restore_mismatch');
+				return;
+			}
+			cacheUnlockedIdentity(identity);
+			restoredIdentity = identity;
+			restoredIdc = commitment;
+			restorePhrase = '';
+			restoreMsg = t('settings.restore_ok');
+		} catch (e) {
+			restoreMsg = (e as Error).message;
+		} finally {
+			restoreBusy = false;
+		}
+	}
+
+	// Persist a NEW password for the just-restored identity: re-encrypt the SAME
+	// identity secret client-side (verified to decrypt back to the same
+	// commitment) and hand the fresh blob to the server, which updates the
+	// existing vault row in place. Identity, commitment, and memberships are
+	// untouched.
+	async function setNewPassword() {
+		const t = get(_);
+		if (!restoredIdentity) return;
+		if (newVaultPassword.length < 12 || newVaultPassword !== newVaultConfirm) {
+			restoreMsg = t('settings.restore_password_error');
+			return;
+		}
+		restoreBusy = true;
+		restoreMsg = '';
+		try {
+			const record = await reEncryptIdentity(restoredIdentity, newVaultPassword, restoredIdc);
+			const res = await fetch('/api/identity/reset-password', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(encodeForWire(record))
+			});
+			if (!res.ok) {
+				restoreMsg = (await res.text()) || t('settings.restore_password_failed');
+				return;
+			}
+			// Keep the cached (now re-encrypted) identity unlocked for this session.
+			cacheUnlockedIdentity(restoredIdentity);
+			newVaultPassword = '';
+			newVaultConfirm = '';
+			restoredIdentity = null;
+			restoredIdc = '';
+			restoreMsg = t('settings.restore_password_saved');
+		} catch (e) {
+			restoreMsg = (e as Error).message;
+		} finally {
+			restoreBusy = false;
+		}
+	}
 
 	// Data rights state — export & delete-account flows.
 	let deleteOpen = false;
@@ -391,6 +481,69 @@
 								<Button type="submit" disabled={busy}>{$_('settings.rotate_button')}</Button>
 							</div>
 						</form>
+					</div>
+				</details>
+				<details class="disclosure">
+					<summary>{$_('settings.restore_summary')}</summary>
+					<div class="stack disclosure-body">
+						<p class="muted">{$_('settings.restore_blurb')}</p>
+						<form
+							onsubmit={(e) => {
+								e.preventDefault();
+								restoreFromPhrase();
+							}}
+							class="stack-form"
+						>
+							<Field
+								label={$_('settings.restore_phrase_label')}
+								multiline
+								rows={3}
+								bind:value={restorePhrase}
+								required
+								autocomplete="off"
+							/>
+							<div>
+								<Button type="submit" disabled={restoreBusy || !restorePhrase.trim()}>
+									{$_('settings.restore_button')}
+								</Button>
+							</div>
+						</form>
+						{#if restoredIdentity}
+							<Rule subtle />
+							<Kicker>{$_('settings.restore_set_password_heading')}</Kicker>
+							<p class="muted">{$_('settings.restore_set_password_blurb')}</p>
+							<form
+								onsubmit={(e) => {
+									e.preventDefault();
+									setNewPassword();
+								}}
+								class="stack-form"
+							>
+								<Field
+									label={$_('settings.new_password_label')}
+									type="password"
+									bind:value={newVaultPassword}
+									required
+								/>
+								<Field
+									label={$_('settings.confirm_label')}
+									type="password"
+									bind:value={newVaultConfirm}
+									required
+								/>
+								<div>
+									<Button
+										type="submit"
+										disabled={restoreBusy ||
+											newVaultPassword.length < 12 ||
+											newVaultPassword !== newVaultConfirm}
+									>
+										{$_('settings.restore_set_password_button')}
+									</Button>
+								</div>
+							</form>
+						{/if}
+						{#if restoreMsg}<p class="status">{restoreMsg}</p>{/if}
 					</div>
 				</details>
 			</div>

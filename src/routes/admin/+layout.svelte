@@ -17,13 +17,18 @@
 			<Kicker>Admin</Kicker>
 		</div>
 		<p class="admin-header__greeting">
-			{$_('admin.welcome', { values: { name: data.user.displayName ?? data.user.username } })}
+			{$_('admin.welcome', {
+				values: { name: data.user.displayName?.trim() || data.user.username }
+			})}
 		</p>
 	</div>
 	<nav class="admin-nav">
 		<Button href="/admin/" variant="ghost" size="sm">{$_('admin.dashboard')}</Button>
 		<Button href="/admin/new" variant="ghost" size="sm">{$_('admin.create_new_blog')}</Button>
 		<Button href="/settings" variant="ghost" size="sm">{$_('admin.settings')}</Button>
+		{#if data.isOperator}
+			<Button href="/admin/ops" variant="ghost" size="sm">Operator</Button>
+		{/if}
 	</nav>
 </header>
 

@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { sluggify } from '$lib/utils';
+	import { onMount } from 'svelte';
 	import {
 		getCachedIdentity,
 		cacheUnlockedIdentity,
@@ -16,7 +15,6 @@
 
 	export let data;
 	let title = '';
-	$: titleSlug = sluggify(title);
 	let content = '';
 	let submitForReview = true;
 	// Default to the blog's default language (server-injected via the load).
@@ -25,12 +23,72 @@
 	let error = '';
 	let password = '';
 	let needsPassword = false;
+	// Post-submit confirmation state (replaces the old silent goto('/admin')).
+	let done = false;
+	let doneMessage = '';
+
+	// A user who signs in but hasn't set up an identity gets bounced to
+	// /signup/identity mid-compose. Stash the in-progress draft so it survives that
+	// detour (identity setup returns here via ?next=) instead of being lost.
+	const DRAFT_KEY = `freedink.draft.${data.blog.id}`;
+
+	function stashDraft() {
+		try {
+			sessionStorage.setItem(
+				DRAFT_KEY,
+				JSON.stringify({ title, content, submitForReview, language })
+			);
+		} catch {
+			// sessionStorage can be unavailable (private mode / quota). Draft
+			// persistence is a best-effort convenience, not correctness-critical.
+		}
+	}
+
+	function clearDraft() {
+		try {
+			sessionStorage.removeItem(DRAFT_KEY);
+		} catch {
+			// Best-effort; see stashDraft.
+		}
+	}
+
+	onMount(() => {
+		try {
+			const raw = sessionStorage.getItem(DRAFT_KEY);
+			if (!raw) return;
+			const d = JSON.parse(raw) as Partial<{
+				title: string;
+				content: string;
+				submitForReview: boolean;
+				language: string;
+			}>;
+			if (typeof d.title === 'string') title = d.title;
+			if (typeof d.content === 'string') content = d.content;
+			if (typeof d.submitForReview === 'boolean') submitForReview = d.submitForReview;
+			if (typeof d.language === 'string') language = d.language;
+			clearDraft();
+		} catch {
+			// Corrupt/blocked storage — start with an empty composer.
+		}
+	});
+
+	function writeAnother() {
+		title = '';
+		content = '';
+		submitForReview = true;
+		error = '';
+		done = false;
+		doneMessage = '';
+	}
 
 	async function unlock() {
 		const res = await fetch('/api/identity');
 		const json = await res.json();
 		if (!json.identity) {
-			window.location.href = '/signup/identity';
+			// Preserve the draft across the identity-setup detour and come back here.
+			stashDraft();
+			const next = encodeURIComponent(`/admin/b/${data.blog.slug}/author`);
+			window.location.href = `/signup/identity?next=${next}`;
 			return null;
 		}
 		const blob = decodeFromWire(json.identity);
@@ -60,7 +118,17 @@
 				return;
 			}
 			let identity = getCachedIdentity();
-			if (!identity) identity = await unlock();
+			if (!identity) {
+				// No identity cached in this tab. Never call unlock() with an empty
+				// password (it would fail decrypt and surface a bogus "wrong
+				// password"). Render the unlock form first; once a password has been
+				// entered, unlock and continue.
+				if (!password) {
+					needsPassword = true;
+					return;
+				}
+				identity = await unlock();
+			}
 			if (!identity) return;
 
 			const group = await fetchGroup(data.blog.slug, 'author');
@@ -97,7 +165,11 @@
 				error = await res.text();
 				return;
 			}
-			goto('/admin');
+			clearDraft();
+			doneMessage = submitForReview
+				? 'Submitted for review. Reviewers will vote before it publishes.'
+				: 'Saved as a draft. It stays private until you submit it for review.';
+			done = true;
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -106,40 +178,50 @@
 	}
 </script>
 
-{#if needsPassword}
-	<Card class="unlock-card">
-		<Kicker>Locked identity</Kicker>
-		<h2 class="page-heading">Unlock your identity</h2>
-		<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
-			<Field
-				label="Identity password"
-				type="password"
-				bind:value={password}
-				required
-				autocomplete="current-password"
-			/>
-			<div class="form-actions">
-				<Button type="submit">Unlock</Button>
-			</div>
-		</form>
-	</Card>
-{/if}
+<svelte:head>
+	<title>New post — {data.blog.title}</title>
+</svelte:head>
 
-<Card>
-	<Kicker>New post</Kicker>
-	<h2 class="page-heading">{data.blog.title}</h2>
-
-	<form on:submit|preventDefault={submit}>
-		<div class="title-wrapper">
-			<Field label="Post Title" id="post-title" bind:value={title} required />
-			<div class="field-native">
-				<label class="native-label" for="post-slug">Mock URL</label>
-				<input type="text" id="post-slug" class="native-input" value={titleSlug} disabled />
-			</div>
+{#if done}
+	<Card class="success-card">
+		<Kicker>Done</Kicker>
+		<h2 class="page-heading">{doneMessage}</h2>
+		<div class="form-actions success-actions">
+			<Button onclick={writeAnother}>Write another post</Button>
+			<Button href="/admin/b/{data.blog.slug}/manage" variant="ghost">Back to blog</Button>
 		</div>
-		<div class="field-native">
-			<span class="native-label">Content</span>
-			<!--
+	</Card>
+{:else}
+	{#if needsPassword}
+		<Card class="unlock-card">
+			<Kicker>Locked identity</Kicker>
+			<h2 class="page-heading">Unlock your identity</h2>
+			<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
+				<Field
+					label="Identity password"
+					type="password"
+					bind:value={password}
+					required
+					autocomplete="current-password"
+				/>
+				<div class="form-actions">
+					<Button type="submit">Unlock</Button>
+				</div>
+			</form>
+		</Card>
+	{/if}
+
+	<Card>
+		<Kicker>New post</Kicker>
+		<h2 class="page-heading">{data.blog.title}</h2>
+
+		<form on:submit|preventDefault={submit}>
+			<div class="title-wrapper">
+				<Field label="Post Title" id="post-title" bind:value={title} required />
+			</div>
+			<div class="field-native">
+				<span class="native-label">Content</span>
+				<!--
 				MarkdownEditor exports markdown via bind:value so storage stays a
 				markdown string (same shape the server-side renderMarkdown helper
 				expects). It's the live preview AND the editor in one — we dropped
@@ -148,33 +230,34 @@
 				because users editing legacy markdown sometimes want a sanity check
 				against the rendered output.
 			-->
-			<MarkdownEditor
-				bind:value={content}
-				placeholder="Write your post — formatting saves as markdown."
-			/>
-		</div>
-		<div class="field-native">
-			<label class="native-label" for="post-language">Language</label>
-			<select id="post-language" class="native-select" bind:value={language}>
-				{#each POST_LANGUAGES as l}
-					<option value={l.code}>{l.name}</option>
-				{/each}
-			</select>
-		</div>
-		<label class="checkbox-row">
-			<input type="checkbox" bind:checked={submitForReview} />
-			<span>Submit for review immediately (uncheck to save as draft)</span>
-		</label>
-		{#if error}
-			<p class="error-text" role="alert">{error}</p>
-		{/if}
-		<div class="form-actions">
-			<Button type="submit" disabled={busy} loading={busy}>
-				{busy ? 'Submitting…' : 'Create Post'}
-			</Button>
-		</div>
-	</form>
-</Card>
+				<MarkdownEditor
+					bind:value={content}
+					placeholder="Write your post — formatting saves as markdown."
+				/>
+			</div>
+			<div class="field-native">
+				<label class="native-label" for="post-language">Language</label>
+				<select id="post-language" class="native-select" bind:value={language}>
+					{#each POST_LANGUAGES as l}
+						<option value={l.code}>{l.name}</option>
+					{/each}
+				</select>
+			</div>
+			<label class="checkbox-row">
+				<input type="checkbox" bind:checked={submitForReview} />
+				<span>Submit for review immediately (uncheck to save as draft)</span>
+			</label>
+			{#if error}
+				<p class="error-text" role="alert">{error}</p>
+			{/if}
+			<div class="form-actions">
+				<Button type="submit" disabled={busy} loading={busy}>
+					{busy ? 'Submitting…' : 'Create Post'}
+				</Button>
+			</div>
+		</form>
+	</Card>
+{/if}
 
 <style>
 	.page-heading {
@@ -205,8 +288,7 @@
 		flex-wrap: wrap;
 	}
 
-	.title-wrapper :global(.field),
-	.title-wrapper .field-native {
+	.title-wrapper :global(.field) {
 		flex: 1 1 16rem;
 	}
 
@@ -223,7 +305,6 @@
 		color: var(--color-text);
 	}
 
-	.native-input,
 	.native-select {
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
@@ -232,11 +313,6 @@
 		border: var(--border-1) solid var(--color-border);
 		border-radius: var(--radius-md);
 		padding: var(--space-2) var(--space-3);
-	}
-
-	.native-input:disabled {
-		color: var(--color-text-muted);
-		background: var(--color-surface-alt);
 	}
 
 	.native-select {
@@ -264,5 +340,9 @@
 
 	.form-actions {
 		display: flex;
+	}
+
+	.success-actions {
+		gap: var(--space-3);
 	}
 </style>
