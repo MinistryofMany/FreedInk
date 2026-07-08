@@ -3,6 +3,7 @@ import type { LayoutServerLoad } from './$types';
 import { getBlogBySlug } from '$lib/db/blogs';
 import { db, schema } from '$lib/db/client';
 import { and, eq, isNull } from 'drizzle-orm';
+import { isFreedinkOperator } from '$lib/server/operators';
 
 export const load: LayoutServerLoad = async ({ locals, params }) => {
 	if (!locals.user) throw redirect(303, '/signup');
@@ -19,10 +20,15 @@ export const load: LayoutServerLoad = async ({ locals, params }) => {
 				isNull(schema.blogMembers.removedAt)
 			)
 		);
-	if (memberships.length === 0) throw redirect(303, '/admin');
+	// A FreedInk service operator has no membership row but is an owner-equivalent
+	// admin on every blog. Let them through with a synthetic owner role so the
+	// subnav renders every section.
+	const operator = memberships.length === 0 && (await isFreedinkOperator(locals.user.id));
+	if (memberships.length === 0 && !operator) throw redirect(303, '/admin');
 
 	return {
 		blog: { id: blog.id, slug: blog.slug, title: blog.title, description: blog.description },
-		roles: memberships.map((m) => m.role)
+		roles: operator ? (['owner'] as const).slice() : memberships.map((m) => m.role),
+		isOperator: operator
 	};
 };

@@ -24,6 +24,9 @@
 		<Button href="/admin/" variant="ghost" size="sm">{$_('admin.dashboard')}</Button>
 		<Button href="/admin/new" variant="ghost" size="sm">{$_('admin.create_new_blog')}</Button>
 		<Button href="/settings" variant="ghost" size="sm">{$_('admin.settings')}</Button>
+		{#if data.isOperator}
+			<Button href="/admin/ops" variant="ghost" size="sm">Operator</Button>
+		{/if}
 	</nav>
 </header>
 

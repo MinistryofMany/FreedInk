@@ -2,6 +2,20 @@ import { db, schema } from './client';
 import { and, eq } from 'drizzle-orm';
 import type { User } from './schema';
 
+// The OIDC subject(s) linked to a user, newest link first. Used to surface the
+// operator's own Minister `sub` in the ops UI / Settings so they can pin it into
+// FREEDINK_OPERATOR_SUBS. A user normally has exactly one (Minister is the only
+// OIDC issuer today), but the schema permits several.
+export async function getOidcSubjectsForUser(
+	userId: string
+): Promise<Array<{ issuer: string; subject: string }>> {
+	return db
+		.select({ issuer: schema.oidcIdentities.issuer, subject: schema.oidcIdentities.subject })
+		.from(schema.oidcIdentities)
+		.where(eq(schema.oidcIdentities.userId, userId))
+		.orderBy(schema.oidcIdentities.linkedAt);
+}
+
 export async function getUserByOidcIdentity(issuer: string, subject: string): Promise<User | null> {
 	const rows = await db
 		.select({ user: schema.users })
