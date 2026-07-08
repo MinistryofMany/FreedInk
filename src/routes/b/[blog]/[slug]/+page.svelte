@@ -168,12 +168,30 @@
 		try {
 			let identity: Identity | null = cached;
 			if (!identity) {
+				// Pick up an identity already unlocked elsewhere in this tab.
+				const vault = await loadVault();
+				identity = vault.getCachedIdentity();
+				if (identity) cached = identity;
+			}
+			if (!identity) {
+				// Nothing cached. Never decrypt with an empty password — show the
+				// unlock field first. A wrong password on a real attempt keeps the
+				// field visible so the user can retry; only genuinely non-password
+				// errors (not signed in, no identity) propagate.
+				if (!password) {
+					needsPassword = true;
+					return;
+				}
 				try {
 					identity = await unlock();
 				} catch (e) {
-					if ((e as Error).message === 'wrong password') throw e;
-					needsPassword = true;
-					return;
+					const msg = (e as Error).message;
+					if (msg === 'wrong password') {
+						needsPassword = true;
+						error = msg;
+						return;
+					}
+					throw e;
 				}
 			}
 			const sem = await import('$lib/client/semaphore');
