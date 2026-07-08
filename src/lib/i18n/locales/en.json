@@ -182,12 +182,18 @@
 		"rotate_confirm_prompt": "Rotate identity? Past posts stay attributed to the old identity.",
 		"session_revoked": "session revoked",
 		"restore_summary": "Restore from recovery phrase",
-		"restore_blurb": "Forgot your password? Paste your 24-word recovery phrase to unlock your identity for this session. This does not change your password — set a new one afterward with \"Rotate this device’s password\" if you like.",
+		"restore_blurb": "Forgot your password? Paste your 24-word recovery phrase to unlock your identity for this session, then set a new password below to make it permanent. Your identity and every blog membership stay the same.",
 		"restore_phrase_label": "Recovery phrase (24 words)",
 		"restore_button": "Restore identity",
-		"restore_ok": "Identity unlocked for this session.",
+		"restore_ok": "Identity unlocked for this session. Set a new password below to make it permanent.",
 		"restore_mismatch": "That recovery phrase does not match any identity on this account.",
-		"restore_invalid": "That does not look like a valid 24-word recovery phrase."
+		"restore_invalid": "That does not look like a valid 24-word recovery phrase.",
+		"restore_set_password_heading": "Set a new password",
+		"restore_set_password_blurb": "Re-encrypts your restored identity under a new password. Same identity, same memberships — only the password changes.",
+		"restore_set_password_button": "Set new password",
+		"restore_password_saved": "New password set. Use it next time you unlock this identity.",
+		"restore_password_error": "pick a password ≥12 chars and confirm it",
+		"restore_password_failed": "Could not set the new password. Try restoring again."
 	},
 	"errors": {
 		"page_not_found_heading": "Page not found?",

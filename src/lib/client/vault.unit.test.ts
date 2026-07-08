@@ -9,6 +9,7 @@ vi.mock('$app/environment', () => ({ browser: true, dev: true }));
 import {
 	generateIdentity,
 	encryptIdentity,
+	reEncryptIdentity,
 	unlockIdentity,
 	encodeForWire,
 	decodeFromWire,
@@ -73,6 +74,42 @@ describe('vault round-trip', () => {
 		const record = await encryptIdentity(id, 'password password password');
 		const back = await unlockIdentity(record, 'password password password');
 		expect(back.commitment.toString()).toBe(id.commitment.toString());
+	});
+});
+
+describe('re-encrypt (persistent password reset)', () => {
+	it('keeps the same idc/commitment and decrypts under the NEW password', async () => {
+		const oldPw = 'old password old password old';
+		const { identity, record } = await generateIdentity(oldPw);
+		const newPw = 'brand new password brand new';
+
+		const rewrapped = await reEncryptIdentity(identity, newPw, record.idc);
+
+		// Same identity binding, new ciphertext.
+		expect(rewrapped.idc).toBe(record.idc);
+		expect(rewrapped.publicKey).toBe(record.publicKey);
+		expect(rewrapped.ciphertext).not.toEqual(record.ciphertext);
+
+		// New password unlocks the SAME identity.
+		const unlocked = await unlockIdentity(rewrapped, newPw);
+		expect(unlocked.commitment.toString()).toBe(identity.commitment.toString());
+		expect(unlocked.export()).toBe(identity.export());
+	});
+
+	it('the old password no longer opens the re-encrypted blob', async () => {
+		const oldPw = 'previous password previous pw';
+		const { identity, record } = await generateIdentity(oldPw);
+		const rewrapped = await reEncryptIdentity(identity, 'a different password here', record.idc);
+		await expect(unlockIdentity(rewrapped, oldPw)).rejects.toThrow('wrong password');
+	});
+
+	it('rejects when the identity does not match the expected commitment', async () => {
+		const { record } = await generateIdentity('some password some password');
+		const other = new Identity('a-completely-different-identity');
+		expect(other.commitment.toString()).not.toBe(record.idc);
+		await expect(
+			reEncryptIdentity(other, 'new password new password', record.idc)
+		).rejects.toThrow('does not match the account commitment');
 	});
 });
 

@@ -152,6 +152,37 @@ export async function encryptIdentity(
 	};
 }
 
+// Re-encrypt an EXISTING identity under a NEW password WITHOUT changing the
+// identity/commitment. This is the persistent forgotten-password reset: the
+// user proves control of the identity (recovery phrase OR old password), then
+// sets a new password that re-wraps the SAME secret. The resulting record keeps
+// the same `idc`/`publicKey`, so the server updates the existing vault row in
+// place (no collision with the global-unique idc index) and every blog
+// membership, past proof, and Merkle leaf stays valid.
+//
+// `expectedIdc` binds the operation to the account commitment being reset: if
+// the supplied identity does not match it we refuse, and after encrypting we
+// unlock the fresh blob and re-check the commitment. Fails closed on any
+// mismatch so a corrupted round-trip can never lock the user out or, worse, let
+// a different identity be swapped in under cover of a password reset.
+export async function reEncryptIdentity(
+	identity: Identity,
+	newPassword: string,
+	expectedIdc: string
+): Promise<IdentityRecord> {
+	assertBrowser();
+	if (identity.commitment.toString() !== expectedIdc) {
+		throw new Error('identity does not match the account commitment being reset');
+	}
+	const record = await encryptIdentity(identity, newPassword);
+	// Self-check: the new blob must decrypt back to the SAME commitment.
+	const check = await unlockIdentity(record, newPassword);
+	if (record.idc !== expectedIdc || check.commitment.toString() !== expectedIdc) {
+		throw new Error('re-encryption self-check failed: commitment mismatch');
+	}
+	return record;
+}
+
 export async function unlockIdentity(blob: VaultBlob, password: string): Promise<Identity> {
 	assertBrowser();
 	const key = await deriveKey(password, blob.salt, blob.kdfParams);
