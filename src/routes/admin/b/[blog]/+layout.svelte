@@ -9,10 +9,13 @@
 	// full subnav). We only surface links the viewer can actually open, so a
 	// reviewer-only member doesn't hit a section that would bounce them to /admin.
 	$: roles = (data.roles ?? []) as string[];
-	$: canManage = roles.includes('owner');
-	$: canReview = roles.some((r) => r === 'owner' || r === 'editor' || r === 'reviewer');
-	$: canWrite = roles.some((r) => r === 'owner' || r === 'editor' || r === 'author');
-	$: canModerate = roles.some((r) => r === 'owner' || r === 'editor');
+	// A service operator is owner-equivalent on every blog regardless of their
+	// membership roles, so every capability ORs in `isOperator`.
+	$: isOperator = data.isOperator ?? false;
+	$: canManage = isOperator || roles.includes('owner');
+	$: canReview = isOperator || roles.some((r) => r === 'owner' || r === 'editor' || r === 'reviewer');
+	$: canWrite = isOperator || roles.some((r) => r === 'owner' || r === 'editor' || r === 'author');
+	$: canModerate = isOperator || roles.some((r) => r === 'owner' || r === 'editor');
 
 	$: base = `/admin/b/${data.blog.slug}`;
 	$: current = $page.url.pathname;

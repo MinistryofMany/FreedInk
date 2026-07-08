@@ -7,10 +7,12 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, parent }) => {
-	const { roles } = await parent();
+	const { roles, isOperator } = await parent();
 	const has = (r: string) => roles.includes(r as (typeof roles)[number]);
 	const base = `/admin/b/${params.blog}`;
-	if (has('owner')) throw redirect(303, `${base}/manage`);
+	// A service operator is owner-equivalent even when they also hold a lesser
+	// member role, so route them to Manage like any owner.
+	if (isOperator || has('owner')) throw redirect(303, `${base}/manage`);
 	if (has('editor')) throw redirect(303, `${base}/review`);
 	if (has('reviewer')) throw redirect(303, `${base}/review`);
 	if (has('author')) throw redirect(303, `${base}/author`);
