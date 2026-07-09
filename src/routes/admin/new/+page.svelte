@@ -31,6 +31,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{$_('admin.create_blog_heading')} — FreedInk</title>
+</svelte:head>
+
 <Card>
 	<h3 class="page-heading">{$_('admin.create_blog_heading')}</h3>
 

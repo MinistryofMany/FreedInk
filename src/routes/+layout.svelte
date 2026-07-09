@@ -292,6 +292,7 @@
 <footer class="site-footer">
 	<Wordmark as="span" class="footer-wordmark" />
 	<div class="footer-right">
+		<span class="footer-beta">Beta · {__BUILD_DATE__}</span>
 		<a href="/status" class="footer-link">Status</a>
 		{#if SUPPORTED_LOCALES.length > 1}
 			<label class="locale-picker">
@@ -589,6 +590,12 @@
 		align-items: center;
 		gap: var(--space-4);
 		flex-wrap: wrap;
+	}
+	.footer-beta {
+		color: var(--color-text-muted);
+		opacity: 0.7;
+		font-size: var(--text-xs);
+		letter-spacing: 0.02em;
 	}
 	.footer-link {
 		color: var(--color-link);

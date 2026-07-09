@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	define: {
+		// Build-day stamp (YYYY-MM-DD) baked in at build time for the "Beta ·
+		// {date}" footer label. Typed globally in src/vite-env.d.ts.
+		__BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10))
+	},
 	resolve: {
 		alias: [
 			// FreedInk is Semaphore-only and does NOT install the optional peer
