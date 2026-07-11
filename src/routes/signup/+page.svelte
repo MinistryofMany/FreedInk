@@ -81,7 +81,8 @@
 				<p class="muted"><a href="/admin">{$_('auth.skip_to_dashboard')}</a></p>
 			{:else if data.ministerEnabled}
 				<p class="body-text">
-					Minister is your identity for Freed.Ink. Sign in to create or access your account.
+					Minister is how you sign in to FreedInk. It vouches for you without oversharing
+					(FreedInk never even sees your email).
 				</p>
 				<Button href={ministerHref} variant="primary" data-sveltekit-reload>
 					Sign in with Minister

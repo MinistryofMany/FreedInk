@@ -24,8 +24,8 @@
 		"en": "English"
 	},
 	"home": {
-		"page_title": "FreedInk — anonymous collaborative blogging",
-		"og_description": "Groups of writers publish together on FreedInk. Individual authorship is hidden by zero-knowledge cryptography.",
+		"page_title": "FreedInk - collective blogs with a shared byline",
+		"og_description": "Groups of writers publish together on FreedInk. Every member's name is on the blog, only members can post, and no one can prove who wrote which piece.",
 		"welcome_heading": "Welcome to Freed Ink",
 		"subhead": "This is a blogging platform that is a bit different than others. We aim to construct blogs shaped around like minds who want to speak more freely, but with some weight behind it.",
 		"cta": "Free Your Ink",

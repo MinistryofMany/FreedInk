@@ -49,7 +49,8 @@
 		<Kicker>Collectives</Kicker>
 		<h1 class="directory-heading">{$_('blog.featured_heading')}</h1>
 		<p class="directory-dek">
-			Anonymous writing collectives — open to readers, closed to surveillance.
+			Group blogs anyone can read. Only members can write, and no post carries a single author's
+			name.
 		</p>
 	</header>
 

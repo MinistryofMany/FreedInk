@@ -56,11 +56,11 @@
 </svelte:head>
 
 <section class="hero">
-	<Kicker>Anonymous collective blogging</Kicker>
+	<Kicker>Collective blogging, members only</Kicker>
 	<h1>Put your name on the masthead. Never on the post.</h1>
 	<p class="dek">
-		A group founds a blog together. Everyone's name is on it. No one - not even the others - can
-		prove who wrote which piece.
+		A group founds a blog together. Every member's name is on the masthead, and only members can
+		post. But no one, not even the other members, can prove who wrote which piece.
 	</p>
 	<div class="ctas">
 		<Button href="/signup">Start a collective</Button>
