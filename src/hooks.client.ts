@@ -5,6 +5,15 @@
 // SvelteKit's default behavior (logging + returning a generic message).
 import type { HandleClientError } from '@sveltejs/kit';
 import { env as publicEnv } from '$env/dynamic/public';
+import { captureMinisterAppSecret } from '$lib/client/minister-anon';
+
+// Capture + scrub the Ministry anonymous-identity fragment BEFORE anything
+// else runs client-side: Sentry (or any later script reading location.href)
+// must never see the secret, and no client-side navigation may run first —
+// the fragment only survives server-side 3xx redirects (anon-identity spec
+// §8.4, findings S3/S4). This module is the earliest first-party code
+// SvelteKit executes in the browser, ahead of hydration and the router.
+captureMinisterAppSecret();
 
 let sentryReady: Promise<void> | null = null;
 

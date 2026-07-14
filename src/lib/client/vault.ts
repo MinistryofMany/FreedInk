@@ -64,11 +64,23 @@ function rand(n: number): Uint8Array {
 	return a;
 }
 
+// Create a new identity and encrypt it under `password`. By default the
+// identity secret is fresh CSPRNG output (`new Identity()`); when `entropy`
+// is supplied (exactly 32 bytes — the Ministry-derived device seed from
+// $lib/client/minister-anon) the SAME bytes become the identity secret, via
+// the identical Identity.import path the mnemonic restore below uses, so the
+// identity is deterministic: re-deriving the seed reproduces the commitment.
+// Wrong-size entropy throws loudly — that's a programmer error, not a
+// fail-closed condition; callers wanting the random identity pass nothing.
 export async function generateIdentity(
-	password: string
+	password: string,
+	entropy?: Uint8Array
 ): Promise<{ identity: Identity; record: IdentityRecord }> {
 	assertBrowser();
-	const identity = new Identity();
+	if (entropy !== undefined && entropy.byteLength !== 32) {
+		throw new Error(`identity entropy must be 32 bytes, got ${entropy.byteLength}`);
+	}
+	const identity = entropy ? Identity.import(bytesToBase64(entropy)) : new Identity();
 	const record = await encryptIdentity(identity, password);
 	return { identity, record };
 }

@@ -7,6 +7,7 @@
 		cacheUnlockedIdentity,
 		exportMnemonic
 	} from '$lib/client/vault';
+	import { ministerIdentitySeed } from '$lib/client/minister-anon';
 	import { _ } from '$lib/i18n';
 	import { get } from 'svelte/store';
 	import { Card, Field, Button, Kicker } from '$lib/components/ui';
@@ -68,7 +69,16 @@
 		busy = true;
 		error = '';
 		try {
-			const { identity, record } = await generateIdentity(password);
+			// Ministry anon handoff: when the user arrived from Minister with an
+			// anon-identity fragment (captured + scrubbed at client boot in
+			// hooks.client.ts) AND the operator provisioned the RP mix secret,
+			// the identity secret is the Ministry-derived seed — signing in with
+			// Minister again re-derives the same identity. Otherwise (no
+			// fragment, unset/invalid mix secret, derivation failure) this is
+			// null and generation stays exactly what it was: random bytes.
+			// Memoized, so a retried submit re-uses the same seed.
+			const ministerSeed = await ministerIdentitySeed(data.anonMixSecret);
+			const { identity, record } = await generateIdentity(password, ministerSeed ?? undefined);
 			const res = await fetch('/api/identity', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },

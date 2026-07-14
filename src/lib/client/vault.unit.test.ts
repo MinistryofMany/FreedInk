@@ -107,9 +107,46 @@ describe('re-encrypt (persistent password reset)', () => {
 		const { record } = await generateIdentity('some password some password');
 		const other = new Identity('a-completely-different-identity');
 		expect(other.commitment.toString()).not.toBe(record.idc);
+		await expect(reEncryptIdentity(other, 'new password new password', record.idc)).rejects.toThrow(
+			'does not match the account commitment'
+		);
+	});
+});
+
+describe('deterministic entropy (Ministry-derived seed)', () => {
+	const seed = new Uint8Array(32).fill(7);
+
+	it('same 32-byte entropy always yields the same commitment', async () => {
+		const a = await generateIdentity('password one password one', seed);
+		const b = await generateIdentity('password two password two', new Uint8Array(seed));
+		expect(a.record.idc).toBe(b.record.idc);
+		expect(a.identity.export()).toBe(b.identity.export());
+	});
+
+	it('different entropy yields a different commitment', async () => {
+		const other = new Uint8Array(32).fill(8);
+		const a = await generateIdentity('same password same password', seed);
+		const b = await generateIdentity('same password same password', other);
+		expect(a.record.idc).not.toBe(b.record.idc);
+	});
+
+	it('entropy-derived identity unlocks and round-trips like a random one', async () => {
+		const pw = 'entropy unlock pw entropy unlock';
+		const { identity, record } = await generateIdentity(pw, seed);
+		const unlocked = await unlockIdentity(record, pw);
+		expect(unlocked.commitment.toString()).toBe(identity.commitment.toString());
+	});
+
+	it('no entropy still yields random identities (legacy path intact)', async () => {
+		const a = await generateIdentity('legacy path password 123456');
+		const b = await generateIdentity('legacy path password 123456');
+		expect(a.record.idc).not.toBe(b.record.idc);
+	});
+
+	it('throws loudly on wrong-size entropy', async () => {
 		await expect(
-			reEncryptIdentity(other, 'new password new password', record.idc)
-		).rejects.toThrow('does not match the account commitment');
+			generateIdentity('short entropy password 12345', new Uint8Array(31))
+		).rejects.toThrow('identity entropy must be 32 bytes');
 	});
 });
 
