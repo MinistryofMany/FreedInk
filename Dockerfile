@@ -3,6 +3,10 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+# Vendored SDK tarballs (file: deps in package.json) must exist before npm ci.
+# @ministryofmany/identity is consumed from a commit-pinned tarball checked
+# into vendor/ (the npm release does not carry the minister-link module yet).
+COPY vendor ./vendor
 RUN npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS build
