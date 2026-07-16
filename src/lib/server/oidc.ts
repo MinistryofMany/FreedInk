@@ -42,12 +42,15 @@ export const NEXT_COOKIE = 'oidc_next';
 
 // A post-login destination is safe only if it's a same-origin absolute path
 // (`/foo`). Reject protocol-relative (`//evil`) and backslash tricks so this
-// can't be turned into an open redirect. Shared by start (on write) and
-// callback (re-validated on read).
+// can't be turned into an open redirect. Strip any URL fragment (`#...`): the
+// callback emits `next` verbatim as a `Location`, and a crafted fragment would
+// override the anonymous-identity fragment the app relies on. Shared by start
+// (on write) and callback (re-validated on read).
 export function safeNext(raw: string | null | undefined): string | null {
 	if (!raw) return null;
 	if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return null;
-	return raw;
+	const hash = raw.indexOf('#');
+	return hash === -1 ? raw : raw.slice(0, hash);
 }
 
 // Build a Minister relying-party client from FreedInk's config. The SDK is
