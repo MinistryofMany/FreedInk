@@ -1,15 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-# Vendored SDK tarballs (file: deps in package.json) must exist before npm ci.
-# @ministryofmany/identity is consumed from a commit-pinned tarball checked
-# into vendor/ (the npm release does not carry the minister-link module yet).
-COPY vendor ./vendor
+# @ministryofmany/identity (+ membership, blind-token) come from the npm registry
+# at 0.3.0 now — the published packages carry the ./link module, so no vendored
+# tarball is needed.
 RUN npm ci --no-audit --no-fund
 
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -27,7 +26,7 @@ RUN npm run build
 # it, so the engine gate is irrelevant to this runtime.
 RUN npm prune --omit=dev --force
 
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/build ./build
