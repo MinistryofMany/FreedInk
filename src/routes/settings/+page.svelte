@@ -2,15 +2,6 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import {
-		generateIdentity,
-		encodeForWire,
-		cacheUnlockedIdentity,
-		clearCachedIdentity,
-		identityFromMnemonic,
-		reEncryptIdentity
-	} from '$lib/client/vault';
-	import type { Identity } from '@semaphore-protocol/identity';
-	import {
 		isPushSupported,
 		getSubscriptionStatus,
 		subscribe as pushSubscribe,
@@ -27,9 +18,7 @@
 		Kicker,
 		SegmentedControl,
 		AlertDialog,
-		Badge,
-		Tag,
-		Rule
+		Tag
 	} from '$lib/components/ui';
 
 	export let data;
@@ -141,96 +130,7 @@
 	let themeSel: string = themePref;
 	$: if (themeSel !== themePref) applyTheme(themeSel as ThemePref);
 
-	let rotatePassword = '';
-	let rotateConfirm = '';
-	let identities = data.identities;
 	let sessions = data.sessions;
-
-	// Restore-from-recovery-phrase (forgot-password path). Derives the identity
-	// from the 24-word mnemonic and, if its commitment matches one of this
-	// account's enrolled identities, unlocks it for the current session. On a
-	// successful restore we keep the derived identity + its commitment around so
-	// the user can PERSIST a new password below (re-encrypt the stored vault blob
-	// in place) without changing the identity/commitment.
-	let restorePhrase = '';
-	let restoreBusy = false;
-	let restoreMsg = '';
-	// The identity proven via the recovery phrase this session, and its
-	// commitment — set only after a successful restore, gating the set-new-password
-	// sub-form so we can only re-encrypt a commitment we've actually derived.
-	let restoredIdentity: Identity | null = null;
-	let restoredIdc = '';
-	let newVaultPassword = '';
-	let newVaultConfirm = '';
-
-	async function restoreFromPhrase() {
-		const t = get(_);
-		restoreBusy = true;
-		restoreMsg = '';
-		try {
-			let identity;
-			try {
-				identity = await identityFromMnemonic(restorePhrase);
-			} catch {
-				restoreMsg = t('settings.restore_invalid');
-				return;
-			}
-			const commitment = identity.commitment.toString();
-			const match = identities.some((id) => id.idc === commitment && id.status === 'active');
-			if (!match) {
-				restoreMsg = t('settings.restore_mismatch');
-				return;
-			}
-			cacheUnlockedIdentity(identity);
-			restoredIdentity = identity;
-			restoredIdc = commitment;
-			restorePhrase = '';
-			restoreMsg = t('settings.restore_ok');
-		} catch (e) {
-			restoreMsg = (e as Error).message;
-		} finally {
-			restoreBusy = false;
-		}
-	}
-
-	// Persist a NEW password for the just-restored identity: re-encrypt the SAME
-	// identity secret client-side (verified to decrypt back to the same
-	// commitment) and hand the fresh blob to the server, which updates the
-	// existing vault row in place. Identity, commitment, and memberships are
-	// untouched.
-	async function setNewPassword() {
-		const t = get(_);
-		if (!restoredIdentity) return;
-		if (newVaultPassword.length < 12 || newVaultPassword !== newVaultConfirm) {
-			restoreMsg = t('settings.restore_password_error');
-			return;
-		}
-		restoreBusy = true;
-		restoreMsg = '';
-		try {
-			const record = await reEncryptIdentity(restoredIdentity, newVaultPassword, restoredIdc);
-			const res = await fetch('/api/identity/reset-password', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(encodeForWire(record))
-			});
-			if (!res.ok) {
-				restoreMsg = (await res.text()) || t('settings.restore_password_failed');
-				return;
-			}
-			// Keep the cached (now re-encrypted) identity unlocked for this session.
-			cacheUnlockedIdentity(restoredIdentity);
-			newVaultPassword = '';
-			newVaultConfirm = '';
-			restoredIdentity = null;
-			restoredIdc = '';
-			restoreMsg = t('settings.restore_password_saved');
-		} catch (e) {
-			restoreMsg = (e as Error).message;
-		} finally {
-			restoreBusy = false;
-		}
-	}
 
 	// Data rights state — export & delete-account flows.
 	let deleteOpen = false;
@@ -311,75 +211,11 @@
 		}
 	}
 
-	async function rotateIdentity() {
-		const t = get(_);
-		if (rotatePassword.length < 12 || rotatePassword !== rotateConfirm) {
-			msg = t('settings.rotate_password_error');
-			return;
-		}
-		if (!confirm(t('settings.rotate_confirm_prompt'))) return;
-		busy = true;
-		msg = '';
-		try {
-			const { identity, record } = await generateIdentity(rotatePassword);
-			const res = await fetch('/api/identity/rotate', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(encodeForWire(record))
-			});
-			if (!res.ok) {
-				msg = await res.text();
-				return;
-			}
-			clearCachedIdentity();
-			cacheUnlockedIdentity(identity);
-			rotatePassword = '';
-			rotateConfirm = '';
-			msg = t('settings.identity_rotated');
-			// Pessimistic reload of the identities list
-			location.reload();
-		} catch (e) {
-			msg = (e as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
-
-	// Revoke ONE device commitment (this or another device). Blocked server-side
-	// for the last active device; the UI also disables that case.
-	async function revokeDevice(id: string) {
-		const t = get(_);
-		if (!confirm(t('settings.device_revoke_confirm'))) return;
-		busy = true;
-		msg = '';
-		try {
-			const res = await fetch(`/api/identity/${encodeURIComponent(id)}/revoke`, {
-				method: 'POST'
-			});
-			if (!res.ok) {
-				msg = await res.text();
-				return;
-			}
-			msg = t('settings.device_revoked');
-			location.reload();
-		} catch (e) {
-			msg = (e as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
-
 	const themeOptions = [
 		{ value: 'system', label: 'System' },
 		{ value: 'light', label: 'Light' },
 		{ value: 'dark', label: 'Dark' }
 	];
-
-	function badgeTone(status: string): 'success' | 'danger' | 'neutral' {
-		if (status === 'active') return 'success';
-		if (status === 'revoked') return 'danger';
-		return 'neutral';
-	}
 </script>
 
 <svelte:head>
@@ -421,131 +257,6 @@
 					</Button>
 				</form>
 				{#if profileMsg}<p class="status">{profileMsg}</p>{/if}
-			</div>
-		</Card>
-
-		<!-- Identity -->
-		<Card padding="lg">
-			<div class="stack">
-				<Kicker>{$_('settings.identity_heading')}</Kicker>
-				<p class="muted">{$_('settings.devices_blurb')}</p>
-				<ul class="id-list">
-					{#each identities as id}
-						<li>
-							<span class="device-label"
-								>{id.deviceLabel?.trim() || $_('settings.device_unnamed')}</span
-							>
-							<code>{id.idc.slice(0, 12)}…</code>
-							<Badge tone={badgeTone(id.status)}>{id.status}</Badge>
-							{#if id.status === 'revoked' && id.revokedAt}
-								<span class="muted-inline">· revoked {new Date(id.revokedAt).toLocaleString()}</span
-								>
-							{:else if id.status === 'active'}
-								<button
-									type="button"
-									class="link-button"
-									disabled={busy || data.activeDeviceCount <= 1}
-									title={data.activeDeviceCount <= 1 ? $_('settings.device_last_active_hint') : ''}
-									onclick={() => revokeDevice(id.id)}
-								>
-									{$_('settings.device_revoke_button')}
-								</button>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-				<details class="disclosure">
-					<summary>{$_('settings.rotate_identity_summary')}</summary>
-					<div class="stack disclosure-body">
-						<p class="muted">{$_('settings.rotate_identity_blurb')}</p>
-						<form
-							onsubmit={(e) => {
-								e.preventDefault();
-								rotateIdentity();
-							}}
-							class="stack-form"
-						>
-							<Field
-								label={$_('settings.new_password_label')}
-								type="password"
-								bind:value={rotatePassword}
-								required
-							/>
-							<Field
-								label={$_('settings.confirm_label')}
-								type="password"
-								bind:value={rotateConfirm}
-								required
-							/>
-							<div>
-								<Button type="submit" disabled={busy}>{$_('settings.rotate_button')}</Button>
-							</div>
-						</form>
-					</div>
-				</details>
-				<details class="disclosure">
-					<summary>{$_('settings.restore_summary')}</summary>
-					<div class="stack disclosure-body">
-						<p class="muted">{$_('settings.restore_blurb')}</p>
-						<form
-							onsubmit={(e) => {
-								e.preventDefault();
-								restoreFromPhrase();
-							}}
-							class="stack-form"
-						>
-							<Field
-								label={$_('settings.restore_phrase_label')}
-								multiline
-								rows={3}
-								bind:value={restorePhrase}
-								required
-								autocomplete="off"
-							/>
-							<div>
-								<Button type="submit" disabled={restoreBusy || !restorePhrase.trim()}>
-									{$_('settings.restore_button')}
-								</Button>
-							</div>
-						</form>
-						{#if restoredIdentity}
-							<Rule subtle />
-							<Kicker>{$_('settings.restore_set_password_heading')}</Kicker>
-							<p class="muted">{$_('settings.restore_set_password_blurb')}</p>
-							<form
-								onsubmit={(e) => {
-									e.preventDefault();
-									setNewPassword();
-								}}
-								class="stack-form"
-							>
-								<Field
-									label={$_('settings.new_password_label')}
-									type="password"
-									bind:value={newVaultPassword}
-									required
-								/>
-								<Field
-									label={$_('settings.confirm_label')}
-									type="password"
-									bind:value={newVaultConfirm}
-									required
-								/>
-								<div>
-									<Button
-										type="submit"
-										disabled={restoreBusy ||
-											newVaultPassword.length < 12 ||
-											newVaultPassword !== newVaultConfirm}
-									>
-										{$_('settings.restore_set_password_button')}
-									</Button>
-								</div>
-							</form>
-						{/if}
-						{#if restoreMsg}<p class="status">{restoreMsg}</p>{/if}
-					</div>
-				</details>
 			</div>
 		</Card>
 
@@ -753,74 +464,6 @@
 	.row-form :global(.grow) {
 		flex: 1;
 		min-width: 14rem;
-	}
-
-	.stack-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		max-width: 22rem;
-	}
-
-	.id-list {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		font-family: var(--font-ui);
-		font-size: var(--text-sm);
-	}
-
-	.id-list li {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		flex-wrap: wrap;
-	}
-
-	.muted-inline {
-		color: var(--color-text-muted);
-		font-size: var(--text-xs);
-	}
-
-	.device-label {
-		font-weight: 600;
-		color: var(--color-text);
-	}
-
-	.link-button {
-		background: none;
-		border: none;
-		padding: 0;
-		margin-left: auto;
-		color: var(--color-danger, var(--color-text));
-		font-family: var(--font-ui);
-		font-size: var(--text-xs);
-		cursor: pointer;
-		text-decoration: underline;
-	}
-
-	.link-button:disabled {
-		color: var(--color-text-muted);
-		cursor: not-allowed;
-		text-decoration: none;
-	}
-
-	.disclosure {
-		font-family: var(--font-ui);
-	}
-
-	.disclosure summary {
-		cursor: pointer;
-		font-size: var(--text-sm);
-		font-weight: 600;
-		color: var(--color-accent);
-	}
-
-	.disclosure-body {
-		margin-top: var(--space-3);
 	}
 
 	.sessions {

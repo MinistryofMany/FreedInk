@@ -123,45 +123,44 @@ appends it to the callback redirect as a URL fragment:
 /api/auth/oidc/callback?code=…&state=…#minister_anon=v1.<43 base64url chars>
 ```
 
-Fragments are never sent to any server and survive the server-side 303s
-(`callback` → `/signup/identity`), so the secret arrives only in the browser
-on the final landing page. FreedInk then (all client-side, via
-`@ministryofmany/identity`):
+The fragment carries the user's FreedInk **branch** of the Ministry identity
+tree (a 32-byte per-app secret), delivered at **every** Ministry login.
+Fragments are never sent to any server and survive the server-side 303s, so the
+branch arrives only in the browser on the final landing page. FreedInk then
+(all client-side, via `@ministryofmany/identity`):
 
 1. `src/hooks.client.ts` calls `captureMinisterAppSecret()` as the first
    client-side code of the document load — before Sentry and before any
    router navigation — which reads the fragment and immediately scrubs it
    from the URL/history (`$lib/client/minister-anon`).
-2. On `/signup/identity`, creating the identity calls
-   `ministerIdentitySeed(mixSecret)`: HKDF-SHA-256 mixing
-   `MINISTER_ANON_RP_MIX_SECRET` (served to that page by its server load)
-   into the per-app secret, yielding a 32-byte seed.
-3. The seed becomes the Semaphore identity secret via the existing
-   `generateIdentity(password, seed)` path (same `Identity.import` route as
-   mnemonic restore). Vault encryption, the recovery phrase, sessionStorage
-   caching, and every downstream proof flow are unchanged.
+2. The root layout calls `reconcileBranch(user.anonEpoch)`. The
+   server-verified `minister_anon_epoch` (read from the id_token in the
+   callback and stored on `users.anonEpoch`) is the authority: the branch is
+   adopted or re-keyed into localStorage only when the signed epoch strictly
+   advances (`decideAnonAction`). A stale or replayed login never clobbers the
+   current branch.
+3. When the user first acts in a blog, `deriveBlogIdentity(blogId)` derives a
+   Semaphore v4 identity from the branch (`{ kind: 'blog', id: blogId }`) and
+   `getEnrolledBlogIdentity` enrolls its commitment via `/api/identity/enroll`.
+   Replacing a different commitment is gated server-side on the epoch strictly
+   advancing (C1). There is no password and no encrypted vault.
 
-Result: the identity is **deterministic** — signing in with Minister on a new
-device re-derives the same seed, so the same commitment can be restored. The
-per-app secret and the derived seed never reach the FreedInk server; it keeps
-seeing exactly what it sees today (an encrypted vault blob + commitment).
+Result: the identity is **deterministic** and re-keyable — signing in with
+Minister on a new device re-derives the same per-blog commitment, and a Ministry
+root re-key (epoch bump) swaps every blog's leaf on the user's next enroll. The
+branch and everything derived from it never reach the FreedInk server; it stores
+only the public commitment.
 
-Degradation is fail-open for login, fail-closed for the anonymous identity —
-in every one of these cases sign-in completes and identity creation falls
-back to today's random generation, byte-identical behavior:
+Degradation is fail-open for login, fail-closed for the anonymous identity — in
+every one of these cases sign-in completes and the user simply sees a "connect
+your identity" prompt where a proof would be built:
 
-- no fragment (client not anon-enabled, user declined or couldn't unlock);
+- no fragment (client not anon-enabled, or the branch never arrived);
 - malformed / unknown-version fragment;
-- `MINISTER_ANON_RP_MIX_SECRET` unset, malformed, or < 32 bytes.
+- no `minister_anon_epoch` in the id_token (nothing to key on).
 
 ### Operational invariants
 
-- **`MINISTER_ANON_RP_MIX_SECRET` is identity-determining** (anon spec
-  invariant I9). Provision `>= 32` CSPRNG bytes (base64url) once, back it up
-  with database-grade durability before enabling the flow, and never rotate
-  or regenerate it — a changed value silently forks every derived identity
-  and no error fires anywhere. See `.env.example` for the provisioning
-  command and warning text.
 - **No client-side redirect may be added anywhere in the callback chain**
   (`/api/auth/oidc/callback` → landing page). The fragment only survives
   server-side 3xx redirects whose `Location` carries no fragment of its own;

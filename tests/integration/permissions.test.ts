@@ -17,16 +17,15 @@ import { currentMembership } from '$lib/db/snapshots';
 import { db, schema } from '$lib/db/client';
 import { Identity } from '@semaphore-protocol/identity';
 
-async function installIdentity(userId: string, seed: string) {
-	const id = new Identity(seed);
+// Enroll a user's per-blog commitment (one-root model). currentMembership reads
+// the live member × per-blog-identity set, so no snapshot refresh is needed here.
+async function installIdentity(userId: string, blogId: string, seed: string) {
+	const id = new Identity(`${new Identity(seed).export()}:${blogId}`);
 	await db.insert(schema.userIdentities).values({
 		userId,
+		blogId,
 		idc: id.commitment.toString(),
-		publicKey: id.publicKey.toString(),
-		ciphertext: new Uint8Array([0]),
-		kdfSalt: new Uint8Array(16),
-		nonce: new Uint8Array(12),
-		kdfParams: { name: 'PBKDF2', iterations: 100_000, hash: 'SHA-256' },
+		anonEpoch: 1,
 		status: 'active'
 	});
 }
@@ -34,11 +33,11 @@ async function installIdentity(userId: string, seed: string) {
 describe('changeCapabilities', () => {
 	it('grants a capability, refreshes the tree, and writes an attributed log row', async () => {
 		const owner = await createUserWithEmail('pc-o@x.com', 'pc-owner');
-		await installIdentity(owner.id, 'pc-owner');
 		const target = await createUserWithEmail('pc-t@x.com', 'pc-target');
-		await installIdentity(target.id, 'pc-target');
 		const { id: blogId } = await createBlog(owner.id, 'PC', null);
+		await installIdentity(owner.id, blogId, 'pc-owner');
 		await setRole(blogId, target.id, 'commenter', owner.id);
+		await installIdentity(target.id, blogId, 'pc-target');
 
 		// Commenter is not in the author tree yet.
 		expect((await currentMembership(blogId, 'author')).eligibleCount).toBe(1);
@@ -74,7 +73,6 @@ describe('changeCapabilities', () => {
 
 	it('blocks removing can_admin from the last admin (last-admin guard)', async () => {
 		const owner = await createUserWithEmail('la-o@x.com', 'la-owner');
-		await installIdentity(owner.id, 'la-owner');
 		const { id: blogId } = await createBlog(owner.id, 'LA', null);
 		// The owner is the only admin.
 		expect(await countAdmins(blogId)).toBe(1);
@@ -94,9 +92,7 @@ describe('changeCapabilities', () => {
 
 	it('allows demoting an admin when another admin remains', async () => {
 		const owner = await createUserWithEmail('2a-o@x.com', '2a-owner');
-		await installIdentity(owner.id, '2a-owner');
 		const second = await createUserWithEmail('2a-s@x.com', '2a-second');
-		await installIdentity(second.id, '2a-second');
 		const { id: blogId } = await createBlog(owner.id, '2A', null);
 		await setRole(blogId, second.id, 'owner', owner.id); // second is now admin
 		expect(await countAdmins(blogId)).toBe(2);
@@ -114,9 +110,7 @@ describe('changeCapabilities', () => {
 
 	it('two concurrent demotions cannot strand a blog at zero admins (TOCTOU)', async () => {
 		const a = await createUserWithEmail('cc-a@x.com', 'cc-a');
-		await installIdentity(a.id, 'cc-a');
 		const b = await createUserWithEmail('cc-b@x.com', 'cc-b');
-		await installIdentity(b.id, 'cc-b');
 		const { id: blogId } = await createBlog(a.id, 'CC', null);
 		await setRole(blogId, b.id, 'owner', a.id); // exactly two admins
 		expect(await countAdmins(blogId)).toBe(2);

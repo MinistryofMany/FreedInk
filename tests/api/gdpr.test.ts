@@ -75,7 +75,7 @@ describe('GDPR export', () => {
 		expect(body.identities.length).toBeGreaterThan(0);
 		const id0 = body.identities[0];
 		expect(id0.idc).toBeTruthy();
-		expect(id0.publicKey).toBeTruthy();
+		expect(id0.blogId).toBeTruthy();
 		expect(id0).not.toHaveProperty('ciphertext');
 		expect(id0).not.toHaveProperty('kdfSalt');
 		expect(id0).not.toHaveProperty('nonce');

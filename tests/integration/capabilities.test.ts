@@ -28,22 +28,7 @@ import {
 } from '$lib/server/auth';
 import { db, schema } from '$lib/db/client';
 import { eq, sql } from 'drizzle-orm';
-import { Identity } from '@semaphore-protocol/identity';
 import type { MemberRole, Capability } from '$lib/db/schema';
-
-async function installIdentity(userId: string, seed: string) {
-	const id = new Identity(seed);
-	await db.insert(schema.userIdentities).values({
-		userId,
-		idc: id.commitment.toString(),
-		publicKey: id.publicKey.toString(),
-		ciphertext: new Uint8Array([0]),
-		kdfSalt: new Uint8Array(16),
-		nonce: new Uint8Array(12),
-		kdfParams: { name: 'PBKDF2', iterations: 100_000, hash: 'SHA-256' },
-		status: 'active'
-	});
-}
 
 // The authoritative role→capability table from the design (and the migration).
 const EXPECTED: Record<
@@ -70,7 +55,6 @@ describe('capabilitiesForRole', () => {
 describe('insert paths populate capabilities', () => {
 	it('createBlog gives the owner all capabilities', async () => {
 		const owner = await createUserWithEmail('cap-o@x.com', 'cap-owner');
-		await installIdentity(owner.id, 'cap-owner');
 		const { id: blogId } = await createBlog(owner.id, 'Cap Blog', null);
 		const m = await getActiveMember(blogId, owner.id);
 		expect(m?.canAuthor).toBe(true);
@@ -83,9 +67,7 @@ describe('insert paths populate capabilities', () => {
 		'setRole(%s) populates the matching capability columns',
 		async (role) => {
 			const owner = await createUserWithEmail(`cap-${role}-o@x.com`, `cap-${role}-o`);
-			await installIdentity(owner.id, `cap-${role}-o`);
 			const target = await createUserWithEmail(`cap-${role}-t@x.com`, `cap-${role}-t`);
-			await installIdentity(target.id, `cap-${role}-t`);
 			const { id: blogId } = await createBlog(owner.id, `Cap ${role}`, null);
 			await setRole(blogId, target.id, role, owner.id);
 			const m = await getActiveMember(blogId, target.id);
@@ -100,14 +82,12 @@ describe('insert paths populate capabilities', () => {
 describe('hasCapability parity with hasRole(ROLES_*)', () => {
 	it('agrees with the legacy role sets for every role', async () => {
 		const owner = await createUserWithEmail('par-o@x.com', 'par-o');
-		await installIdentity(owner.id, 'par-o');
 		const { id: blogId } = await createBlog(owner.id, 'Parity', null);
 
 		const roles: MemberRole[] = ['editor', 'reviewer', 'author', 'commenter'];
 		let n = 0;
 		for (const role of roles) {
 			const u = await createUserWithEmail(`par-${n}@x.com`, `par-${n}`);
-			await installIdentity(u.id, `par-${n}`);
 			await setRole(blogId, u.id, role, owner.id);
 
 			// author capability ≡ ROLES_WRITING
@@ -132,7 +112,6 @@ describe('hasCapability parity with hasRole(ROLES_*)', () => {
 
 	it('returns false for a non-member', async () => {
 		const owner = await createUserWithEmail('nm-o@x.com', 'nm-o');
-		await installIdentity(owner.id, 'nm-o');
 		const stranger = await createUserWithEmail('nm-s@x.com', 'nm-s');
 		const { id: blogId } = await createBlog(owner.id, 'NM', null);
 		for (const cap of ['author', 'review', 'comment', 'admin'] as Capability[]) {
@@ -144,9 +123,7 @@ describe('hasCapability parity with hasRole(ROLES_*)', () => {
 describe('setCapability', () => {
 	it('flips one column in place and reports before/after', async () => {
 		const owner = await createUserWithEmail('sc-o@x.com', 'sc-o');
-		await installIdentity(owner.id, 'sc-o');
 		const target = await createUserWithEmail('sc-t@x.com', 'sc-t');
-		await installIdentity(target.id, 'sc-t');
 		const { id: blogId } = await createBlog(owner.id, 'SC', null);
 		await setRole(blogId, target.id, 'commenter', owner.id);
 
@@ -168,7 +145,6 @@ describe('setCapability', () => {
 
 	it('is a no-op when the value already matches', async () => {
 		const owner = await createUserWithEmail('sc2-o@x.com', 'sc2-o');
-		await installIdentity(owner.id, 'sc2-o');
 		const { id: blogId } = await createBlog(owner.id, 'SC2', null);
 		// Owner already can_admin; setting it true again must be a clean no-op.
 		const res = await setCapability(blogId, owner.id, 'admin', true);
@@ -178,7 +154,6 @@ describe('setCapability', () => {
 
 	it('returns null for a non-member', async () => {
 		const owner = await createUserWithEmail('sc3-o@x.com', 'sc3-o');
-		await installIdentity(owner.id, 'sc3-o');
 		const stranger = await createUserWithEmail('sc3-s@x.com', 'sc3-s');
 		const { id: blogId } = await createBlog(owner.id, 'SC3', null);
 		expect(await setCapability(blogId, stranger.id, 'author', true)).toBeNull();
@@ -201,7 +176,6 @@ describe('migration backfill SQL (0007)', () => {
 		// left at their false defaults, then run the EXACT backfill UPDATE from the
 		// 0007 migration and assert the resulting columns.
 		const owner = await createUserWithEmail('mig-o@x.com', 'mig-o');
-		await installIdentity(owner.id, 'mig-o');
 		const { id: blogId } = await createBlog(owner.id, 'Mig', null);
 
 		// Insert one bare member per role with capabilities deliberately wrong

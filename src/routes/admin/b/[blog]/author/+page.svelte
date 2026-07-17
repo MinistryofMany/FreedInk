@@ -1,11 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import {
-		getCachedIdentity,
-		cacheUnlockedIdentity,
-		unlockIdentity,
-		decodeFromWire
-	} from '$lib/client/vault';
+	import { getEnrolledBlogIdentity } from '$lib/client/blog-identity';
 	import { buildProof, fetchGroup } from '$lib/client/semaphore';
 	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import { POST_LANGUAGES } from '$lib/languages';
@@ -21,56 +15,9 @@
 	let language: string = data.blog?.defaultLanguage ?? 'en';
 	let busy = false;
 	let error = '';
-	let password = '';
-	let needsPassword = false;
 	// Post-submit confirmation state (replaces the old silent goto('/admin')).
 	let done = false;
 	let doneMessage = '';
-
-	// A user who signs in but hasn't set up an identity gets bounced to
-	// /signup/identity mid-compose. Stash the in-progress draft so it survives that
-	// detour (identity setup returns here via ?next=) instead of being lost.
-	const DRAFT_KEY = `freedink.draft.${data.blog.id}`;
-
-	function stashDraft() {
-		try {
-			sessionStorage.setItem(
-				DRAFT_KEY,
-				JSON.stringify({ title, content, submitForReview, language })
-			);
-		} catch {
-			// sessionStorage can be unavailable (private mode / quota). Draft
-			// persistence is a best-effort convenience, not correctness-critical.
-		}
-	}
-
-	function clearDraft() {
-		try {
-			sessionStorage.removeItem(DRAFT_KEY);
-		} catch {
-			// Best-effort; see stashDraft.
-		}
-	}
-
-	onMount(() => {
-		try {
-			const raw = sessionStorage.getItem(DRAFT_KEY);
-			if (!raw) return;
-			const d = JSON.parse(raw) as Partial<{
-				title: string;
-				content: string;
-				submitForReview: boolean;
-				language: string;
-			}>;
-			if (typeof d.title === 'string') title = d.title;
-			if (typeof d.content === 'string') content = d.content;
-			if (typeof d.submitForReview === 'boolean') submitForReview = d.submitForReview;
-			if (typeof d.language === 'string') language = d.language;
-			clearDraft();
-		} catch {
-			// Corrupt/blocked storage — start with an empty composer.
-		}
-	});
 
 	function writeAnother() {
 		title = '';
@@ -79,32 +26,6 @@
 		error = '';
 		done = false;
 		doneMessage = '';
-	}
-
-	async function unlock() {
-		const res = await fetch('/api/identity');
-		const json = await res.json();
-		if (!json.identity) {
-			// Preserve the draft across the identity-setup detour and come back here.
-			stashDraft();
-			const next = encodeURIComponent(`/admin/b/${data.blog.slug}/author`);
-			window.location.href = `/signup/identity?next=${next}`;
-			return null;
-		}
-		const blob = decodeFromWire(json.identity);
-		const id = await unlockIdentity(blob, password);
-		cacheUnlockedIdentity(id);
-		needsPassword = false;
-		password = '';
-		return id;
-	}
-
-	async function unlockFromForm() {
-		try {
-			await unlock();
-		} catch (e) {
-			error = (e as Error).message;
-		}
 	}
 
 	async function submit() {
@@ -117,19 +38,14 @@
 				error = 'post content cannot be empty';
 				return;
 			}
-			let identity = getCachedIdentity();
+			// Derive the per-blog identity from the Ministry branch and ensure it is
+			// enrolled in this blog's trees. No password, ever.
+			const identity = await getEnrolledBlogIdentity(data.blog.id, data.blog.slug);
 			if (!identity) {
-				// No identity cached in this tab. Never call unlock() with an empty
-				// password (it would fail decrypt and surface a bogus "wrong
-				// password"). Render the unlock form first; once a password has been
-				// entered, unlock and continue.
-				if (!password) {
-					needsPassword = true;
-					return;
-				}
-				identity = await unlock();
+				error =
+					'Connect your private identity: sign in with Minister, then reload this page.';
+				return;
 			}
-			if (!identity) return;
 
 			const group = await fetchGroup(data.blog.slug, 'author');
 			if (!group.identities.includes(identity.commitment.toString())) {
@@ -165,7 +81,6 @@
 				error = await res.text();
 				return;
 			}
-			clearDraft();
 			doneMessage = submitForReview
 				? 'Submitted for review. Reviewers will vote before it publishes.'
 				: 'Saved as a draft. It stays private until you submit it for review.';
@@ -192,25 +107,6 @@
 		</div>
 	</Card>
 {:else}
-	{#if needsPassword}
-		<Card class="unlock-card">
-			<Kicker>Locked identity</Kicker>
-			<h2 class="page-heading">Unlock your identity</h2>
-			<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
-				<Field
-					label="Identity password"
-					type="password"
-					bind:value={password}
-					required
-					autocomplete="current-password"
-				/>
-				<div class="form-actions">
-					<Button type="submit">Unlock</Button>
-				</div>
-			</form>
-		</Card>
-	{/if}
-
 	<Card>
 		<Kicker>New post</Kicker>
 		<h2 class="page-heading">{data.blog.title}</h2>
@@ -272,14 +168,6 @@
 		flex-direction: column;
 		gap: var(--space-4);
 		max-width: 80ch;
-	}
-
-	:global(.unlock-card) {
-		margin-bottom: var(--space-5);
-	}
-
-	.unlock-form {
-		max-width: 40ch;
 	}
 
 	.title-wrapper {

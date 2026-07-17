@@ -46,6 +46,7 @@ const exchangeCodeForClaims = vi.fn(async () => ({ sub: 'sub-1', name: 'Alice' }
 vi.mock('$lib/server/oidc', () => ({
 	oidcConfig: () => ({ issuer: 'https://ministry.id', clientId: 'freedink' }),
 	exchangeCodeForClaims,
+	extractAnonEpoch: () => null,
 	issuerKey: () => 'https://ministry.id',
 	safeNext: (raw: string | null | undefined) => (raw ? raw : null),
 	NEXT_COOKIE: 'oidc_next'
@@ -54,7 +55,8 @@ vi.mock('$lib/server/oidc', () => ({
 vi.mock('$lib/db/oidc', () => ({
 	getUserByOidcIdentity: vi.fn(async () => ({ id: 'user-1' })),
 	createUserWithOidcIdentity: vi.fn(async () => ({ id: 'user-1' })),
-	linkOidcIdentityToUser: vi.fn(async () => {})
+	linkOidcIdentityToUser: vi.fn(async () => {}),
+	setUserAnonEpoch: vi.fn(async () => {})
 }));
 
 vi.mock('$lib/server/session', () => ({

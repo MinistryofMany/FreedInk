@@ -25,11 +25,13 @@ export type IncomingProof = {
 // can never pass a commenters check and vice-versa. Votes do not call this
 // (blind tokens).
 //
-// R4 (requireCurrentRoot default): the package engine defaults this flag to TRUE
-// (fail-closed). FreedInk's historical default is TOLERANT (false). We therefore
-// carry each caller's value verbatim and default to `false`, so a call site that
-// omits it keeps FreedInk's tolerant "any historical snapshot of the same (blog,
-// capability)" behavior. Author/edit/comment all pass an explicit `true`.
+// R4 (requireCurrentRoot default): FAIL-CLOSED. Under the one-root re-key model
+// blog_member_snapshots is append-only and never pruned, so tolerating any
+// historical root (the old default) would let a re-keyed-away commitment prove
+// membership forever — a bounded per-re-key gain becomes an unbounded cumulative
+// one (audit W5). We therefore default to TRUE: a call site that omits the flag
+// rejects any root that is not the tree's current live root. Author/edit/comment
+// already pass an explicit `true`; the default now matches them.
 export async function verifyMembership(opts: {
 	blogId: string;
 	capability: TreeCapability;
@@ -45,7 +47,7 @@ export async function verifyMembership(opts: {
 		proof: { kind: 'semaphore', ...proof },
 		expectedScope,
 		expectedMessage,
-		requireCurrentRoot: requireCurrentRoot ?? false
+		requireCurrentRoot: requireCurrentRoot ?? true
 	});
 
 	if (!result.ok) {

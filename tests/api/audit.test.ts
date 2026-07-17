@@ -299,26 +299,26 @@ describe('audit log: session.destroyed on signout', () => {
 });
 
 describe('audit log: identity.created', () => {
-	it('records when a user installs their first identity', async () => {
-		// makeUser inserts an identity directly, so spin up a brand-new bare user
-		// (no identity row) and POST the first identity through the endpoint.
+	it('records when a user enrolls their first per-blog identity', async () => {
+		// A brand-new bare user + a blog they own, then enroll their per-blog
+		// commitment through /api/identity/enroll. The owner already holds author +
+		// comment capability, and their authoritative anon epoch must be set first
+		// (the enroll gate keys on it — C1).
 		const [u] = await db.insert(schema.users).values({ username: 'audit-id-user' }).returning();
+		const { setUserAnonEpoch } = await import('$lib/db/oidc');
+		await setUserAnonEpoch(u.id, 1);
+		const { createBlog } = await import('$lib/db/blogs');
+		const blog = await createBlog(u.id, 'Audit Blog', null);
 
 		const { createSession, packCookie } = await import('$lib/server/session');
 		const sid = await createSession(u.id, { userAgent: 'vitest', ip: '127.0.0.1' });
 		const cookie = `sid=${packCookie(sid)}`;
 
+		const { Identity } = await import('@semaphore-protocol/identity');
+		const idc = new Identity('audit-enroll').commitment.toString();
 		const res = await postJSON(
-			'/api/identity',
-			{
-				idc: '12345',
-				public_key: '[1,2]',
-				ciphertext: 'AA',
-				salt: 'AA',
-				nonce: 'AA',
-				kdf: 'pbkdf2-sha256',
-				kdf_params: { name: 'PBKDF2', iterations: 600_000, hash: 'SHA-256' }
-			},
+			'/api/identity/enroll',
+			{ blog_slug: blog.slug, idc },
 			{ cookie }
 		);
 		expect(res.status).toBe(200);

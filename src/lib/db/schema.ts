@@ -152,6 +152,13 @@ export const users = pgTable(
 		// (not surfaced to the suspended user in the UI to avoid arguing).
 		suspendedAt: timestamp('suspended_at', { withTimezone: true }),
 		suspendedReason: text('suspended_reason'),
+		// Authoritative Ministry anonymous-identity epoch, snapshotted from the
+		// verified id_token's `minister_anon_epoch` on every Ministry login. Null
+		// until the user first signs in with Minister carrying the claim. Only ever
+		// advances (Ministry bumps it on a root re-key). It is the server-side
+		// authority the per-blog leaf-replacement gate keys on (C1): a replacement is
+		// honored only when this strictly exceeds the per-membership stored epoch.
+		anonEpoch: integer('anon_epoch'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
@@ -183,6 +190,12 @@ export const sessions = pgTable(
 
 // ──────────────────────────── identities ────────────────────────────
 
+// One-root-identity model: a user holds ONE Semaphore commitment PER BLOG,
+// derived client-side from their Ministry per-app branch (never from a password
+// vault). The server stores only the commitment (`idc`) plus the epoch it was
+// last keyed at; there is no encrypted blob any more — the branch is the backup,
+// re-delivered at every Ministry login. Every device of a user derives the
+// identical per-blog commitment, so the row is per (user, blog), not per device.
 export const userIdentities = pgTable(
 	'user_identities',
 	{
@@ -190,26 +203,32 @@ export const userIdentities = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		// The blog this commitment is scoped to. Per-blog derivation gives each blog
+		// a distinct, unlinkable commitment for the same user.
+		blogId: uuid('blog_id')
+			.notNull()
+			.references(() => blogs.id, { onDelete: 'cascade' }),
 		idc: text('idc').notNull(),
-		publicKey: text('public_key').notNull(),
-		ciphertext: byteaType('ciphertext').notNull(),
-		kdf: text('kdf').notNull().default('pbkdf2-sha256'),
-		kdfSalt: byteaType('kdf_salt').notNull(),
-		kdfParams: jsonb('kdf_params').notNull(),
-		nonce: byteaType('nonce').notNull(),
+		// The Ministry anon epoch this leaf was last keyed at (C1). A replacement is
+		// accepted only when the user's authoritative `users.anonEpoch` STRICTLY
+		// exceeds this, so an attacker cannot loop leaf replacements to defeat RLN and
+		// a stale device cannot clobber a freshly re-keyed commitment.
+		anonEpoch: integer('anon_epoch').notNull().default(0),
 		status: identityStatus('status').notNull().default('active'),
-		// Optional human label for the device this commitment belongs to ("laptop",
-		// "phone"). Per-device model (Phase 3): a user may hold several active
-		// commitments, one per enrolled device. Null for pre-Phase-3 rows and when
-		// the user doesn't name the device.
-		deviceLabel: text('device_label'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		revokedAt: timestamp('revoked_at', { withTimezone: true })
 	},
 	(t) => ({
+		// Global uniqueness on the commitment: the cross-user tripwire (audit W2). A
+		// collision across users would be a derivation bug, and this is the free
+		// detector for it. Retained deliberately under per-blog derivation.
 		idcIdx: uniqueIndex('user_identities_idc_key').on(t.idc),
+		// At most one ACTIVE commitment per (user, blog): the per-membership leaf.
+		userBlogActiveIdx: uniqueIndex('user_identities_user_blog_active_key')
+			.on(t.userId, t.blogId)
+			.where(sql`${t.status} = 'active'`),
 		userIdx: index('user_identities_user_idx').on(t.userId),
-		userActiveIdx: index('user_identities_user_status_idx').on(t.userId, t.status)
+		blogStatusIdx: index('user_identities_blog_status_idx').on(t.blogId, t.status)
 	})
 );
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { postJSON, getJSON } from './helpers';
+import { postJSON } from './helpers';
 
 const stubProof = {
 	merkleTreeDepth: 1,
@@ -32,15 +32,9 @@ describe('auth gates: unauthenticated requests are rejected', () => {
 		['/api/post/submit', { post_version_id: '00000000-0000-0000-0000-000000000000' }],
 		['/api/post/tags', { post_id: '00000000-0000-0000-0000-000000000000', tags: ['x'] }],
 		['/api/user', { username: 'newname' }],
-		['/api/identity', { idc: '1' }],
-		['/api/identity/rotate', { idc: '1' }]
+		['/api/identity/enroll', { blog_slug: 'x', idc: '1' }]
 	])('POST %s → 401', async (path, body) => {
 		const res = await postJSON(path, body);
-		expect(res.status).toBe(401);
-	});
-
-	it('GET /api/identity unauthed → 401', async () => {
-		const res = await getJSON('/api/identity');
 		expect(res.status).toBe(401);
 	});
 });

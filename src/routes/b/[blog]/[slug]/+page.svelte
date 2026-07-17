@@ -1,9 +1,8 @@
 <script lang="ts">
-	// IMPORTANT: no static imports of `$lib/client/vault` or
+	// IMPORTANT: no static imports of `$lib/client/blog-identity` or
 	// `$lib/client/semaphore`. Anonymous readers of a post must not download
-	// snarkjs / identity primitives / vault crypto just to read text. The
-	// comment form is gated on `signedIn` and dynamic-imports its deps inside
-	// the click handlers.
+	// snarkjs / Semaphore identity primitives just to read text. The comment form
+	// is gated on `signedIn` and dynamic-imports its deps inside the click handler.
 	import { onMount } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -69,44 +68,8 @@
 	$: publishedIso = data.Post.publishedAt ? new Date(data.Post.publishedAt).toISOString() : null;
 
 	let body = '';
-	let password = '';
-	let needsPassword = false;
 	let busy = false;
 	let error = '';
-
-	type Identity = import('@semaphore-protocol/identity').Identity;
-	let cached: Identity | null = null;
-
-	async function loadVault() {
-		const mod = await import('$lib/client/vault');
-		return mod;
-	}
-
-	async function unlock() {
-		const vault = await loadVault();
-		cached = vault.getCachedIdentity();
-		if (cached) return cached;
-
-		const res = await fetch('/api/identity');
-		if (!res.ok) throw new Error('sign in to comment');
-		const json = await res.json();
-		if (!json.identity) throw new Error('create an identity first');
-		const blob = vault.decodeFromWire(json.identity);
-		const id = await vault.unlockIdentity(blob, password);
-		vault.cacheUnlockedIdentity(id);
-		needsPassword = false;
-		password = '';
-		cached = id;
-		return id;
-	}
-
-	async function unlockFromForm() {
-		try {
-			await unlock();
-		} catch (e) {
-			error = (e as Error).message;
-		}
-	}
 
 	// ──────────── Report dialog state ────────────
 	// One dialog reused for both the post and any comment. The submit
@@ -166,33 +129,12 @@
 		busy = true;
 		error = '';
 		try {
-			let identity: Identity | null = cached;
+			// Derive + enroll the per-blog identity from the Ministry branch. No password.
+			const { getEnrolledBlogIdentity } = await import('$lib/client/blog-identity');
+			const identity = await getEnrolledBlogIdentity(data.Blog.id, data.Blog.slug);
 			if (!identity) {
-				// Pick up an identity already unlocked elsewhere in this tab.
-				const vault = await loadVault();
-				identity = vault.getCachedIdentity();
-				if (identity) cached = identity;
-			}
-			if (!identity) {
-				// Nothing cached. Never decrypt with an empty password — show the
-				// unlock field first. A wrong password on a real attempt keeps the
-				// field visible so the user can retry; only genuinely non-password
-				// errors (not signed in, no identity) propagate.
-				if (!password) {
-					needsPassword = true;
-					return;
-				}
-				try {
-					identity = await unlock();
-				} catch (e) {
-					const msg = (e as Error).message;
-					if (msg === 'wrong password') {
-						needsPassword = true;
-						error = msg;
-						return;
-					}
-					throw e;
-				}
+				error = 'Sign in with Minister to connect your private identity, then reload this page.';
+				return;
 			}
 			const sem = await import('$lib/client/semaphore');
 			const group = await sem.fetchGroup(data.Blog.slug, 'comment');
@@ -331,20 +273,6 @@
 
 	{#if signedIn && data.canComment}
 		<h3 class="leave-heading">{$_('comments.leave_heading')}</h3>
-		{#if needsPassword}
-			<form class="comment-form" on:submit|preventDefault={unlockFromForm}>
-				<Field
-					label={$_('comments.identity_password_label')}
-					type="password"
-					bind:value={password}
-					required
-					autocomplete="current-password"
-				/>
-				<div class="form-actions">
-					<Button type="submit">{$_('comments.unlock_button')}</Button>
-				</div>
-			</form>
-		{/if}
 		<form class="comment-form" on:submit|preventDefault={postComment}>
 			<Field
 				label={$_('comments.leave_heading')}

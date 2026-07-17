@@ -1,7 +1,7 @@
 // End-to-end API flow: blog creation → invite members → post with real
 // Semaphore proof → review by other members → auto-publish → comment.
 import { describe, it, expect } from 'vitest';
-import { asUser, postJSON, getJSON, buildVoteToken, redeemVote, castTokenVote } from './helpers';
+import { asUser, postJSON, buildVoteToken, redeemVote, castTokenVote } from './helpers';
 import { makeUser, makeBlogWith, buildTestProof } from '../setup/factories';
 import { refreshSnapshot } from '$lib/db/snapshots';
 import { db, schema } from '$lib/db/client';
@@ -194,45 +194,6 @@ describe('blog/members', () => {
 			}
 		);
 		expect(res.status).toBe(409);
-	});
-});
-
-describe('identity flow', () => {
-	it('GET /api/identity returns the encrypted blob for the signed-in user', async () => {
-		const user = await makeUser({ username: 'u' });
-		const { cookie } = await asUser(user);
-		const res = await getJSON('/api/identity', { cookie });
-		expect(res.status).toBe(200);
-		const json = await res.json();
-		expect(json.identity.idc).toBe(user.identity.commitment.toString());
-		expect(json.identity.ciphertext).toMatch(/^[A-Za-z0-9_-]+$/);
-		expect(json.identity.kdf).toBe('pbkdf2-sha256');
-	});
-
-	it('POST /api/identity enrolls a SECOND device (per-device model, Phase 3)', async () => {
-		// makeUser already installed device #1. Enrolling a distinct commitment as a
-		// second device now succeeds (the old single-active 409 block is gone).
-		const user = await makeUser({ username: 'u' });
-		const { cookie } = await asUser(user);
-		const res = await postJSON(
-			'/api/identity',
-			{
-				idc: '12345678901234567890',
-				public_key: '[1,2]',
-				ciphertext: 'AA',
-				salt: 'AA',
-				nonce: 'AA',
-				kdf: 'pbkdf2-sha256',
-				kdf_params: { name: 'PBKDF2', iterations: 600_000, hash: 'SHA-256' },
-				device_label: 'second-device'
-			},
-			{ cookie }
-		);
-		expect(res.status).toBe(200);
-		// Both devices are now active.
-		const list = await getJSON('/api/identity', { cookie });
-		const json = await list.json();
-		expect(json.identities).toHaveLength(2);
 	});
 });
 

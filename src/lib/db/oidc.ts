@@ -1,5 +1,5 @@
 import { db, schema } from './client';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import type { User } from './schema';
 
 // The OIDC subject(s) linked to a user, newest link first. Used to surface the
@@ -57,4 +57,20 @@ export async function createUserWithOidcIdentity(
 		.returning();
 	await db.insert(schema.oidcIdentities).values({ userId: user.id, issuer, subject });
 	return user;
+}
+
+// Snapshot the verified Ministry anon epoch onto the user, advancing only (never
+// backwards) so a delayed/replayed login can't lower it. This is the server-side
+// authority the per-blog leaf-replacement gate keys on (C1); it is set on every
+// Ministry login from the id_token's `minister_anon_epoch`.
+export async function setUserAnonEpoch(userId: string, epoch: number): Promise<void> {
+	await db
+		.update(schema.users)
+		.set({ anonEpoch: epoch })
+		.where(
+			and(
+				eq(schema.users.id, userId),
+				or(isNull(schema.users.anonEpoch), lt(schema.users.anonEpoch, epoch))
+			)
+		);
 }

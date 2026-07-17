@@ -7,31 +7,20 @@ import { SESSION_COOKIE_NAME, currentSessionId } from '$lib/server/session';
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) throw redirect(303, '/signup');
 	const current = currentSessionId(cookies.get(SESSION_COOKIE_NAME));
-	const [identities, sessionRows] = await Promise.all([
-		db
-			.select({
-				id: schema.userIdentities.id,
-				idc: schema.userIdentities.idc,
-				deviceLabel: schema.userIdentities.deviceLabel,
-				status: schema.userIdentities.status,
-				createdAt: schema.userIdentities.createdAt,
-				revokedAt: schema.userIdentities.revokedAt
-			})
-			.from(schema.userIdentities)
-			.where(eq(schema.userIdentities.userId, locals.user.id))
-			.orderBy(desc(schema.userIdentities.createdAt)),
-		db
-			.select({
-				id: schema.sessions.id,
-				createdAt: schema.sessions.createdAt,
-				lastSeenAt: schema.sessions.lastSeenAt,
-				userAgent: schema.sessions.userAgent,
-				ip: schema.sessions.ip
-			})
-			.from(schema.sessions)
-			.where(eq(schema.sessions.userId, locals.user.id))
-			.orderBy(desc(schema.sessions.lastSeenAt))
-	]);
+	// Private identities are no longer surfaced or managed here: each is derived
+	// per-blog from the user's Ministry root, which is the only backup and lives
+	// only on their own devices. There is nothing to rotate, restore, or revoke.
+	const sessionRows = await db
+		.select({
+			id: schema.sessions.id,
+			createdAt: schema.sessions.createdAt,
+			lastSeenAt: schema.sessions.lastSeenAt,
+			userAgent: schema.sessions.userAgent,
+			ip: schema.sessions.ip
+		})
+		.from(schema.sessions)
+		.where(eq(schema.sessions.userId, locals.user.id))
+		.orderBy(desc(schema.sessions.lastSeenAt));
 	const sessions = sessionRows.map((s) => ({
 		id: s.id,
 		createdAt: s.createdAt,
@@ -40,7 +29,6 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 		ip: s.ip,
 		current: s.id === current
 	}));
-	const activeDeviceCount = identities.filter((i) => i.status === 'active').length;
 	return {
 		user: {
 			id: locals.user.id,
@@ -48,10 +36,6 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			displayName: locals.user.displayName,
 			email: locals.user.email
 		},
-		identities,
-		// Drives the device-revoke UI: revoking the LAST active device is blocked
-		// server-side (you'd lose the ability to act), so the UI disables it too.
-		activeDeviceCount,
 		sessions
 	};
 };

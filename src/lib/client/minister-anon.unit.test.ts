@@ -1,25 +1,34 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // minister-anon reads `browser` from `$app/environment`; under jsdom the real
-// flag is false, so mock it the same way vault.unit.test.ts does.
+// flag is false, so force it true.
 vi.mock('$app/environment', () => ({ browser: true, dev: true }));
 
-// The module holds per-document-load state (captured secret, memoized seed),
-// so every test re-imports a fresh copy via resetModules.
+// The module holds per-document-load state (the captured branch), so every test
+// re-imports a fresh copy via resetModules. localStorage is the durable store and
+// is cleared between tests.
 type MinisterAnon = typeof import('./minister-anon');
 async function freshModule(): Promise<MinisterAnon> {
 	vi.resetModules();
 	return import('./minister-anon');
 }
 
-// Spec §9.2 golden vector: per_app_secret = the §8.1 `deforum` vector,
-// rp_mix_secret = utf8("example-rp-mix-secret-32-bytes!!").
-const APP_SECRET_B64URL = 'pqORh0VKzCh-Yrnq6r7O-MZ78IUA_FO9XgCRKrD3Gl4';
-const MIX_B64URL = 'ZXhhbXBsZS1ycC1taXgtc2VjcmV0LTMyLWJ5dGVzISE';
-const EXPECTED_SEED_HEX = '09aa876834bad70b4c38e57dbecea98c69f127e240e4eb021ed6d822cab554d5';
+// Two distinct valid branches (43 base64url chars → 32 bytes). The first is the
+// spec §8.1 `deforum` per-app-secret vector; the second is arbitrary-but-valid.
+const BRANCH_A = 'pqORh0VKzCh-Yrnq6r7O-MZ78IUA_FO9XgCRKrD3Gl4';
+const BRANCH_B = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 
-const VALID_FRAGMENT = `#minister_anon=v1.${APP_SECRET_B64URL}`;
+function fragOf(branch: string): string {
+	return `#minister_anon=v1.${branch}`;
+}
+
+function b64urlToBytes(s: string): Uint8Array {
+	const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+	const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+	const bin = atob(b64 + pad);
+	return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
 
 function toHex(bytes: Uint8Array): string {
 	return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
@@ -29,17 +38,10 @@ function setUrl(pathAndHash: string) {
 	history.replaceState(null, '', pathAndHash);
 }
 
-beforeAll(async () => {
-	if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
-		const { webcrypto } = await import('node:crypto');
-		// @ts-expect-error - patching for test env
-		globalThis.crypto = webcrypto;
-	}
-});
-
 let warnSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
-	setUrl('/signup/identity');
+	localStorage.clear();
+	setUrl('/');
 	warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 afterEach(() => {
@@ -47,79 +49,77 @@ afterEach(() => {
 	setUrl('/');
 });
 
-describe('minister anon handoff', () => {
-	it('yields no seed when no fragment arrived (byte-identical legacy path)', async () => {
+describe('minister anon handoff (one-root)', () => {
+	it('has no branch when no fragment arrived', async () => {
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
 		expect(location.hash).toBe('');
-		await expect(mod.ministerIdentitySeed(MIX_B64URL)).resolves.toBeNull();
-		expect(warnSpy).not.toHaveBeenCalled();
+		mod.reconcileBranch(1);
+		expect(mod.getStoredBranch()).toBeNull();
 	});
 
-	it('captures + scrubs the fragment and derives the spec §9.2 golden vector', async () => {
-		setUrl(`/signup/identity${VALID_FRAGMENT}`);
+	it('captures + scrubs the fragment and adopts the branch at the signed epoch', async () => {
+		setUrl(`/${fragOf(BRANCH_A)}`);
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
 		// Scrubbed before anything else can read it (finding S4).
 		expect(location.hash).toBe('');
-		expect(location.pathname).toBe('/signup/identity');
-		const seed = await mod.ministerIdentitySeed(MIX_B64URL);
-		expect(seed).not.toBeNull();
-		expect(seed!.byteLength).toBe(32);
-		expect(toHex(seed!)).toBe(EXPECTED_SEED_HEX);
+		// No branch is persisted until reconcile runs with the authoritative epoch.
+		mod.reconcileBranch(1);
+		const stored = mod.getStoredBranch();
+		expect(stored).not.toBeNull();
+		expect(toHex(stored!)).toBe(toHex(b64urlToBytes(BRANCH_A)));
 	});
 
 	it('preserves other fragment params when scrubbing', async () => {
-		setUrl(`/signup/identity#foo=1&minister_anon=v1.${APP_SECRET_B64URL}&bar=2`);
+		setUrl(`/#foo=1&minister_anon=v1.${BRANCH_A}&bar=2`);
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
 		expect(location.hash).toBe('#foo=1&bar=2');
-		await expect(mod.ministerIdentitySeed(MIX_B64URL)).resolves.not.toBeNull();
+		mod.reconcileBranch(1);
+		expect(mod.getStoredBranch()).not.toBeNull();
 	});
 
-	it('memoizes the seed so a retried submit re-uses the same identity', async () => {
-		setUrl(`/signup/identity${VALID_FRAGMENT}`);
+	it('re-keys to a new branch when the epoch strictly advances', async () => {
+		// A previous login already keyed branch A at epoch 1.
+		localStorage.setItem('freedink.minister.branch', BRANCH_A);
+		localStorage.setItem('freedink.minister.epoch', '1');
+		setUrl(`/${fragOf(BRANCH_B)}`);
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
-		const first = await mod.ministerIdentitySeed(MIX_B64URL);
-		const second = await mod.ministerIdentitySeed(MIX_B64URL);
-		expect(first).not.toBeNull();
-		expect(second).toBe(first);
+		mod.reconcileBranch(2);
+		expect(toHex(mod.getStoredBranch()!)).toBe(toHex(b64urlToBytes(BRANCH_B)));
+		expect(localStorage.getItem('freedink.minister.epoch')).toBe('2');
 	});
 
-	it('fails closed when the mix secret is unset', async () => {
-		setUrl(`/signup/identity${VALID_FRAGMENT}`);
+	it('does NOT clobber the current branch at an equal-or-lower epoch (anti-rollback)', async () => {
+		localStorage.setItem('freedink.minister.branch', BRANCH_A);
+		localStorage.setItem('freedink.minister.epoch', '2');
+		// A stale login re-delivers an old branch at a non-advancing epoch.
+		setUrl(`/${fragOf(BRANCH_B)}`);
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
-		await expect(mod.ministerIdentitySeed(null)).resolves.toBeNull();
-		await expect(mod.ministerIdentitySeed(undefined)).resolves.toBeNull();
-		expect(warnSpy).toHaveBeenCalled();
-		// The dropped secret cannot be resurrected by later providing a mix.
-		await expect(mod.ministerIdentitySeed(MIX_B64URL)).resolves.toBeNull();
+		mod.reconcileBranch(2);
+		// Branch A is retained; branch B is ignored.
+		expect(toHex(mod.getStoredBranch()!)).toBe(toHex(b64urlToBytes(BRANCH_A)));
 	});
 
-	it('fails closed when the mix secret is shorter than 32 bytes', async () => {
-		setUrl(`/signup/identity${VALID_FRAGMENT}`);
+	it('keeps the stored branch when no fragment arrives on a later login', async () => {
+		localStorage.setItem('freedink.minister.branch', BRANCH_A);
+		localStorage.setItem('freedink.minister.epoch', '1');
+		setUrl('/admin'); // no fragment
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
-		// 16 bytes, base64url.
-		await expect(mod.ministerIdentitySeed('AAAAAAAAAAAAAAAAAAAAAA')).resolves.toBeNull();
-		expect(warnSpy).toHaveBeenCalled();
+		mod.reconcileBranch(1);
+		expect(toHex(mod.getStoredBranch()!)).toBe(toHex(b64urlToBytes(BRANCH_A)));
 	});
 
-	it('fails closed when the mix secret is not base64url', async () => {
-		setUrl(`/signup/identity${VALID_FRAGMENT}`);
-		const mod = await freshModule();
-		mod.captureMinisterAppSecret();
-		await expect(mod.ministerIdentitySeed('not base64url!!! definitely $$$')).resolves.toBeNull();
-		expect(warnSpy).toHaveBeenCalled();
-	});
-
-	it('scrubs but rejects a malformed or unknown-version fragment', async () => {
-		setUrl('/signup/identity#minister_anon=v9.AAAA');
+	it('scrubs but adopts nothing from a malformed / unknown-version fragment', async () => {
+		setUrl('/#minister_anon=v9.AAAA');
 		const mod = await freshModule();
 		mod.captureMinisterAppSecret();
 		expect(location.hash).toBe('');
-		await expect(mod.ministerIdentitySeed(MIX_B64URL)).resolves.toBeNull();
+		mod.reconcileBranch(1);
+		expect(mod.getStoredBranch()).toBeNull();
 	});
 });

@@ -1,10 +1,5 @@
 <script lang="ts">
-	import {
-		getCachedIdentity,
-		cacheUnlockedIdentity,
-		unlockIdentity,
-		decodeFromWire
-	} from '$lib/client/vault';
+	import { getEnrolledBlogIdentity } from '$lib/client/blog-identity';
 	import { buildProof, fetchGroup } from '$lib/client/semaphore';
 	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import { POST_LANGUAGES } from '$lib/languages';
@@ -21,8 +16,6 @@
 	let busy = false;
 	let error = '';
 	let notice = '';
-	let password = '';
-	let needsPassword = false;
 
 	// Wave 3B added a marked + DOMPurify-backed preview panel here. That panel
 	// is now obsolete: the WYSIWYG IS the preview — Tiptap renders the
@@ -30,29 +23,6 @@
 	// toggle below as a sanity check for users editing legacy posts who want
 	// to confirm the serialized markdown the server will store.
 	let showRawMarkdown = false;
-
-	async function unlock() {
-		const res = await fetch('/api/identity');
-		const json = await res.json();
-		if (!json.identity) {
-			window.location.href = '/signup/identity';
-			return null;
-		}
-		const blob = decodeFromWire(json.identity);
-		const id = await unlockIdentity(blob, password);
-		cacheUnlockedIdentity(id);
-		needsPassword = false;
-		password = '';
-		return id;
-	}
-
-	async function unlockFromForm() {
-		try {
-			await unlock();
-		} catch (e) {
-			error = (e as Error).message;
-		}
-	}
 
 	async function submit() {
 		busy = true;
@@ -64,19 +34,13 @@
 				error = 'post content cannot be empty';
 				return;
 			}
-			let identity = getCachedIdentity();
+			// Derive + enroll the per-blog identity from the Ministry branch. No password.
+			const identity = await getEnrolledBlogIdentity(data.blog.id, data.blog.slug);
 			if (!identity) {
-				// No identity cached in this tab. Never call unlock() with an empty
-				// password (it would fail decrypt and surface a bogus "wrong
-				// password"). Render the unlock form first; once a password has been
-				// entered, unlock and continue.
-				if (!password) {
-					needsPassword = true;
-					return;
-				}
-				identity = await unlock();
+				error =
+					'Connect your private identity: sign in with Minister, then reload this page.';
+				return;
 			}
-			if (!identity) return;
 
 			const group = await fetchGroup(data.blog.slug, 'author');
 			if (!group.identities.includes(identity.commitment.toString())) {
@@ -168,25 +132,6 @@
 	</Card>
 {/if}
 
-{#if needsPassword}
-	<Card class="unlock-card">
-		<Kicker>Locked identity</Kicker>
-		<h2 class="page-heading">Unlock your identity</h2>
-		<form on:submit|preventDefault={unlockFromForm} class="unlock-form">
-			<Field
-				label="Identity password"
-				type="password"
-				bind:value={password}
-				required
-				autocomplete="current-password"
-			/>
-			<div class="form-actions">
-				<Button type="submit">Unlock</Button>
-			</div>
-		</form>
-	</Card>
-{/if}
-
 <Card>
 	<Kicker>Edit post</Kicker>
 	<h2 class="page-heading">{data.blog.title}</h2>
@@ -268,13 +213,8 @@
 		max-width: 80ch;
 	}
 
-	:global(.feedback-card),
-	:global(.unlock-card) {
+	:global(.feedback-card) {
 		margin-bottom: var(--space-5);
-	}
-
-	.unlock-form {
-		max-width: 40ch;
 	}
 
 	.title-wrapper {

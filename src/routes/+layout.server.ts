@@ -22,7 +22,11 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 			id: locals.user.id,
 			username: locals.user.username,
 			displayName: locals.user.displayName,
-			email: locals.user.email
+			email: locals.user.email,
+			// Server-authoritative Ministry anon epoch (from the last verified
+			// id_token). The client reconciles its cached branch against this, adopting
+			// or re-keying only when it strictly advances.
+			anonEpoch: locals.user.anonEpoch
 		}
 	};
 };

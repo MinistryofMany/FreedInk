@@ -32,14 +32,14 @@ export const POST: RequestHandler = async (event) => {
 		.from(schema.oidcIdentities)
 		.where(eq(schema.oidcIdentities.userId, userId));
 
-	// Identities: include only public fields. NO ciphertext / kdfSalt / nonce
-	// because the user already has the secret vault locally; emitting it here
-	// turns a stolen export file into a secondary attack surface.
+	// Identities: only the public commitment per blog. There is no secret material
+	// to leak any more — the identity is derived from the user's Ministry root,
+	// which never touches the server.
 	const identities = await db
 		.select({
 			id: schema.userIdentities.id,
+			blogId: schema.userIdentities.blogId,
 			idc: schema.userIdentities.idc,
-			publicKey: schema.userIdentities.publicKey,
 			status: schema.userIdentities.status,
 			createdAt: schema.userIdentities.createdAt,
 			revokedAt: schema.userIdentities.revokedAt

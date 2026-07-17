@@ -2,7 +2,6 @@
 // members and produce real Semaphore proofs against the current snapshot.
 import { existsSync } from 'node:fs';
 import { db, schema } from '$lib/db/client';
-import { and, eq } from 'drizzle-orm';
 import { Identity } from '@semaphore-protocol/identity';
 import { Group } from '@semaphore-protocol/group';
 import { generateProof } from '@semaphore-protocol/proof';
@@ -25,20 +24,32 @@ function capabilityForScope(scope: string): TreeCapability {
 export type TestUser = {
 	id: string;
 	username: string;
+	// The user's BASE identity (seed). Under the one-root model the commitment
+	// actually enrolled in a blog is per-(user, blog) — see perBlogIdentity — so
+	// this base is never enrolled directly; it is the deterministic seed the
+	// per-blog identity (and the matching proof) derive from.
 	identity: Identity;
 };
 
-async function installIdentity(userId: string, identity: Identity) {
+// The deterministic per-blog Semaphore identity for a user, mirroring the app's
+// per-blog derivation. Enrollment (installIdentity) and proving (buildTestProof)
+// both go through this, so a user's proof always uses the commitment enrolled for
+// that blog, and two blogs get two distinct commitments (no global-idc collision).
+export function perBlogIdentity(base: Identity, blogId: string): Identity {
+	return new Identity(`${base.export()}:${blogId}`);
+}
+
+// Enroll a user's per-blog commitment into a blog (idc + epoch only — no vault).
+export async function installIdentity(userId: string, blogId: string, base: Identity) {
+	const identity = perBlogIdentity(base, blogId);
 	await db.insert(schema.userIdentities).values({
 		userId,
+		blogId,
 		idc: identity.commitment.toString(),
-		publicKey: identity.publicKey.toString(),
-		ciphertext: new Uint8Array([0]),
-		kdfSalt: new Uint8Array(16),
-		nonce: new Uint8Array(12),
-		kdfParams: { name: 'PBKDF2', iterations: 100_000, hash: 'SHA-256' },
+		anonEpoch: 1,
 		status: 'active'
 	});
+	return identity;
 }
 
 export async function makeUser(
@@ -52,41 +63,7 @@ export async function makeUser(
 	const email = opts.email ?? `${username}@x.com`;
 	const user = await createUserWithEmail(email, username);
 	const identity = new Identity(opts.seed ?? username);
-	await installIdentity(user.id, identity);
 	return { id: user.id, username, identity };
-}
-
-// Enroll an ADDITIONAL active device commitment for an existing user (Phase 3:
-// per-device model). Returns the new device's Identity. The caller is
-// responsible for refreshing snapshots (e.g. refreshSnapshotsForUser) so the new
-// leaf enters the trees, mirroring the /api/identity enroll endpoint.
-export async function enrollDevice(userId: string, seed: string): Promise<Identity> {
-	const identity = new Identity(seed);
-	await installIdentity(userId, identity);
-	return identity;
-}
-
-export async function rotateUserIdentity(userId: string, seed: string): Promise<Identity> {
-	const identity = new Identity(seed);
-	await db.transaction(async (tx) => {
-		await tx
-			.update(schema.userIdentities)
-			.set({ status: 'revoked', revokedAt: new Date() })
-			.where(
-				and(eq(schema.userIdentities.userId, userId), eq(schema.userIdentities.status, 'active'))
-			);
-		await tx.insert(schema.userIdentities).values({
-			userId,
-			idc: identity.commitment.toString(),
-			publicKey: identity.publicKey.toString(),
-			ciphertext: new Uint8Array([0]),
-			kdfSalt: new Uint8Array(16),
-			nonce: new Uint8Array(12),
-			kdfParams: { name: 'PBKDF2', iterations: 100_000, hash: 'SHA-256' },
-			status: 'active'
-		});
-	});
-	return identity;
 }
 
 export async function makeBlogWith(opts: {
@@ -96,8 +73,12 @@ export async function makeBlogWith(opts: {
 }): Promise<{ id: string; slug: string }> {
 	const title = opts.title ?? `blog ${Math.random().toString(36).slice(2, 8)}`;
 	const blog = await createBlog(opts.owner.id, title, null);
+	// The owner and every member enroll their per-blog commitment, so each holds a
+	// leaf in the trees their capabilities place them in.
+	await installIdentity(opts.owner.id, blog.id, opts.owner.identity);
 	for (const m of opts.members ?? []) {
 		await setRole(blog.id, m.user.id, m.role, opts.owner.id);
+		await installIdentity(m.user.id, blog.id, m.user.identity);
 	}
 	return blog;
 }
@@ -142,13 +123,15 @@ export async function buildTestProof(opts: {
 	const scopeField = await hashToField(opts.scope);
 	const messageField = await hashToField(opts.message);
 
-	const leafIndex = group.indexOf(opts.identity.commitment);
+	// Prove with the per-blog identity that was enrolled for this blog.
+	const proveIdentity = perBlogIdentity(opts.identity, opts.blogId);
+	const leafIndex = group.indexOf(proveIdentity.commitment);
 	const merkleProof = group.generateMerkleProof(leafIndex);
 	const depth = merkleProof.siblings.length || 1;
 	const artifacts = nodeArtifactsForDepth(depth);
 
 	const proof = await generateProof(
-		opts.identity,
+		proveIdentity,
 		merkleProof,
 		messageField,
 		scopeField,

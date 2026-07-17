@@ -1,5 +1,6 @@
 import { createMinisterClient, generatePkce, randomUrlToken } from '@minister/client';
 import type { MinisterClient, MinisterClaims, OidcFlowState } from '@minister/client';
+import { decodeJwt } from 'jose';
 import { env } from '$env/dynamic/private';
 
 // "Sign in with Minister" — Minister is an external OpenID Connect identity
@@ -110,6 +111,24 @@ export async function exchangeCodeForClaims(
 		expectedNonce: args.expectedNonce
 	});
 	return claims;
+}
+
+// The Ministry anonymous-identity epoch carried by the VERIFIED id_token
+// (`minister_anon_epoch`). `claims.raw` is the raw id_token the SDK has already
+// signature/iss/aud/nonce-verified, so decoding its payload here is reading an
+// authenticated value — never trust an id_token this hasn't seen verified. The
+// epoch is a positive integer that only advances (Ministry bumps it on a root
+// re-key); anything else (absent, non-integer, < 1) yields null and the user's
+// stored epoch is left unchanged.
+export function extractAnonEpoch(claims: MinisterClaims): number | null {
+	try {
+		const payload = decodeJwt(claims.raw);
+		const epoch = payload['minister_anon_epoch'];
+		if (typeof epoch === 'number' && Number.isInteger(epoch) && epoch >= 1) return epoch;
+		return null;
+	} catch {
+		return null;
+	}
 }
 
 // Stable key stored alongside the pairwise subject. Minister's `sub` is unique

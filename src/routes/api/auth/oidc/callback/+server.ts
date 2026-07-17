@@ -6,6 +6,7 @@ import { enforce, RULES } from '$lib/server/rate-limit';
 import {
 	oidcConfig,
 	exchangeCodeForClaims,
+	extractAnonEpoch,
 	issuerKey,
 	safeNext,
 	NEXT_COOKIE
@@ -13,7 +14,8 @@ import {
 import {
 	getUserByOidcIdentity,
 	createUserWithOidcIdentity,
-	linkOidcIdentityToUser
+	linkOidcIdentityToUser,
+	setUserAnonEpoch
 } from '$lib/db/oidc';
 import { createSession, setSessionCookie, SuspendedUserError } from '$lib/server/session';
 import { audit } from '$lib/server/audit';
@@ -78,6 +80,12 @@ export const GET: RequestHandler = async (event) => {
 		}
 	}
 
+	// Snapshot the verified anon epoch on every Ministry login (advancing only). It
+	// is the authority the per-blog leaf-replacement gate reads (C1), and exposing
+	// it to the client (root layout → reconcileBranch) is what drives adopt/re-key.
+	const anonEpoch = extractAnonEpoch(claims);
+	if (anonEpoch !== null) await setUserAnonEpoch(user.id, anonEpoch);
+
 	let sessionId: string;
 	try {
 		sessionId = await createSession(user.id, {
@@ -104,23 +112,8 @@ export const GET: RequestHandler = async (event) => {
 	const next = safeNext(cookies.get(NEXT_COOKIE));
 	if (next) cookies.delete(NEXT_COOKIE, { path: '/' });
 
-	// New accounts have no Semaphore identity yet — send them to set one up
-	// first, carrying `next` through so they still land where they intended.
-	const needsIdentity = await hasNoActiveIdentity(user.id);
-	if (needsIdentity) {
-		const dest = next ? `/signup/identity?next=${encodeURIComponent(next)}` : '/signup/identity';
-		throw redirect(303, dest);
-	}
+	// No identity-setup step any more: a user's per-blog Semaphore identity is
+	// derived from their Ministry branch on demand, the first time they act in a
+	// blog (see blog-identity.ts). New accounts go straight where they intended.
 	throw redirect(303, next ?? '/admin');
 };
-
-async function hasNoActiveIdentity(userId: string): Promise<boolean> {
-	const rows = await db
-		.select({ id: schema.userIdentities.id })
-		.from(schema.userIdentities)
-		.where(
-			and(eq(schema.userIdentities.userId, userId), eq(schema.userIdentities.status, 'active'))
-		)
-		.limit(1);
-	return rows.length === 0;
-}

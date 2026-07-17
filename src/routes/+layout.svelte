@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { prewarmForAuthedUser } from '$lib/client/semaphore';
+	import { reconcileBranch } from '$lib/client/minister-anon';
 	import '$lib/styles/tokens.css';
 	import '$lib/styles/base.css';
 	import '$lib/styles/fonts.ts';
@@ -46,6 +47,14 @@
 	$: if (browser && data.user && data.user.id !== prewarmedFor) {
 		prewarmedFor = data.user.id;
 		prewarmForAuthedUser();
+	}
+
+	// Reconcile the Ministry branch captured at client boot against the
+	// server-authoritative anon epoch: persist a freshly-delivered branch to
+	// localStorage on first sign-in or a re-key, leave it untouched otherwise. The
+	// signed epoch is the only re-key trigger.
+	$: if (browser && data.user) {
+		reconcileBranch(data.user.anonEpoch);
 	}
 
 	// Mobile drawer state. The drawer holds the right-side nav (Dashboard /

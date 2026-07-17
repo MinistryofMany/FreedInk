@@ -12,27 +12,9 @@ import {
 	listInvitations,
 	revokeInvitation
 } from '$lib/db/invitations';
-import { Identity } from '@semaphore-protocol/identity';
-
-async function installIdentity(userId: string, seed: string) {
-	const id = new Identity(seed);
-	await db.insert(schema.userIdentities).values({
-		userId,
-		idc: id.commitment.toString(),
-		publicKey: id.publicKey.toString(),
-		ciphertext: new Uint8Array([0]),
-		kdfSalt: new Uint8Array(16),
-		nonce: new Uint8Array(12),
-		kdfParams: { name: 'PBKDF2', iterations: 100_000, hash: 'SHA-256' },
-		status: 'active'
-	});
-	return id;
-}
-
 describe('createInvitation', () => {
 	it('persists with the right shape; sets a ~7d expiry and a unique token', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 
 		const before = Date.now();
@@ -78,7 +60,6 @@ describe('createInvitation', () => {
 describe('getInvitationByToken', () => {
 	it('hydrates blog + inviter context for an active token', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId, slug } = await createBlog(owner.id, 'Cool Blog', null);
 
 		const inv = await createInvitation({
@@ -97,7 +78,6 @@ describe('getInvitationByToken', () => {
 
 	it('returns null for an unknown / expired / revoked / accepted token', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 
 		expect(await getInvitationByToken('nope')).toBeNull();
@@ -130,7 +110,6 @@ describe('getInvitationByToken', () => {
 			role: 'author'
 		});
 		const invitee = await createUserWithEmail('invitee@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 		await acceptInvitation({ token: accepted.token, userId: invitee.id });
 		expect(await getInvitationByToken(accepted.token)).toBeNull();
 	});
@@ -139,11 +118,9 @@ describe('getInvitationByToken', () => {
 describe('acceptInvitation', () => {
 	it('creates a blog_members row with the invited role for an existing user', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 
 		const invitee = await createUserWithEmail('inv@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 
 		const inv = await createInvitation({
 			blogId,
@@ -180,10 +157,8 @@ describe('acceptInvitation', () => {
 
 	it('rejects a second accept on the same token (idempotency / replay)', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 		const invitee = await createUserWithEmail('inv@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 
 		const inv = await createInvitation({
 			blogId,
@@ -199,10 +174,8 @@ describe('acceptInvitation', () => {
 
 	it('rejects a revoked token with 410', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 		const invitee = await createUserWithEmail('inv@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 
 		const inv = await createInvitation({
 			blogId,
@@ -218,10 +191,8 @@ describe('acceptInvitation', () => {
 
 	it('no-ops when user is already a member with the exact same role', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 		const invitee = await createUserWithEmail('inv@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 		// Pre-add as author at the same role we're about to invite to.
 		await setRole(blogId, invitee.id, 'author', owner.id);
 
@@ -256,10 +227,8 @@ describe('acceptInvitation', () => {
 
 	it('refuses to downgrade/upgrade — user already a member at a different role', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 		const invitee = await createUserWithEmail('inv@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 		await setRole(blogId, invitee.id, 'commenter', owner.id);
 
 		const inv = await createInvitation({
@@ -296,10 +265,8 @@ describe('acceptInvitation', () => {
 describe('listInvitations', () => {
 	it('returns only pending by default; can include accepted + revoked', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 		const invitee = await createUserWithEmail('inv@x.com', 'invitee');
-		await installIdentity(invitee.id, 'invitee');
 
 		const pending = await createInvitation({
 			blogId,
@@ -340,11 +307,9 @@ describe('listInvitations', () => {
 describe('revokeInvitation', () => {
 	it('owner can revoke; non-owner cannot', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		const { id: blogId } = await createBlog(owner.id, 'B', null);
 
 		const editor = await createUserWithEmail('e@x.com', 'editor');
-		await installIdentity(editor.id, 'editor');
 		await setRole(blogId, editor.id, 'editor', owner.id);
 
 		const inv = await createInvitation({
@@ -368,7 +333,6 @@ describe('revokeInvitation', () => {
 
 	it('throws 404 for an unknown invitation id', async () => {
 		const owner = await createUserWithEmail('o@x.com', 'owner');
-		await installIdentity(owner.id, 'owner');
 		await expect(
 			revokeInvitation('00000000-0000-0000-0000-000000000000', owner.id)
 		).rejects.toMatchObject({ status: 404 });

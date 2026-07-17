@@ -31,7 +31,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const bodyHtml = renderMarkdown(post.version.content);
 
 	return {
-		Blog: { title: blog.title, slug: blog.slug, defaultLanguage: blog.defaultLanguage },
+		Blog: { id: blog.id, title: blog.title, slug: blog.slug, defaultLanguage: blog.defaultLanguage },
 		Post: {
 			id: post.post.id,
 			versionId: post.version.id,
