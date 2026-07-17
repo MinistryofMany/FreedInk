@@ -79,7 +79,7 @@
 		"@tiptap/pm": "^3.0.0",
 		"@tiptap/starter-kit": "^3.0.0",
 		"bits-ui": "^2.18.1",
-		"dompurify": "^3.2.3",
+		"dompurify": "^3.4.11",
 		"drizzle-orm": "^0.45.2",
 		"ethers": "^6.13.2",
 		"isomorphic-dompurify": "^2.20.0",
